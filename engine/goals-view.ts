@@ -71,10 +71,10 @@ export function buildGoalsView(state: AppState, today: IsoDate): GoalsView {
     let reason = '';
     if (needReview.has(p.accountId)) {
       status = 'needs_review';
-      reason = 'в MoneyManager помечен «не учитывать в балансе» — ответь на экране «Импорт», что это за счёт';
+      reason = 'в MoneyManager помечен «не учитывать в балансе» — ответь в «Ещё → Счета», что это за счёт';
     } else if (p.excluded) {
       status = 'excluded';
-      reason = 'исключён из анализа («Настройки → Счета»)';
+      reason = 'не учитывается («Ещё → Счета»)';
     } else if (bound && o.goals.some((g) => g.id === bound && g.status !== 'cancelled' && g.status !== 'done')) {
       status = 'bound';
       reason = `весь остаток уже за целью «${goalTitle(bound)}»`;
@@ -83,7 +83,7 @@ export function buildGoalsView(state: AppState, today: IsoDate): GoalsView {
       reason = 'на счёте нет денег';
     } else if (free <= 0) {
       status = 'fully_assigned';
-      reason = 'все деньги на счёте уже назначены целям';
+      reason = 'все деньги на счёте уже закреплены за целями';
     } else status = 'available';
     return { accountId: p.accountId, title: p.title, balance: p.balance, free, status, reason };
   });

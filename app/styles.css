@@ -436,3 +436,17 @@ body.lock #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 .row > .val { flex-shrink: 1; max-width: 55%; }
 .row > .val .tag, .row > .val .chip { display: inline-block; max-width: 100%; white-space: normal; text-align: right; line-height: 1.25; height: auto; }
 .row > .val .tag { padding-block: 3px; }
+/* «Цели» (D85) */
+.goals-sum { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.goals-sum .gs-text { display: flex; flex-direction: column; gap: 2px; font-size: calc(15px * var(--fz)); color: var(--ink-2); }
+.goals-sum .gs-text strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.goals-sum .gs-text .neg strong { color: var(--bad); }
+.goals-sum .btn { flex-shrink: 0; }
+.goal-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.goal-card { text-decoration: none; }
+.goal-card.dim { opacity: 1; background: var(--surface-sunken); }
+.goal-card.dim .gt { color: var(--ink-2); }
+.goal-card.flash { animation: goal-flash 2.4s ease-out; }
+@keyframes goal-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.gh { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; }

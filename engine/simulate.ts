@@ -427,7 +427,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
     }
   }
   for (const gp of gaps) violations.push(`Кассовый разрыв ${day(gp.start)}–${day(gp.end)}: не хватает до ${money(gp.maxDeficit)}`);
-  if (overAssignedFrom) violations.push(`С ${overAssignedFrom} целям назначено больше, чем есть денег`);
+  if (overAssignedFrom) violations.push(`С ${overAssignedFrom} за целями закреплено больше, чем есть денег`);
 
   const capitalAfter: Record<number, Money | null> = {};
   for (const h of CAPITAL_HORIZONS) capitalAfter[h] = months[h]?.capital ?? null;
@@ -463,7 +463,7 @@ export function assumptions(i: SimInput, scenario: Scenario): string[] {
   }
   if (i.payments.length) a.push(`Платежи по обязательствам: ${i.payments.length} шт. на ${money(sum(i.payments.map((p) => p.amount)))} по графикам`);
   for (const e of i.events) a.push(`Событие «${e.title}» ${day(e.date)}: ${eventLabel(e)}`);
-  a.push(`Месячный прирост назначается целям по стратегии «${STRATEGY_LABELS[i.strategy.id]}»; назначения — метки на деньгах, на капитал не влияют`);
+  a.push(`Месячный прирост закрепляется за целями по варианту «${STRATEGY_LABELS[i.strategy.id]}»; это метки на деньгах, на капитал не влияют`);
   a.push('Вероятности не считаются: это расчёт «если всё будет так», а не прогноз шансов');
   return a;
 }

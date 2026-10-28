@@ -211,5 +211,5 @@ export function acceptAllocation(state: AppState, c: CompareResult, row: Strateg
     explanation: [...c.step0.explanation, ...row.explanation].map((s) => s.text),
     userNote: note,
   };
-  return { ok: true, value: { ...state, fundings: [...state.fundings, ...added], decisions: [...state.decisions, decision] }, explanation: [step('plan.accepted', `Выбрана стратегия ${row.label}: назначено ${Object.keys(row.byGoal).length} целям`)] };
+  return { ok: true, value: { ...state, fundings: [...state.fundings, ...added], decisions: [...state.decisions, decision] }, explanation: [step('plan.accepted', `Выбран вариант «${row.label}»: деньги закреплены за целями (${Object.keys(row.byGoal).length})`)] };
 }

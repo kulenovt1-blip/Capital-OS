@@ -119,6 +119,8 @@ export interface ToastOptions {
   /** «Отменить» в сообщении: 5 секунд с полоской-таймером (D76). */
   undo?: () => void | Promise<void>;
   level?: 'info' | 'error';
+  /** Кнопка следующего шага в сообщении («Закрепить деньги»): тоже 5 секунд. */
+  action?: { label: string; run: () => void };
 }
 
 /** Сообщение внизу над панелью. С «Отменить» — 5 секунд и полоска; смахивается пальцем. */
@@ -135,8 +137,8 @@ export function toast(text: string, opts: ToastOptions | 'info' | 'error' = {}):
       x0 = null;
     });
   }
-  const ms = o.undo ? 5000 : 3500;
-  toastUndo = !!o.undo;
+  const ms = o.undo || o.action ? 5000 : 3500;
+  toastUndo = !!(o.undo || o.action);
   el.replaceChildren(
     ...([
     h('span', null, text),
@@ -153,7 +155,10 @@ export function toast(text: string, opts: ToastOptions | 'info' | 'error' = {}):
           'Отменить',
         )
       : null,
-    o.undo ? h('span', { class: 'tp', style: `animation-duration:${ms}ms` }) : null,
+    o.action
+      ? h('button', { type: 'button', onclick: () => { hideToast(true); o.action!.run(); } }, o.action.label)
+      : null,
+    o.undo || o.action ? h('span', { class: 'tp', style: `animation-duration:${ms}ms` }) : null,
     ].filter(Boolean) as Node[]),
   );
   el.className = `on${o.level === 'error' ? ' error' : ''}`;

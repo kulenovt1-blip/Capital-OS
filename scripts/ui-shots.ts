@@ -78,9 +78,10 @@ const SCREENS: [string, string][] = [
   ['forecast', '#/forecast'], ['import', '#/import'], ['classes', '#/classes'], ['settings', '#/settings'], ['calc', '#/settings/calc'],
   ['more', '#/more'], ['markup', '#/markup'], ['accounts', '#/accounts'], ['incomes', '#/incomes'], ['debts', '#/debts'],
   ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
+  ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-move'], ['goal-fund', '#/goals~goal-fund/goal-move'], ['goal-edit', '#/goals~goal-edit/goal-move'],
 ];
 /** Набор экранов: «before» — старые адреса; дальше — новые (старые ведут на них же). */
-const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc'];
+const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit'];
 const PLAN: [string, string[]][] =
   stage === 'before'
     ? [

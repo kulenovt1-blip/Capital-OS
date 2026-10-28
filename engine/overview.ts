@@ -160,7 +160,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const freeMoney = fm.result.free;
   explanation.push(
     step('overview.reserve', untilIncome.length ? `Резерв под платежи до ${day(nextIncome.date)}: ${money(reserveUntilIncome)} — ${untilIncome.map((u) => `«${u.title}» ${money(u.amount)} ${day(u.date)}`).join(', ')}` : `Платежей по обязательствам до ${day(nextIncome.date)} нет`, { amount: reserveUntilIncome, ...(untilIncome.length ? {} : { detail: true }) }),
-    step('overview.free', `Свободно ${money(freeMoney)} = ${formula([['ликвидно', capital.liquidNow, 1], ['назначено целям', assigned, -1], ['резерв под платежи', reserveUntilIncome, -1]])}`, { amount: freeMoney, level: freeMoney < 0 ? 'warn' : 'info' }),
+    step('overview.free', `Свободно ${money(freeMoney)} = ${formula([['на руках', capital.liquidNow, 1], ['за целями', assigned, -1], ['под платежи', reserveUntilIncome, -1]])}`, { amount: freeMoney, level: freeMoney < 0 ? 'warn' : 'info' }),
   );
 
   // цели: суммы по правилам, дерево, превышения назначений
