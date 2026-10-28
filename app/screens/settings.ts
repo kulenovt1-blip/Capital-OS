@@ -1,8 +1,8 @@
 /** Экран «Настройки»: счета и ликвидность, ручные счета, корректировки, обязательства, доходы, классификация, параметры, бэкап. */
 import {
-  CLASS_LABELS, DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_KIND_LABELS, SAVINGS_FLOW_ACCOUNT_ID, buildOverview, classifyAll, emptyState, makeInstallment, makeRecurring,
+  CLASS_LABELS, DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_PATTERN_LABELS, createIncomeKind, deleteIncomeKind, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, tenge, updateIncomeKind, validateIncomeItem, SAVINGS_FLOW_ACCOUNT_ID, buildOverview, classifyAll, emptyState, makeInstallment, makeRecurring,
   parseState, remainingFromLastDate, remainingFromTerm, serializeState, suggestionToObligation, validateAdjustment, validateClassification, validateObligation,
-  type AccountSettings, type AppState, type IncomeKind, type InstallmentSuggestion, type Liquidity, type ManualAccount, type Obligation, type Overview, type RemainingResult, type Settings,
+  type AccountSettings, type AppState, type IncomeKind, type IncomeKindDef, type IncomePattern, type IncomeScheduleItem, type InstallmentSuggestion, type Liquidity, type ManualAccount, type Obligation, type Overview, type RemainingResult, type Settings,
 } from '../../engine/index';
 import { confirmButton, download, field, h, section, table, toast } from '../dom';
 import { getState, replaceState, today, update } from '../store';
@@ -470,20 +470,36 @@ function checksBlock(st: AppState, o: Overview): HTMLElement | null {
   );
 }
 
+function kindSummary(k: IncomeKindDef, st: AppState): string {
+  const adv = st.settings.scenarios.find((x) => x.id === 'adverse')?.patch ?? {};
+  const b = kindBehavior(adv, k.id);
+  return [
+    k.dependsOnWork ? 'зависит от работы' : 'от работы не зависит',
+    INCOME_PATTERN_LABELS[k.pattern],
+    `в плохом сценарии ${b.factorBp / 100} %${b.delayMonths ? `, позже на ${b.delayMonths} мес.` : ''}`,
+    k.ends ? 'заканчивается' : '',
+  ].filter(Boolean).join(' · ');
+}
+
 function incomeSection(st: AppState): HTMLElement {
-  const KINDS: IncomeKind[] = ['work', 'stable', 'irregular'];
-  const kindSel = h('select', { name: 'kind' }, KINDS.map((k) => h('option', { value: k }, INCOME_KIND_LABELS[k])));
-  const kindHint = h('small', { class: 'muted' }, INCOME_KIND_HINTS.work);
-  kindSel.addEventListener('change', () => (kindHint.textContent = INCOME_KIND_HINTS[kindSel.value as IncomeKind]));
+  const reg = incomeKindRegistry(st.settings.incomeKinds);
+  const hintOf = (id: string) => {
+    const k = reg.find((x) => x.id === id);
+    if (!k) return '';
+    return k.builtin ? INCOME_KIND_HINTS[k.id as 'work' | 'stable' | 'irregular'] : `Свой вид: ${kindSummary(k, st)}.`;
+  };
+  const kindSel = h('select', { name: 'kind' }, reg.map((k) => h('option', { value: k.id }, k.builtin ? k.label : `${k.label} (свой)`)));
+  const kindHint = h('small', { class: 'muted' }, hintOf('work'));
+  kindSel.addEventListener('change', () => (kindHint.textContent = hintOf(kindSel.value)));
   const form = h(
     'form',
     { class: 'grid-form' },
     field('Источник', h('input', { name: 'title', required: true, placeholder: 'Зарплата' })),
     field('День месяца', h('input', { name: 'day', type: 'number', min: 1, max: 31, value: 5, class: 'short' })),
     field(h('span', null, 'Вид', info('incomeKind')), h('div', { class: 'stack' }, kindSel, kindHint)),
-    field('Ожидаемая сумма, ₸', moneyInput('amount'), 'для нерегулярного — средняя за месяц; если не уверен — примерная'),
+    field('Ожидаемая сумма, ₸', moneyInput('amount'), 'если сумма плавает или доход нерегулярный — средняя за месяц'),
     field('С даты (необязательно)', h('input', { name: 'start', type: 'date' })),
-    field('По дату (необязательно)', h('input', { name: 'end', type: 'date' })),
+    field('По дату', h('input', { name: 'end', type: 'date' }), 'обязательно для вида, который заканчивается'),
     h('button', { class: 'btn primary', type: 'submit' }, 'Добавить доход'),
   );
   const errBox = h('div');
@@ -495,34 +511,162 @@ function incomeSection(st: AppState): HTMLElement {
     if (!readStr(form, 'title')) errs.push('Нужно название');
     if (!(dayN >= 1 && dayN <= 31)) errs.push('День месяца — от 1 до 31');
     if (amount === null || amount <= 0) errs.push('Сумма должна быть больше нуля');
-    errBox.replaceChildren(errorsBox(errs) ?? '');
-    if (errs.length) return;
     const start = readStr(form, 'start');
     const end = readStr(form, 'end');
-    const item = { id: newId('inc'), title: readStr(form, 'title'), dayOfMonth: dayN, amount: amount!, kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}) };
+    const item: IncomeScheduleItem = { id: newId('inc'), title: readStr(form, 'title'), dayOfMonth: dayN, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}) };
+    errs.push(...validateIncomeItem(item, reg));
+    errBox.replaceChildren(errorsBox(errs) ?? '');
+    if (errs.length) return;
     await update((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, item] } }));
     toast('Доход добавлен');
   });
+  const setKind = (id: string, kind: string) => update((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((y) => (y.id === id ? { ...y, kind: kind as IncomeKind } : y)) } }));
   return section(
     'Расписание доходов',
     guide(
       `Когда и сколько денег приходит. Отсюда «Свободно» знает, сколько дней до следующего дохода (без расписания — условно ${st.settings.defaultIncomeHorizonDays} дней), а прогноз — будущие поступления.`,
-      'Да, хотя бы основной доход. Вид дохода решает, как он поведёт себя в неблагоприятном сценарии; доход, который закончится (стипендия до выпуска), — с датой окончания.',
+      'Да, хотя бы основной доход. Вид дохода решает, как он поведёт себя в неблагоприятном сценарии. Не хватает вида — создай свой ниже, в «Виды дохода».',
     ),
     st.settings.incomeSchedule.length
       ? table(
-          ['Источник', 'День', 'Сумма', 'Период', ''],
-          st.settings.incomeSchedule.map((x) => [
-            h('span', null, x.title, h('small', { class: 'muted' }, ` · ${INCOME_KIND_LABELS[x.kind ?? 'stable']}`)),
-            String(x.dayOfMonth),
-            fmt(x.amount),
-            `${x.start ? 'с ' + fmtDate(x.start) : ''} ${x.end ? 'по ' + fmtDate(x.end) : ''}`.trim() || 'бессрочно',
-            confirmButton('Удалить', 'Точно?', () => update((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.filter((y) => y.id !== x.id) } }))),
-          ]),
+          ['Источник', 'Вид', 'День', 'Сумма', 'Период', ''],
+          st.settings.incomeSchedule.map((x) => {
+            const sel = h('select', { class: 'compact' }, reg.map((k) => h('option', { value: k.id, selected: k.id === (x.kind ?? 'stable') }, k.label)));
+            sel.addEventListener('change', () => setKind(x.id, sel.value).then(() => toast('Вид изменён')));
+            return [
+              x.title,
+              sel,
+              String(x.dayOfMonth),
+              fmt(x.amount),
+              `${x.start ? 'с ' + fmtDate(x.start) : ''} ${x.end ? 'по ' + fmtDate(x.end) : ''}`.trim() || 'бессрочно',
+              confirmButton('Удалить', 'Точно?', () => update((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.filter((y) => y.id !== x.id) } }))),
+            ];
+          }),
         )
       : null,
     h('details', { class: 'add' }, h('summary', null, '+ Добавить доход'), form, errBox),
+    incomeKindsBlock(st),
   );
+}
+
+/** Виды дохода: встроенные и свои, их поведение, мастер нового вида (D75). */
+function incomeKindsBlock(st: AppState): HTMLElement {
+  const reg = incomeKindRegistry(st.settings.incomeKinds);
+  const save = async (r: { ok: true; value: Settings } | { ok: false; error: string }, ok: string, err: HTMLElement) => {
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    await update((s) => ({ ...s, settings: r.value }));
+    toast(ok);
+  };
+  const row = (k: IncomeKindDef) => {
+    const adv = kindBehavior(st.settings.scenarios.find((x) => x.id === 'adverse')?.patch ?? {}, k.id);
+    const err = h('div');
+    const f = h(
+      'form',
+      { class: 'grid-form' },
+      !k.builtin ? field('Название', h('input', { name: 'label', value: k.label })) : null,
+      !k.builtin ? field('Пропадёт вместе с работой?', h('select', { name: 'work' }, h('option', { value: '1', selected: k.dependsOnWork }, 'да'), h('option', { value: '0', selected: !k.dependsOnWork }, 'нет'))) : null,
+      !k.builtin ? field('Как приходит', h('select', { name: 'pattern' }, (Object.keys(INCOME_PATTERN_LABELS) as IncomePattern[]).map((p) => h('option', { value: p, selected: p === k.pattern }, INCOME_PATTERN_LABELS[p])))) : null,
+      field('В плохом сценарии остаётся, %', h('input', { name: 'factor', inputmode: 'decimal', value: String(adv.factorBp / 100), class: 'short' })),
+      field('Задержка начала, мес.', h('input', { name: 'delay', type: 'number', min: 0, max: 24, value: adv.delayMonths, class: 'short' })),
+      !k.builtin ? h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'ends', checked: k.ends }), ' Закончится (нужна дата окончания)') : null,
+      h('button', { class: 'btn', type: 'submit' }, 'Сохранить'),
+      err,
+    );
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const factor = Math.round(Number(readStr(f, 'factor').replace(',', '.')) * 100);
+      const patch = {
+        adverseFactorBp: Number.isFinite(factor) ? factor : -1,
+        delayMonths: Math.floor(Number(readStr(f, 'delay')) || 0),
+        ...(!k.builtin ? { label: readStr(f, 'label'), dependsOnWork: readStr(f, 'work') === '1', pattern: readStr(f, 'pattern') as IncomePattern, ends: readChecked(f, 'ends') } : {}),
+      };
+      void save(updateIncomeKind(k.id, patch, getState().settings), 'Вид сохранён', err);
+    });
+    const del = k.builtin
+      ? null
+      : (() => {
+          const r = deleteIncomeKind(k.id, st.settings);
+          return r.ok ? confirmButton('Удалить вид', 'Точно удалить?', () => save(deleteIncomeKind(k.id, getState().settings), 'Вид удалён', err)) : h('small', { class: 'muted' }, r.error);
+        })();
+    return h(
+      'li',
+      { class: 'class-row' },
+      h('div', null, h('strong', null, k.label), k.builtin ? h('small', { class: 'muted' }, ' встроенный') : h('span', { class: 'badge' }, 'свой')),
+      h('div', { class: 'muted' }, kindSummary(k, st)),
+      h('details', { class: 'add', 'data-key': `income-kind:${k.id}` }, h('summary', null, 'Изменить'), f),
+      del,
+    );
+  };
+  return h(
+    'details',
+    { class: 'add', 'data-key': 'income-kinds' },
+    h('summary', null, `Виды дохода (${reg.length})`),
+    h('p', { class: 'muted' }, 'Вид решает, как доход ведёт себя в прогнозе: пропадёт ли вместе с работой, насколько упадёт в плохом сценарии, закончится ли.'),
+    h('ul', { class: 'plain' }, reg.map(row)),
+    h('details', { class: 'add', 'data-key': 'income-kind:new' }, h('summary', null, '+ Новый вид дохода'), kindWizard(st)),
+  );
+}
+
+function kindWizard(st: AppState): HTMLElement {
+  const adverse = st.settings.scenarios.find((x) => x.id === 'adverse')?.patch ?? {};
+  const label = h('input', { name: 'label', placeholder: 'Фриланс, Аренда квартиры, Помощь родителей…' });
+  const work = h('select', { name: 'work' }, h('option', { value: '0' }, 'нет, от работы не зависит'), h('option', { value: '1' }, 'да, пропадёт вместе с работой'));
+  const pattern = h('select', { name: 'pattern' }, (Object.keys(INCOME_PATTERN_LABELS) as IncomePattern[]).map((p) => h('option', { value: p }, INCOME_PATTERN_LABELS[p])));
+  const factor = h('input', { name: 'factor', inputmode: 'decimal', class: 'short' });
+  const delay = h('input', { name: 'delay', type: 'number', min: 0, max: 24, class: 'short' });
+  const ends = h('input', { type: 'checkbox', name: 'ends' });
+  const example = moneyInput('example', tenge(40_000));
+  const preview = h('ul', { class: 'plain preview' });
+  const err = h('div');
+  let touched = false;
+  const answers = () => ({
+    dependsOnWork: work.value === '1',
+    pattern: pattern.value as IncomePattern,
+    adverseFactorBp: Math.round(Number(factor.value.replace(',', '.')) * 100),
+    delayMonths: Math.floor(Number(delay.value) || 0),
+    ends: ends.checked,
+  });
+  const applyDefaults = () => {
+    if (touched) return;
+    const d = incomeKindDefaults({ dependsOnWork: work.value === '1', pattern: pattern.value as IncomePattern }, adverse);
+    factor.value = String(d.adverseFactorBp / 100);
+    delay.value = String(d.delayMonths);
+  };
+  const form = h(
+    'form',
+    { class: 'stack' },
+    field('1. Название', label),
+    field('2. Пропадёт ли он, если ты потеряешь основную работу?', work),
+    field('3. Как он приходит?', pattern),
+    field('4. Сколько от него остаётся в неблагоприятном сценарии, %', factor, 'подставлено по ответам выше — можно поменять'),
+    field('5. Если доход ещё не начался — на сколько месяцев может задержаться начало?', delay),
+    h('label', { class: 'check' }, ends, ' 6. Он закончится (у каждого такого дохода будет дата окончания)'),
+    field('Пример суммы для превью, ₸', example),
+    h('div', { class: 'notice info' }, h('strong', null, 'Что это значит в расчётах'), preview),
+    h('button', { class: 'btn primary', type: 'submit' }, 'Создать вид'),
+    err,
+  );
+  const sync = () => {
+    const a = answers();
+    const ex = readMoney(form, 'example') ?? tenge(40_000);
+    preview.replaceChildren(...incomeKindPreview(a, ex).map((t) => h('li', null, t)));
+  };
+  work.addEventListener('change', () => (applyDefaults(), sync()));
+  pattern.addEventListener('change', () => (applyDefaults(), sync()));
+  factor.addEventListener('input', () => ((touched = true), sync()));
+  delay.addEventListener('input', () => ((touched = true), sync()));
+  form.addEventListener('input', sync);
+  form.addEventListener('change', sync);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = createIncomeKind({ label: label.value, ...answers() }, getState().settings);
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    await update((s) => ({ ...s, settings: r.value }));
+    toast(`Вид «${label.value.trim()}» создан — выбери его у дохода`);
+  });
+  applyDefaults();
+  sync();
+  return form;
 }
 
 function classificationSection(st: AppState): HTMLElement {
@@ -645,14 +789,20 @@ function strategySection(st: AppState): HTMLElement {
 
 function scenariosSection(st: AppState): HTMLElement {
   const pct = (bp: number | undefined) => (bp === undefined ? '' : (bp / 100).toString());
+  const kinds = incomeKindRegistry(st.settings.incomeKinds);
   const blocks = st.settings.scenarios.filter((sc) => sc.id !== 'base').map((sc) => {
     const p = sc.patch;
     const form = h(
       'form',
       { class: 'grid-form' },
-      field('Доход «работа», % от плана', h('input', { name: 'work', inputmode: 'decimal', value: pct(p.workIncomeFactorBp), class: 'short', placeholder: '100' })),
-      field('Нерегулярный доход, % от плана', h('input', { name: 'irregular', inputmode: 'decimal', value: pct(p.irregularIncomeFactorBp), class: 'short', placeholder: '100' })),
-      field('Ещё не начавшаяся работа — позже на, мес.', h('input', { name: 'delay', type: 'number', min: 0, value: p.workDelayMonths ?? 0, class: 'short' })),
+      // доходы — по видам: встроенные и свои (D75)
+      ...kinds.flatMap((k) => {
+        const b = kindBehavior(p, k.id);
+        return [
+          field(`Доход «${k.label}», % от плана`, h('input', { name: `f-${k.id}`, inputmode: 'decimal', value: pct(b.factorBp), class: 'short', placeholder: '100' })),
+          field(`«${k.label}»: ещё не начавшийся — позже на, мес.`, h('input', { name: `d-${k.id}`, type: 'number', min: 0, max: 24, value: b.delayMonths, class: 'short' })),
+        ];
+      }),
       field('Расходы, % от медианы', h('input', { name: 'exp', inputmode: 'decimal', value: pct(p.expenseFactorBp), class: 'short', placeholder: '100' })),
       field('Разовый расход, % месяца базовых', h('input', { name: 'oneoff', inputmode: 'decimal', value: pct(p.oneOffMonthsOfBaseBp), class: 'short', placeholder: '0' })),
       field('…в каком месяце от текущего', h('input', { name: 'offset', type: 'number', min: 0, value: p.oneOffMonthOffset ?? 1, class: 'short' })),
@@ -666,8 +816,16 @@ function scenariosSection(st: AppState): HTMLElement {
         const v = Math.round(Number(t.replace(',', '.')) * 100);
         return Number.isSafeInteger(v) && v >= 0 ? v : undefined;
       };
-      const patch = { workIncomeFactorBp: bp('work'), irregularIncomeFactorBp: bp('irregular'), workDelayMonths: Math.max(0, Math.floor(Number(readStr(form, 'delay')) || 0)) || undefined, expenseFactorBp: bp('exp'), oneOffMonthsOfBaseBp: bp('oneoff'), oneOffMonthOffset: Math.max(0, Math.floor(Number(readStr(form, 'offset')) || 0)) };
-      const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+      const factors: Record<string, number> = {};
+      const delays: Record<string, number> = {};
+      for (const k of kinds) {
+        factors[k.id] = Math.min(30000, bp(`f-${k.id}`) ?? 10000);
+        const d = Math.min(24, Math.max(0, Math.floor(Number(readStr(form, `d-${k.id}`)) || 0)));
+        // явный 0 для «работы» нужен, чтобы перекрыть старое поле задержки
+        if (d || k.id === 'work') delays[k.id] = d;
+      }
+      const rest = { expenseFactorBp: bp('exp'), oneOffMonthsOfBaseBp: bp('oneoff'), oneOffMonthOffset: Math.max(0, Math.floor(Number(readStr(form, 'offset')) || 0)) };
+      const clean = { ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)), incomeFactorsBp: factors, incomeDelayMonths: delays };
       await update((x) => ({ ...x, settings: { ...x.settings, scenarios: x.settings.scenarios.map((y) => (y.id === sc.id ? { ...y, patch: clean } : y)) } }));
       toast('Сценарий сохранён');
     });
@@ -675,7 +833,7 @@ function scenariosSection(st: AppState): HTMLElement {
   });
   return section(
     h('span', null, 'Сценарии прогноза', info('scenarios')),
-    guide('Насколько хуже или лучше базового плана считаются неблагоприятный и благоприятный прогнозы: доход, расходы, внезапная трата.', 'Только если считаешь значения по умолчанию слишком мягкими или жёсткими для своей жизни.'),
+    guide('Насколько хуже или лучше базового плана считаются неблагоприятный и благоприятный прогнозы: каждый вид дохода, расходы, внезапная трата.', 'Только если считаешь значения по умолчанию слишком мягкими или жёсткими для своей жизни. Поведение одного вида удобнее менять в «Мои деньги → Расписание доходов → Виды дохода».'),
     ...blocks,
   );
 }

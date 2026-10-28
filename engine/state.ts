@@ -132,7 +132,9 @@ export function parseState(json: string): ParseResult {
  * коэффициента нерегулярного дохода получает значение по умолчанию 0 (D66).
  */
 export function migrateState(s: AppState): void {
-  s.settings.incomeSchedule = s.settings.incomeSchedule.map((x) => ({ ...x, kind: normalizeIncomeKind(x.kind) }));
+  s.settings.incomeKinds = Array.isArray(s.settings.incomeKinds) ? s.settings.incomeKinds : [];
+  const custom = s.settings.incomeKinds.map((k) => k.id);
+  s.settings.incomeSchedule = s.settings.incomeSchedule.map((x) => ({ ...x, kind: normalizeIncomeKind(x.kind, custom) }));
   s.settings.scenarios = s.settings.scenarios.map((sc) =>
     sc.id === 'adverse' && sc.patch.irregularIncomeFactorBp === undefined ? { ...sc, patch: { ...sc.patch, irregularIncomeFactorBp: 0 } } : sc,
   );

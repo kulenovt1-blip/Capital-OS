@@ -8,6 +8,7 @@ import type { Account } from './types';
 import { DEFAULT_CLASSIFICATION, type ClassificationSettings } from './classify';
 import { DEFAULT_STRATEGY_SETTINGS, type StrategyId, type StrategySettings } from './ladder';
 import { DEFAULT_SCENARIOS, type LifeEvent, type Scenario } from './simulate';
+import type { IncomeKindDef } from './income-kinds';
 import { DEFAULT_CLASS_SETTINGS, type ClassSettings } from './classes';
 
 export type Liquidity = { kind: 'instant' } | { kind: 'days'; days: number } | { kind: 'locked_until'; date: IsoDate };
@@ -90,21 +91,23 @@ export interface IncomeScheduleItem {
   kind?: IncomeKind;
 }
 
-/** Вид дохода = поведение в прогнозе, а не метка (D66). */
-export type IncomeKind = 'work' | 'stable' | 'irregular';
-export const INCOME_KIND_LABELS: Record<IncomeKind, string> = {
+/** Вид дохода = поведение в прогнозе, а не метка (D66). Встроенные — ниже; свои — id 'K_…' (D75). */
+export type IncomeKind = 'work' | 'stable' | 'irregular' | `K_${string}`;
+export const INCOME_KIND_LABELS: Record<'work' | 'stable' | 'irregular', string> = {
   work: 'зависит от работы',
   stable: 'стабильный',
   irregular: 'нерегулярный',
 };
-export const INCOME_KIND_HINTS: Record<IncomeKind, string> = {
+export const INCOME_KIND_HINTS: Record<'work' | 'stable' | 'irregular', string> = {
   work: 'Зарплата, подработка по найму. В неблагоприятном сценарии урезается и может начаться позже.',
   stable: 'Стипендия, пенсия, аренда, регулярный перевод. Сценарии его не меняют; если он закончится — укажи дату окончания.',
   irregular: 'Фриланс, премии, заказы. В прогнозе — средняя сумма, в неблагоприятном сценарии по умолчанию 0.',
 };
-/** Старые значения ('stipend', 'other', пусто) — это «стабильный». */
-export function normalizeIncomeKind(k: unknown): IncomeKind {
-  return k === 'work' || k === 'irregular' ? k : 'stable';
+/** Старые значения ('stipend', 'other', пусто) и удалённые свои виды — это «стабильный». */
+export function normalizeIncomeKind(k: unknown, customIds: readonly string[] = []): IncomeKind {
+  if (k === 'work' || k === 'irregular') return k;
+  if (typeof k === 'string' && customIds.includes(k)) return k as IncomeKind;
+  return 'stable';
 }
 
 export interface Settings {
@@ -141,6 +144,8 @@ export interface Settings {
   savingsFlows: SavingsFlowsSetting;
   /** Находки автозаполнения рассрочек, отклонённые пользователем («это не рассрочка»), по ключу находки (D67). */
   dismissedInstallments: string[];
+  /** Свои виды дохода (D75); поведение в сценариях — в самих сценариях по id вида. */
+  incomeKinds: IncomeKindDef[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -163,6 +168,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openingDebts: { receivable: 0 as Money, payable: 0 as Money },
   savingsFlows: { mode: 'estimate' },
   dismissedInstallments: [],
+  incomeKinds: [],
 };
 
 /** Счета с флагом MoneyManager «не учитывать в балансе», о которых пользователь ещё не ответил (D58). */

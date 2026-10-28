@@ -103,7 +103,8 @@ export function validateClassDef(c: ClassDef): string[] {
   return errs;
 }
 
-function slug(label: string): string {
+/** Латинский идентификатор из названия (кириллица и казахские буквы транслитерируются). */
+export function slug(label: string): string {
   const map: Record<string, string> = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya', ә: 'a', ғ: 'g', қ: 'k', ң: 'n', ө: 'o', ұ: 'u', ү: 'u', һ: 'h', і: 'i' };
   const s = label.trim().toLowerCase().split('').map((ch) => map[ch] ?? ch).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
   return s || 'class';

@@ -21,3 +21,4 @@ export * from './plan';
 export * from './classes';
 export * from './setup';
 export * from './installment-detect';
+export * from './income-kinds';

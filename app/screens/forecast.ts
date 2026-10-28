@@ -1,8 +1,7 @@
 /** Экран «Прогноз»: три сценария, график капитала, плановые события, «что если» и альтернативы. */
 import {
   buildSimInput, runAlternatives, runForecast, runWhatIf, formatMonthRu, formatDateRu,
-  type LifeEvent, type LifeEventKind, type Money, type SimResult, type WhatIfResult, type AlternativeResult,
-} from '../../engine/index';
+  type LifeEvent, type LifeEventKind, type Money, type SimResult, type WhatIfResult, type AlternativeResult, incomeKindRegistry, type IncomeKind } from '../../engine/index';
 import { lineChart } from '../chart';
 import { confirmButton, field, h, section, table, toast } from '../dom';
 import { getState, today, update } from '../store';
@@ -39,6 +38,7 @@ function eventForm(submitLabel: string, onEvent: (e: LifeEvent) => void): HTMLFo
     field('Действует до (необязательно)', h('input', { name: 'until', type: 'date' })),
     field('Доход / обязательство', h('select', { name: 'target' }, h('option', { value: '' }, '—'), targets.map((t) => h('option', { value: t.id }, t.title)))),
     field('День поступления (для нового дохода)', h('input', { name: 'day', type: 'number', min: 1, max: 31, class: 'short' })),
+    field('Вид нового дохода', h('select', { name: 'incomeKind' }, incomeKindRegistry(st.settings.incomeKinds).map((k) => h('option', { value: k.id }, k.label))), 'от вида зависит, как доход поведёт себя в плохом сценарии'),
     h('button', { class: 'btn primary', type: 'submit' }, submitLabel),
   );
   const err = h('div');
@@ -65,6 +65,7 @@ function eventForm(submitLabel: string, onEvent: (e: LifeEvent) => void): HTMLFo
       ...(target ? { target } : {}),
       ...(until ? { until } : {}),
       ...(dayN >= 1 && dayN <= 31 ? { dayOfMonth: dayN } : {}),
+      ...(kind === 'income_start' ? { incomeKind: readStr(form, 'incomeKind') as IncomeKind } : {}),
     });
   });
   return form;
@@ -119,7 +120,17 @@ export function renderForecast(rerender: () => void): HTMLElement {
       ...rs.map((r, i) =>
         r.violations.length ? h('details', { class: 'explain' }, h('summary', null, `${names[i]}: нарушения (${r.violations.length})`), h('ul', null, r.violations.map((v) => h('li', { class: 'warn' }, v)))) : null,
       ),
-      h('details', { class: 'explain' }, h('summary', null, 'Предположения'), h('ul', null, rs[0]!.assumptions.map((a) => h('li', null, a)))),
+      h(
+        'details',
+        { class: 'explain' },
+        h('summary', null, 'Предположения'),
+        h('ul', null, rs[0]!.assumptions.map((a) => h('li', null, a))),
+        // как каждый сценарий изменил доходы — по видам дохода (D75)
+        ...rs.slice(1).map((r, i) => {
+          const notes = r.assumptions.filter((a) => a.startsWith('Сценарий: ')).map((a) => a.slice('Сценарий: '.length));
+          return notes.length ? h('div', null, h('strong', null, `${names[i + 1]}:`), h('ul', null, notes.map((n) => h('li', null, n)))) : null;
+        }),
+      ),
     ),
   );
 

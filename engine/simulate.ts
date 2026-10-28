@@ -14,6 +14,7 @@ import { add, applyBp, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from
 import { addDays, addMonths, daysInMonth, endOfMonth, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate, type MonthKey } from './date';
 import { day, money, step, type Explanation } from './explain';
 import type { IncomeKind } from './settings';
+import { kindBehavior } from './income-kinds';
 import { ladder, STRATEGY_LABELS, type StrategyParams, type StrategySettings } from './ladder';
 import type { Goal, GoalId } from './goals';
 
@@ -76,6 +77,10 @@ export interface LifeEvent {
 }
 
 export interface SimInput {
+  /** Названия видов дохода — для пояснений сценария (D75). */
+  incomeKindLabels?: Record<string, string>;
+  /** Что сценарий поменял в доходах — заполняет applyScenario, печатается в предположениях. */
+  scenarioNotes?: string[];
   start: IsoDate;
   horizonMonths: number;
   /** Ликвидные деньги (карты, наличные, сбережения с мгновенным доступом). */
@@ -100,6 +105,10 @@ export interface ScenarioPatch {
   workIncomeFactorBp?: number;
   /** Нерегулярный доход × (б.п./10000). Нет поля — без изменений. */
   irregularIncomeFactorBp?: number;
+  /** По виду дохода (id вида → б.п.); сильнее полей выше (D75). */
+  incomeFactorsBp?: Record<string, number>;
+  /** По виду дохода: ещё не начавшийся доход начинается на N месяцев позже. */
+  incomeDelayMonths?: Record<string, number>;
   /** Доход вида work, который ещё не начался, начинается на N месяцев позже. */
   workDelayMonths?: number;
   /** Все расходы × (б.п./10000). */
@@ -184,18 +193,29 @@ function cloneInput(i: SimInput): SimInput {
 /** Применить патч сценария. Исходные параметры не меняются. */
 export function applyScenario(input: SimInput, p: ScenarioPatch): SimInput {
   const i = cloneInput(input);
-  if (p.workIncomeFactorBp !== undefined) {
-    for (const s of i.incomes) if (s.kind === 'work') s.amount = mulDiv(s.amount, p.workIncomeFactorBp, 10000);
-    for (const e of i.events) if (e.kind === 'income_start' && (e.incomeKind ?? 'work') === 'work') e.amount = mulDiv(e.amount, p.workIncomeFactorBp, 10000);
+  // доходы — по поведению вида в этом сценарии (D66, D75)
+  const notes: string[] = [];
+  const label = (k: string) => i.incomeKindLabels?.[k] ?? k;
+  for (const s of i.incomes) {
+    const b = kindBehavior(p, s.kind);
+    if (b.factorBp !== 10000) {
+      const was = s.amount;
+      s.amount = mulDiv(s.amount, b.factorBp, 10000);
+      notes.push(`Доход «${s.title}» (вид «${label(s.kind)}»): ${money(was)} → ${money(s.amount)} (${b.factorBp / 100} %)`);
+    }
+    if (b.delayMonths && s.start && s.start > i.start) {
+      s.start = addMonths(s.start, b.delayMonths);
+      notes.push(`Доход «${s.title}» начинается на ${b.delayMonths} мес. позже — с ${day(s.start)}`);
+    }
   }
-  if (p.irregularIncomeFactorBp !== undefined) {
-    for (const s of i.incomes) if (s.kind === 'irregular') s.amount = mulDiv(s.amount, p.irregularIncomeFactorBp, 10000);
-    for (const e of i.events) if (e.kind === 'income_start' && e.incomeKind === 'irregular') e.amount = mulDiv(e.amount, p.irregularIncomeFactorBp, 10000);
+  for (const e of i.events) {
+    if (e.kind !== 'income_start') continue;
+    const k = e.incomeKind ?? 'work';
+    const b = kindBehavior(p, k);
+    if (b.factorBp !== 10000) e.amount = mulDiv(e.amount, b.factorBp, 10000);
+    if (b.delayMonths && e.date > i.start) e.date = addMonths(e.date, b.delayMonths);
   }
-  if (p.workDelayMonths) {
-    for (const s of i.incomes) if (s.kind === 'work' && s.start && s.start > i.start) s.start = addMonths(s.start, p.workDelayMonths);
-    for (const e of i.events) if (e.kind === 'income_start' && (e.incomeKind ?? 'work') === 'work' && e.date > i.start) e.date = addMonths(e.date, p.workDelayMonths);
-  }
+  if (notes.length) i.scenarioNotes = [...(i.scenarioNotes ?? []), ...notes];
   if (p.expenseFactorBp !== undefined) for (const x of i.expenses) x.monthly = mulDiv(x.monthly, p.expenseFactorBp, 10000);
   if (p.oneOffMonthsOfBaseBp) {
     const date = withDay(addMonths(startOfMonth(i.start), p.oneOffMonthOffset ?? 1), 15);
@@ -436,6 +456,7 @@ export function assumptions(i: SimInput, scenario: Scenario): string[] {
     a.push(`Доход «${s.title}»: ${money(s.amount)} ${s.dayOfMonth}-го числа${s.start ? `, с ${day(s.start)}` : ''}${s.end ? `, по ${day(s.end)}` : ''}${s.growth ? `, рост ${s.growth.rateBp / 100}% каждые ${s.growth.everyMonths} мес.` : ''}`);
   }
   if (!i.incomes.length) a.push('Регулярных доходов нет');
+  for (const n of i.scenarioNotes ?? []) a.push(`Сценарий: ${n}`);
   for (const x of i.expenses) a.push(`Расход «${x.title}»: ${money(x.monthly)} в месяц${x.growthBp ? `, рост ${x.growthBp / 100}% в год` : ', без роста'}${x.start ? `, с ${day(x.start)}` : ''}${x.end ? ` по ${day(x.end)}` : ''}`);
   for (const d of i.deposits) {
     a.push(`Вклад «${d.title}»: ${money(d.balance)}, ${d.rateBp / 100}% годовых, капитализация ${d.capitalization === 'daily' ? 'ежедневная' : 'ежемесячная'}; деньги и проценты недоступны до ${day(d.availableFrom)}`);

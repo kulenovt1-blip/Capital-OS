@@ -10,6 +10,7 @@ import { baselineMonthly, monthlyFlows } from './ledger';
 import { BEHAVIOR_LABELS, classRegistry } from './classes';
 import { upcomingPayments } from './obligations';
 import { normalizeIncomeKind } from './settings';
+import { incomeKindRegistry } from './income-kinds';
 import { assignMoney, directFunded, type GoalFunding } from './goals';
 import { compareStrategies, type CompareResult, type StrategyParams, type StrategyRow } from './allocate';
 import { simulate, whatIf, compareAlternatives, type ExpenseBaseline, type LifeEvent, type SimDeposit, type SimInput, type SimResult, type WhatIfResult, type AlternativeResult } from './simulate';
@@ -103,13 +104,14 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
   if (!state.settings.incomeSchedule.length) warnings.push(step('plan.no_income', 'Расписание доходов пустое — прогноз без доходов', { level: 'warn' }));
 
   const input: SimInput = {
+    incomeKindLabels: Object.fromEntries(incomeKindRegistry(state.settings.incomeKinds).map((k) => [k.id, k.label])),
     start: today,
     horizonMonths: state.settings.simulationMonths,
     cash,
     deposits,
     liabilities: o.capital.liabilities.total,
     payments,
-    incomes: state.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth, kind: normalizeIncomeKind(x.kind), ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}) })),
+    incomes: state.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth, kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)), ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}) })),
     expenses,
     events: state.settings.plannedEvents,
     goals: o.goals,
