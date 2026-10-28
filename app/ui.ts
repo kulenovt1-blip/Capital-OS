@@ -231,8 +231,9 @@ export function attention(items: AttentionItem[], progress?: { done: number; tot
     h(
       'div',
       { class: 'head' },
-      h('div', { class: 't' }, h('span', null, `Требует внимания · ${items.length}`), progress ? h('span', { class: 'muted' }, `настройка ${progress.done} из ${progress.total}`) : null),
+      h('div', { class: 't' }, `Требует внимания · ${items.length}`),
       progress ? h('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': String(progress.done), 'aria-valuemax': String(progress.total), 'aria-label': 'Настройка' }, h('span', { style: `width:${progress.total ? Math.round((progress.done * 100) / progress.total) : 0}%` })) : null,
+      progress ? h('div', { class: 'cap' }, `Настройка: ${progress.done} из ${progress.total}`) : null,
     ),
     shown.map((i) => row({ title: i.title, href: i.href, cls: i.bad ? 'bad' : '', lead: h('span', { class: 'lead' }) })),
     restBox,

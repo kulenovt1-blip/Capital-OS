@@ -1,112 +1,106 @@
-/** Экран «Обзор»: капитал, ликвидность, ближайшие обязательства, свободные деньги, уведомления. */
-import { add, buildOverview, ZERO, type Overview } from '../../engine/index';
-import { h, section, table } from '../dom';
-import { getState, today } from '../store';
-import { setupBanner } from './setup';
-import { explainBlock, fmt, fmtDate, info, liquidityText, moneySpan, notices, stat } from '../ui';
-import type { Child } from '../dom';
-const lab = (t: string, k: Parameters<typeof info>[0]): Child => h('span', null, t, info(k));
+/**
+ * «Обзор» (D82, заменяет D71): одно главное число — сколько свободно до дохода; под ним разбивка,
+ * капитал и долги мелко, одна карточка «Требует внимания», платежи строкой, счета списком.
+ */
+import { addDays, type Overview } from '../../engine/index';
+import { h } from '../dom';
+import { today } from '../store';
+import { badAccounts, ov, progress } from '../ctx';
+import { attentionItems } from '../attention';
+import { attention, fmt, fmtDay, hero, info, liquidityText, nWord, row, rows, sub } from '../ui';
+import { registerExplain } from '../explain';
+import { defineSheet, sheetHref } from '../main';
+
+registerExplain('overview', 'Как посчитано: «Обзор»', () => {
+  const o = ov();
+  return [...o.capital.explanation.filter((s) => s.level !== 'warn'), ...o.explanation];
+});
+
+defineSheet('payments', () => {
+  const o = ov();
+  return {
+    title: 'Платежи на 30 дней',
+    body: o.upcoming30.length
+      ? rows(o.upcoming30.map((u) => row({ title: `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, sub: fmtDay(u.date), value: fmt(u.amount) })))
+      : h('p', { class: 'muted' }, 'Платежей нет.'),
+  };
+});
+
+defineSheet('excluded', () => {
+  const o = ov();
+  return {
+    title: 'Не учитываются',
+    body: h(
+      'div',
+      { class: 'stack' },
+      rows(o.capital.accounts.filter((p) => p.excluded).map((p) => row({ title: p.title, value: h('span', { class: 'muted' }, fmt(p.balance)) }))),
+      h('a', { class: 'btn', href: '#/accounts' }, 'Изменить в «Счета»'),
+    ),
+  };
+});
 
 export type OverviewBuilder = () => Overview;
+/** Совместимость: раньше этап 2 подменял построитель обзора. */
+export function setOverviewBuilder(_b: OverviewBuilder): void {}
 
-/** По умолчанию — обзор этапа 1; этап 2 подставляет версию с целями. */
-export let overviewBuilder: OverviewBuilder = () => buildOverview(getState(), today());
-export function setOverviewBuilder(b: OverviewBuilder): void {
-  overviewBuilder = b;
+function heroBlock(o: Overview): HTMLElement {
+  const c = o.capital;
+  const est = c.accounts.find((p) => p.source === 'savings_flow' && !p.excluded && p.availableFrom <= today());
+  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно · горизонт 30 дней', info('free'));
+  const parts = [`на руках ${fmt(c.liquidNow)}`, `за целями ${fmt(o.assigned)}`, `под платежи ${fmt(o.reserveUntilIncome)}`];
+  const subline =
+    o.freeMoney < 0
+      ? h('span', null, `до дохода не хватает ${fmt((-o.freeMoney) as never)}`)
+      : h('span', null, parts.join(' · '), est ? h('span', null, ` · в т. ч. оценка ${fmt(est.balance)}`, info('savingsFlow')) : null);
+  return hero(label, fmt(o.freeMoney), subline, { neg: o.freeMoney < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+}
+
+function emptyState(): HTMLElement {
+  return h(
+    'div',
+    { class: 'screen' },
+    hero('Свободно', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
+    h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'),
+    h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве.'),
+  );
 }
 
 export function renderOverview(): HTMLElement {
-  const o = overviewBuilder();
+  const o = ov();
+  if (!o.hasData) return emptyState();
   const c = o.capital;
-  const root = h('div', { class: 'screen' });
-  root.append(
-    h('p', { class: 'muted date-line' }, `На ${fmtDate(o.today)}${o.classification && !o.classification.complete ? ' · отчёт неполный' : ''}`),
-    setupBanner() ?? '',
-    notices(o.notices) ?? '',
-    h(
-      'div',
-      { class: 'stats' },
-      // первым — сколько денег на руках; капитал нетто следом, с расшифровкой (D71)
-      stat(lab('Ликвидно сейчас', 'liquid'), moneySpan(c.liquidNow), 'деньги, которые можно снять сегодня', 'accent'),
-      stat(lab('Свободно', 'free'), moneySpan(o.freeMoney), `до дохода ${fmtDate(o.nextIncome.date)}${o.nextIncome.source === 'default' ? ' (условно)' : ''}`, o.freeMoney < 0 ? 'bad' : ''),
-      stat(lab('Капитал нетто', 'net'), moneySpan(c.net), c.liabilities.total ? `на счетах ${fmt(c.gross)} − долги и рассрочки ${fmt(c.liabilities.total)}` : 'долгов и рассрочек нет'),
-      c.liabilities.total ? stat(lab('Обязательства', 'liabilities'), moneySpan(c.liabilities.total), liabilityParts(c)) : '',
-      c.receivables ? stat(lab('Тебе должны', 'receivables'), moneySpan(c.receivables), 'в нетто не входит') : '',
-      o.reserveUntilIncome ? stat(lab('Резерв до дохода', 'reserveUntilIncome'), moneySpan(o.reserveUntilIncome), 'платежи по обязательствам') : '',
-    ),
-    explainBlock([...c.explanation.filter((s) => s.level !== 'warn'), ...o.explanation]) ?? '',
-  );
-
-  const total30 = o.upcoming30.reduce((a, u) => add(a, u.amount), ZERO);
-  root.append(
-    folded(
-      'upcoming',
-      o.upcoming30.length ? `Платежи на 30 дней: ${o.upcoming30.length} на ${fmt(total30)}` : 'Платежей на 30 дней нет',
-      o.upcoming30.length
-        ? table(
-            ['Дата', 'Обязательство', 'Сумма'],
-            o.upcoming30.map((u) => [fmtDate(u.date), `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, moneySpan(u.amount)]),
-          )
-        : h('p', { class: 'muted' }, 'Рассрочки и долги добавляются в «Настройки → Обязательства»; найденные в операциях рассрочки там предложатся сами.'),
-    ),
-  );
-
-  const shown = c.accounts.filter((p) => !p.excluded);
-  const excluded = c.accounts.filter((p) => p.excluded);
-  root.append(
-    section(
-      'Счета',
-      table(
-        ['Счёт', 'Баланс', 'Доступ', ''],
-        shown.map((p) => [
-          p.title,
-          moneySpan(p.balance),
-          liquidityText(p.liquidity),
-          p.source === 'manual' ? h('span', { class: 'badge' }, 'вручную') : p.source === 'savings_flow' ? h('span', null, h('span', { class: 'badge warn' }, 'оценка'), info('savingsFlow')) : '',
-        ]),
+  const bad = badAccounts();
+  const p = progress();
+  const items = attentionItems();
+  const end = addDays(today(), 30);
+  const total30 = o.upcoming30.reduce((s, u) => s + u.amount, 0);
+  const shown = c.accounts.filter((x) => !x.excluded);
+  const excluded = c.accounts.filter((x) => x.excluded);
+  const cells = [
+    h('a', { class: 'cell', href: sheetHref('explain', 'overview') }, h('div', { class: 'k' }, 'Капитал', info('net')), h('div', { class: 'v' }, fmt(c.net))),
+    c.liabilities.total ? h('a', { class: 'cell', href: '#/debts' }, h('div', { class: 'k' }, 'Долги', info('liabilities')), h('div', { class: 'v' }, fmt(c.liabilities.total))) : null,
+    c.receivables ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Тебе должны', info('receivables')), h('div', { class: 'v' }, fmt(c.receivables))) : null,
+  ];
+  return h(
+    'div',
+    { class: 'screen' },
+    heroBlock(o),
+    h('div', { class: 'cells' }, cells),
+    items.length ? attention(items, p.done < p.total ? p : undefined) : null,
+    o.upcoming30.length
+      ? rows(row({ title: 'Платежи на 30 дней', sub: `${nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей')} до ${fmtDay(end)}`, value: fmt(total30 as never), href: sheetHref('payments') }))
+      : rows(row({ title: `Платежей до ${fmtDay(end)} нет` })),
+    sub('Счета'),
+    rows(
+      shown.map((x) =>
+        row({
+          title: h('span', null, x.title, x.source === 'savings_flow' ? h('span', null, ' ', h('span', { class: 'tag warn' }, 'оценка')) : null),
+          sub: `снять: ${liquidityText(x.liquidity)}`,
+          value: fmt(x.balance),
+          mark: bad.has(x.accountId),
+        }),
       ),
-      excluded.length
-        ? h(
-            'details',
-            { class: 'add', 'data-key': 'overview:excluded' },
-            h('summary', null, `Исключённые (${excluded.length}) — в капитал не входят`),
-            table(
-              ['Счёт', 'Баланс'],
-              excluded.map((p) => [p.title, moneySpan(p.balance, { muted: true })]),
-            ),
-            h('p', { class: 'muted' }, h('a', { href: '#/settings/accounts' }, 'Изменить в «Настройки → Счета»')),
-          )
-        : null,
+      excluded.length ? row({ title: `Не учитываются (${excluded.length})`, sub: 'в капитал не входят', href: sheetHref('excluded') }) : null,
     ),
   );
-
-  if (o.obligations.length) {
-    const left = o.obligations.filter((s) => s.obligation.kind !== 'recurring').reduce((a, s) => add(a, s.remainingNow), ZERO);
-    root.append(
-      folded(
-        'obligations',
-        `Обязательства: ${o.obligations.length}${left ? `, осталось выплатить ${fmt(left)}` : ''}`,
-        table(
-          ['Название', 'Остаток', 'Следующий платёж'],
-          o.obligations.map((s) => [
-            `${s.obligation.title}${s.obligation.owner === 'family' ? ' (семья)' : ''}`,
-            s.obligation.kind === 'recurring' ? 'регулярный' : moneySpan(s.remainingNow),
-            s.nextDue ? `${fmt(s.nextDue.amount)} · ${fmtDate(s.nextDue.date)}` : '—',
-          ]),
-        ),
-      ),
-    );
-  }
-  return root;
-}
-
-/** Свёрнутый раздел: заголовок-итог видно всегда, таблица — по нажатию. */
-function folded(key: string, summary: string, body: HTMLElement): HTMLElement {
-  return h('section', { class: 'card folded' }, h('details', { 'data-key': `overview:${key}` }, h('summary', null, h('h2', null, summary)), body));
-}
-
-function liabilityParts(c: Overview['capital']): string {
-  const l = c.liabilities;
-  const parts: [string, number][] = [['свои рассрочки', l.installmentsOwn], ['семейные', l.installmentsFamily], ['долги', add(l.debtsManual, l.payablesFromOps)]];
-  return parts.filter(([, v]) => v !== 0).map(([t, v]) => `${t} ${fmt(v as never)}`).join(' · ');
 }
