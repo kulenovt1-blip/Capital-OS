@@ -79,9 +79,10 @@ const SCREENS: [string, string][] = [
   ['more', '#/more'], ['markup', '#/markup'], ['accounts', '#/accounts'], ['incomes', '#/incomes'], ['debts', '#/debts'],
   ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
   ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-move'], ['goal-fund', '#/goals~goal-fund/goal-move'], ['goal-edit', '#/goals~goal-edit/goal-move'],
+  ['fc-events', '#/forecast~fc-events'], ['fc-whatif', '#/forecast~fc-whatif'], ['fc-whatif-result', '#/forecast~fc-whatif'],
 ];
 /** Набор экранов: «before» — старые адреса; дальше — новые (старые ведут на них же). */
-const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit'];
+const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'fc-events', 'fc-whatif', 'fc-whatif-result'];
 const PLAN: [string, string[]][] =
   stage === 'before'
     ? [
@@ -141,6 +142,15 @@ for (const v of VARIANTS) {
         const amount = page.locator('input[name=amount]').first();
         await amount.fill('180000');
         await amount.press('Enter');
+        await page.waitForTimeout(900);
+      }
+      if (name === 'fc-whatif-result') {
+        await page.locator('#fc-whatif-form select[name=kind]').selectOption('recurring_change');
+        await page.locator('#fc-whatif-form input[name=title]').fill('Аренда');
+        await page.locator('#fc-whatif-form input[name=amount]').fill('120000');
+        await page.getByRole('button', { name: 'Добавить событие' }).click();
+        await page.waitForTimeout(300);
+        await page.getByRole('button', { name: 'Посчитать' }).click();
         await page.waitForTimeout(900);
       }
       await page.screenshot({ path: join(OUT, `${stateName}-${name}-${v.name}.png`), fullPage: true });

@@ -204,7 +204,7 @@ function sheetView(p: Parsed): HTMLElement | null {
   if (!v) return null;
   const el = h(
     'div',
-    { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': v.title },
+    { class: `sheet${v.bar ? ' with-bar' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': v.title },
     h('div', { class: 'sh-head' }, h('button', { class: 'back', type: 'button', onclick: closeSheet }, '‹ Назад'), h('h2', null, v.title)),
     h('div', { class: 'sh-body' }, v.body),
     v.bar ?? null,
@@ -213,6 +213,10 @@ function sheetView(p: Parsed): HTMLElement | null {
 }
 
 let lastKey = '';
+/** Перерисовать текущий экран и подэкран (подэкраны со своим состоянием — «Что если»). */
+export function refresh(): void {
+  render();
+}
 function render(): void {
   const p = parseHash();
   // старые адреса

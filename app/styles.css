@@ -465,3 +465,17 @@ input.big-input { height: 64px; font-size: calc(28px * var(--fz)); font-weight: 
 .variant .chip.static { max-width: 100%; display: inline-block; text-align: left; }
 .variant { gap: 8px; padding: 14px 16px; }
 .variants > .variant:only-child { flex-basis: 100%; }
+svg.chart .dot.s1 { fill: var(--series-1); }
+/* «Прогноз» (D87) */
+table.tbl.four { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; margin: 12px 0; font-variant-numeric: tabular-nums; }
+table.tbl.four th, table.tbl.four td { padding: 12px 10px; text-align: right; border-bottom: 1px solid var(--divider); font-size: calc(15px * var(--fz)); }
+table.tbl.four th:first-child { text-align: left; font-weight: 600; color: var(--ink-2); }
+table.tbl.four thead th { font-size: calc(13px * var(--fz)); color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+table.tbl.four tr:last-child > * { border-bottom: none; }
+table.tbl.four tr.on > * { background: var(--surface-sunken); }
+.screen > .seg { margin-bottom: 12px; }
+.screen > .okline, .screen > .badline { margin: 12px 0; }
+.sheet.with-bar .sh-body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+table.tbl.four { table-layout: fixed; }
+table.tbl.four th, table.tbl.four td { padding: 12px 8px; font-size: calc(14px * var(--fz)); overflow-wrap: anywhere; }
+table.tbl.four thead th { font-size: calc(13px * var(--fz)); letter-spacing: 0.02em; }
