@@ -450,3 +450,18 @@ body.lock #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 @keyframes goal-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .gh { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .chips.wrap { flex-wrap: wrap; overflow: visible; }
+/* «Доход» (D86) */
+input.big-input { height: 64px; font-size: calc(28px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; }
+.income-head { margin: 16px 0 8px; }
+.income-head .label { font-size: calc(12px * var(--fz)); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; display: flex; align-items: center; }
+.income-head .value { font-size: calc(36px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.income-head .muted a { color: inherit; }
+.variant .warnline { margin: 0; }
+.variant details.fold { margin-top: 4px; }
+.variant { cursor: pointer; }
+.variant:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.variants { align-items: flex-start; }
+.variant .chip.static { min-height: 32px; height: auto; white-space: normal; padding: 6px 12px; line-height: 1.25; }
+.variant .chip.static { max-width: 100%; display: inline-block; text-align: left; }
+.variant { gap: 8px; padding: 14px 16px; }
+.variants > .variant:only-child { flex-basis: 100%; }

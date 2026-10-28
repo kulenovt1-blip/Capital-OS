@@ -81,6 +81,18 @@ describe('1. Денег хватает на всё', () => {
   });
 });
 
+describe('«Цена выбора» читается (D86)', () => {
+  it('нет «: ,», «: , но» и букв стратегий в начале; у не-плана есть сравнение с планом', () => {
+    for (const amount of [60_000, 150_000, 250_000, 400_000, 900_000]) {
+      const c = compareStrategies(compareInput(amount));
+      for (const row of c.rows) {
+        expect(row.price).not.toMatch(/: ,|:\s*$|, но\s*$|^\s*,/);
+        expect(row.price).not.toMatch(/\b[ABCD] «/);
+      }
+    }
+  });
+});
+
 describe('2. Хватает на обязательства, но не на все цели', () => {
   it('резерв получает всё, минимум переезда помечен недофинансированным', () => {
     const s0 = step0({ ...step0Base, income: tenge(150_000) });

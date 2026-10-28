@@ -48,9 +48,13 @@ const nodeOf = (v: GoalsView, id: string) => v.flat.find((n) => n.goal.id === id
 
 // ───────────────────────── подсветка новой цели ─────────────────────────
 
-let flash: { id: string; until: number } | null = null;
+let flash: { ids: string[]; until: number } | null = null;
 function flashGoal(id: string): void {
-  flash = { id, until: Date.now() + 2500 };
+  flashGoals([id]);
+}
+/** Подсветить цели при следующей отрисовке «Целей» (новая цель, метки после распределения дохода). */
+export function flashGoals(ids: string[]): void {
+  flash = { ids, until: Date.now() + 2500 };
 }
 
 // ───────────────────────── форма цели ─────────────────────────
@@ -191,7 +195,7 @@ function goalCard(n: GoalNode, v: GoalsView, depth = 0): HTMLElement[] {
   const bound = v.fundings.filter((f) => f.goalId === g.id && f.id.startsWith('bound:'));
   const card = h(
     'a',
-    { class: `goal-card${depth ? ' child' : ''}${dim ? ' dim' : ''}${flash && flash.id === g.id && Date.now() < flash.until ? ' flash' : ''}`, href: sheetHref('goal', g.id), 'data-goal': g.id, style: depth > 1 ? `margin-left:${16 * depth}px;width:calc(100% - ${16 * depth}px)` : undefined },
+    { class: `goal-card${depth ? ' child' : ''}${dim ? ' dim' : ''}${flash && flash.ids.includes(g.id) && Date.now() < flash.until ? ' flash' : ''}`, href: sheetHref('goal', g.id), 'data-goal': g.id, style: depth > 1 ? `margin-left:${16 * depth}px;width:calc(100% - ${16 * depth}px)` : undefined },
     h('div', { class: 'gh' }, h('span', { class: 'gt' }, g.title), stateTag(n)),
     h('div', { class: `bar${n.achieved ? ' done' : ''}`, role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(width)), 'aria-label': `Прогресс «${g.title}»` }, h('span', { style: `width:${width}%` })),
     h('div', { class: 'gm' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · ${percent(n)}`),
@@ -291,8 +295,8 @@ export function renderGoals(): HTMLElement {
 
   // новая цель: прокрутить к ней и подсветить
   if (flash && Date.now() < flash.until) {
-    const id = flash.id;
-    setTimeout(() => document.querySelector(`[data-goal="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+    const id = flash.ids[0];
+    if (id) setTimeout(() => document.querySelector(`[data-goal="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
   }
   return root;
 }

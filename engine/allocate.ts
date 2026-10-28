@@ -3,7 +3,7 @@
  * Ядро (шаг 0, лестница) — в ladder.ts; здесь — сравнение, объединение и «цена выбора».
  */
 import { add, ZERO, type Money } from './money';
-import { monthsBetween, type MonthKey } from './date';
+import { formatDateRu, formatMonthRu, monthsBetween, type MonthKey } from './date';
 import { money, step, type Explanation } from './explain';
 import type { Goal, GoalId } from './goals';
 import {
@@ -131,10 +131,10 @@ export function compareStrategies(ci: CompareInput): CompareResult {
   }
   for (const o of out) {
     if (o.ids.length < 2) continue;
-    const labels = o.ids.map((id) => `${id} «${STRATEGY_LABELS[id]}»`).join(', ');
+    const labels = o.ids.map((id) => `«${STRATEGY_LABELS[id]}»`).join(' и ');
     const all = out.length === 1;
     const shown = STRATEGY_LABELS[o.strategy.id];
-    const reason = `${all ? 'Все стратегии сведены к одному варианту' : `${labels} совпали`}: доступно только ${money(s0.available)} после обязательств и расходов до следующего дохода, и при любой стратегии оно уходит на одни и те же цели (разница меньше ${money(ci.settings.mergeTolerance)}). Даты целей — при дальнейшем распределении по стратегии «${shown}»`;
+    const reason = `${all ? 'Все варианты дают одно и то же' : `${labels} дают одно и то же`}: доступно только ${money(s0.available)} после платежей и обычных трат до следующего дохода, и при любом варианте оно уходит на одни и те же цели (разница меньше ${money(ci.settings.mergeTolerance)}). Даты целей — если дальше распределять как «${shown}»`;
     merged.push({ ids: o.ids, reason });
     o.label = o.ids.map((id) => STRATEGY_LABELS[id]).join(' = ');
     o.price = reason;
@@ -149,30 +149,43 @@ function sameAllocation(a: StrategyRow, b: StrategyRow, tol: Money): boolean {
   return Math.abs(a.free - b.free) < tol;
 }
 
-/** «Цена выбора» одной фразой из объяснения: что ускоряется, что замедляется, что с резервом и разрывами. */
+/**
+ * «Цена выбора» одной фразой: что лучше и что хуже, чем в текущем плане (сроки целей, подушка, разрывы).
+ * Без выгод — без двоеточия и «но» (раньше получалось «Безопасность: , но …»).
+ */
 function priceOf(row: StrategyRow, plan: StrategyRow | undefined, title: (id: string) => string, reserve: Goal | undefined): string {
   const parts: string[] = [];
   const minus: string[] = [];
-  if (plan && row !== plan) {
+  const isPlan = !plan || row === plan;
+  if (!isPlan) {
     const shifts = Object.entries(row.shiftVsPlan).filter(([, v]) => v !== null && v !== 0) as [string, number][];
     const faster = shifts.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
     const slower = shifts.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-    for (const [g, v] of faster.slice(0, 2)) parts.push(`ускоряет «${title(g)}» на ${-v} мес.`);
-    for (const [g, v] of slower.slice(0, 2)) minus.push(`замедляет «${title(g)}» на ${v} мес.`);
-    if (!faster.length && !slower.length) parts.push(`сроки целей те же, что у «${plan.label}»`);
+    for (const [g, v] of faster.slice(0, 2)) parts.push(`«${title(g)}» раньше на ${-v} мес.`);
+    for (const [g, v] of slower.slice(0, 2)) minus.push(`«${title(g)}» позже на ${v} мес.`);
+    // подушка сейчас: месяцы базовых трат после этого распределения
+    const a = row.reserveMonthsTenths;
+    const b = plan!.reserveMonthsTenths;
+    if (a !== null && b !== null && a !== b) (a > b ? parts : minus).push(`подушка ${a > b ? '+' : '−'}${tenthsText(Math.abs(a - b))} мес.`);
+    if (!faster.length && !slower.length && !parts.length && !minus.length) parts.push(`сроки целей те же, что в «${plan!.label}»`);
   } else {
-    parts.push('текущий план — база для сравнения');
+    parts.push('текущий план');
   }
   if (reserve) {
     const rm = row.reserveMinMonth;
-    if (rm === null) minus.push(`резерв ниже минимума весь горизонт`);
-    else if (plan && row !== plan && plan.reserveMinMonth && rm !== plan.reserveMinMonth) (rm > plan.reserveMinMonth ? minus : parts).push(`резерв достигает минимума в ${rm} (в плане — ${plan.reserveMinMonth})`);
-    else if (row === plan || !plan) parts.push(`резерв на минимуме с ${rm}`);
+    if (rm === null) minus.push('подушка ниже минимума весь горизонт');
+    else if (!isPlan && plan!.reserveMinMonth && rm !== plan!.reserveMinMonth) (rm > plan!.reserveMinMonth ? minus : parts).push(`подушка на минимуме с ${formatMonthRu(rm)} (в плане — с ${formatMonthRu(plan!.reserveMinMonth)})`);
+    else if (isPlan) parts.push(`подушка на минимуме с ${formatMonthRu(rm)}`);
   }
-  if (row.underfunded.length) minus.push(`недофинансировано: ${row.underfunded.map((u) => `«${title(u.goalId)}»`).join(', ')}`);
-  if (row.gaps.length) minus.push(`кассовый разрыв с ${row.gaps[0]!.start}`);
-  if (row.free > 0) parts.push(`свободно ${money(row.free)}`);
+  if (row.underfunded.length) minus.push(`не хватает на обязательный взнос: ${row.underfunded.map((u) => `«${title(u.goalId)}»`).join(', ')}`);
+  if (row.gaps.length) minus.push(`кассовый разрыв с ${formatDateRu(row.gaps[0]!.start)}`);
+  if (row.free > 0) parts.push(`не распределено ${money(row.free)}`);
+  if (!parts.length) return minus.length ? `${row.label}: ${minus.join(', ')}` : row.label;
   const head = `${row.label}: ${parts.join(', ')}`;
   return minus.length ? `${head}, но ${minus.join(', ')}` : head;
 }
 
+/** Десятые доли: 4 → «0,4». */
+function tenthsText(t: number): string {
+  return `${Math.floor(t / 10)}${t % 10 ? `,${t % 10}` : ''}`;
+}
