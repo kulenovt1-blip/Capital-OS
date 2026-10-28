@@ -50,10 +50,10 @@ export function forecastExpenses(state: AppState, today: IsoDate, ops: readonly 
       } else if (history.length >= 3) {
         monthly = mulDiv(sumN, 1, history.length);
         how = `средняя за ${history.length} мес.`;
-        warnings.push(step('plan.irregular_short', `«${c.label}»: истории ${history.length} мес. — меньше года, сезонность не видна. Задай оценку на год на экране «Классы»`, { level: 'warn' }));
+        warnings.push(step('plan.irregular_short', `«${c.label}»: истории ${history.length} мес. — меньше года, сезонность не видна. Задай оценку на год в «Разметке → Свои типы»`, { level: 'warn' }));
       } else {
         monthly = ZERO;
-        warnings.push(step('plan.irregular_short', `«${c.label}»: истории меньше 3 месяцев и нет оценки на год — в прогнозе 0. Задай оценку на экране «Классы»`, { level: 'warn' }));
+        warnings.push(step('plan.irregular_short', `«${c.label}»: истории меньше 3 месяцев и нет оценки на год — в прогнозе 0. Задай оценку в «Разметке → Свои типы»`, { level: 'warn' }));
         continue;
       }
     } else {
@@ -96,12 +96,12 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
   const ops = o.classification?.ops ?? [];
   const notes: Explanation = [];
   const expenses = forecastExpenses(state, today, ops, warnings, notes);
-  if (!expenses.length) warnings.push(step('plan.no_expenses', 'Нет размеченных расходов — прогноз считает расходы нулевыми. Разметь категории на экране «Импорт»', { level: 'warn' }));
+  if (!expenses.length) warnings.push(step('plan.no_expenses', 'Нет размеченных трат — прогноз считает траты нулевыми. Разметь категории в «Разметке»', { level: 'warn' }));
   const instMedian = sum(['E_installment_own', 'E_installment_family'].map((c) => baselineMonthly(ops, today, c as OpClass, state.settings.baselineMonths).median));
   if (instMedian > 0 && !state.obligations.some((x) => x.kind === 'installment')) {
-    warnings.push(step('plan.installments_missing', `В операциях есть рассрочки (медиана ${instMedian / 100} ₸ в месяц), но в обязательствах их нет — в прогнозе они не учтены. Заведи их в «Настройки → Обязательства»`, { level: 'warn' }));
+    warnings.push(step('plan.installments_missing', `В операциях есть рассрочки (в обычный месяц ${money(instMedian)}), но они не заведены — в прогнозе не учтены. Заведи их в «Ещё → Долги и рассрочки»`, { level: 'warn' }));
   }
-  if (!state.settings.incomeSchedule.length) warnings.push(step('plan.no_income', 'Расписание доходов пустое — прогноз без доходов', { level: 'warn' }));
+  if (!state.settings.incomeSchedule.length) warnings.push(step('plan.no_income', 'Доходы не заданы — прогноз без доходов. Добавь их в «Ещё → Доходы»', { level: 'warn' }));
 
   const input: SimInput = {
     incomeKindLabels: Object.fromEntries(incomeKindRegistry(state.settings.incomeKinds).map((k) => [k.id, k.label])),
@@ -211,5 +211,5 @@ export function acceptAllocation(state: AppState, c: CompareResult, row: Strateg
     explanation: [...c.step0.explanation, ...row.explanation].map((s) => s.text),
     userNote: note,
   };
-  return { ok: true, value: { ...state, fundings: [...state.fundings, ...added], decisions: [...state.decisions, decision] }, explanation: [step('plan.accepted', `Выбрана стратегия ${row.label}: назначено ${Object.keys(row.byGoal).length} целям`)] };
+  return { ok: true, value: { ...state, fundings: [...state.fundings, ...added], decisions: [...state.decisions, decision] }, explanation: [step('plan.accepted', `Выбран вариант «${row.label}»: деньги закреплены за целями (${Object.keys(row.byGoal).length})`)] };
 }

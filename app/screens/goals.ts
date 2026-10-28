@@ -1,316 +1,229 @@
-/** Экран «Цели»: дерево с прогрессом, назначение и снятие денег, редактирование с причиной, история. */
+/**
+ * Экран «Цели» (D85): одна строка-сводка, «＋ Цель» вверху, карточки целей; всё остальное — в подэкранах.
+ * Быстрая форма — три поля и шаблон; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
+ */
 import {
-  ROLE_LABELS, STATUS_LABELS, HORIZON_LABELS, assignMoney, deleteGoal, starterGoals, buildGoalsView, changeStatus, createGoal, exampleGoals, moveFunding, updateGoal, withdrawMoney,
-  type Goal, type GoalNode, type GoalRole, type GoalStatus, type GoalsView, type Importance, type Flexibility, type Money,
+  STATUS_LABELS, assignMoney, deleteGoal, buildGoalsView, changeStatus, createGoal, exampleGoals, moveFunding, updateGoal, withdrawMoney,
+  type Goal, type GoalNode, type GoalRole, type GoalStatus, type GoalsView, type Horizon, type Importance, type Flexibility, type Money,
 } from '../../engine/index';
-import { confirmButton, field, h, section, table, toast } from '../dom';
-import { getState, today, update } from '../store';
-import { errorsBox, explainBlock, fmt, fmtDate, info, moneyInput, moneySpan, newId, readMoney, readStr, stat } from '../ui';
+import { ask, confirmButton, field, h, toast } from '../dom';
+import { act, getState, today, update } from '../store';
+import { chip, errorsBox, fmt, fmtDate, info, moneyInput, newId, pct, readMoney, readStr, row, rows, stickyBar, sub } from '../ui';
+import { closeSheet, defineSheet, openSheet, sheetHref } from '../main';
+import { explainLink, registerExplain } from '../explain';
+import { cushionOffer } from '../blocks';
+import { ov } from '../ctx';
 
-const ROLES = Object.keys(ROLE_LABELS) as GoalRole[];
-const STATUSES = Object.keys(STATUS_LABELS) as GoalStatus[];
+/** Шаблоны вместо слова «роль»: по одному на роль; «Накопления» — по умолчанию. */
+const TEMPLATES: { role: GoalRole; label: string; hint: string; flexibility?: Flexibility; importance?: Importance }[] = [
+  { role: 'capital', label: 'Накопления', hint: 'Финансовая база' },
+  { role: 'safety', label: 'Подушка', hint: 'Подушка', importance: 5 },
+  { role: 'quality', label: 'Покупка', hint: 'Ноутбук' },
+  { role: 'life_change', label: 'Переезд и перемены', hint: 'Переезд' },
+  { role: 'obligation', label: 'Долг', hint: 'Вернуть долг', flexibility: 'fixed', importance: 5 },
+  { role: 'growth', label: 'Учёба и рост', hint: 'Курсы' },
+];
+const FLEX: Record<Flexibility, string> = { fixed: 'жёсткий', flexible: 'гибкий', open: 'без срока' };
 
-function options<T extends string>(values: readonly T[], labels: Record<T, string>, selected?: T): HTMLOptionElement[] {
-  return values.map((v) => h('option', { value: v, selected: v === selected }, labels[v]));
+/** Горизонт словами по порогам из настроек (по умолчанию 3 / 12 / 36 мес.). */
+function horizonText(hz: Horizon): string {
+  const [a, b, c] = getState().settings.horizonMonths;
+  const m = (n: number) => (n % 12 === 0 ? (n === 12 ? 'года' : `${n / 12} лет`) : `${n} мес.`);
+  return { small: `до ${m(a)}`, medium: `до ${m(b)}`, long: `до ${m(c)}`, major: `дольше ${m(c)}` }[hz];
 }
 
-/** Все счета: доступные — с суммой, остальные серым и с причиной (ничего не пропадает молча). */
-function accountSelect(v: GoalsView, name: string): HTMLSelectElement {
-  const list = [...v.allAccounts].sort((a, b) => Number(b.status === 'available') - Number(a.status === 'available'));
-  return h(
-    'select',
-    { name },
-    list.map((a) =>
-      a.status === 'available'
-        ? h('option', { value: a.accountId }, `${a.title} — свободно ${fmt(a.free)}`)
-        : h('option', { value: a.accountId, disabled: true }, `${a.title} — ${a.reason}`),
-    ),
-  );
+function percent(n: GoalNode): string {
+  const p = n.pctPermille / 10;
+  return pct(p >= 10 ? Math.floor(p) : Math.floor(p * 10) / 10);
 }
 
-/** Поля цели — общие для создания и редактирования. */
-function goalFields(g: Partial<Goal>, goals: Goal[], selfId?: string): HTMLElement[] {
-  return [
-    field('Название', h('input', { name: 'title', required: true, value: g.title ?? '' })),
-    field('Роль', h('select', { name: 'role' }, options(ROLES, ROLE_LABELS, g.role ?? 'capital'))),
-    field('Минимальная сумма, ₸', moneyInput('targetMin', g.targetMin)),
-    field('Комфортная сумма, ₸ (необязательно)', moneyInput('targetComfort', g.targetComfort, '')),
-    field('Желаемая дата', h('input', { name: 'desiredDate', type: 'date', value: g.desiredDate ?? '' })),
-    field('Дедлайн', h('input', { name: 'deadline', type: 'date', value: g.deadline ?? '' })),
-    field('Гибкость срока', h('select', { name: 'flexibility' }, options(['fixed', 'flexible', 'open'] as Flexibility[], { fixed: 'жёсткий', flexible: 'гибкий', open: 'открытый' }, g.flexibility ?? 'flexible'))),
-    field('Важность (1–5)', h('select', { name: 'importance' }, [1, 2, 3, 4, 5].map((i) => h('option', { value: i, selected: i === (g.importance ?? 3) }, String(i))))),
-    field('Минимальный взнос в месяц, ₸ (необязательно)', moneyInput('minMonthlyFunding', g.minMonthlyFunding, '')),
-    field(
-      'Родительская цель',
-      h('select', { name: 'parentId' }, h('option', { value: '' }, '— нет —'), goals.filter((x) => x.id !== selfId).map((x) => h('option', { value: x.id, selected: x.id === g.parentId }, x.title))),
-    ),
-    field('Зачем', h('input', { name: 'why', value: g.why ?? '' })),
-    field('Критерий выполнения', h('input', { name: 'doneCriteria', value: g.doneCriteria ?? '' })),
-  ];
+function deadlineText(g: Goal): string {
+  if (g.deadline) return `к ${fmtDate(g.deadline)}`;
+  if (g.desiredDate) return `желательно к ${fmtDate(g.desiredDate)}`;
+  return 'без срока';
 }
 
-function readGoalFields(form: HTMLFormElement): { patch: Partial<Goal>; errs: string[] } {
-  const errs: string[] = [];
-  const targetMin = readMoney(form, 'targetMin');
-  if (targetMin === null) errs.push('Минимальная сумма: введи число');
-  const comfortStr = readStr(form, 'targetComfort');
-  const targetComfort = comfortStr ? readMoney(form, 'targetComfort') : undefined;
-  if (targetComfort === null) errs.push('Комфортная сумма: введи число или оставь пустой');
-  const mmfStr = readStr(form, 'minMonthlyFunding');
-  const minMonthlyFunding = mmfStr ? readMoney(form, 'minMonthlyFunding') : undefined;
-  if (minMonthlyFunding === null) errs.push('Минимальный взнос: введи число или оставь пустым');
-  const opt = <T,>(v: T | '' | undefined | null): T | undefined => (v === '' || v === null || v === undefined ? undefined : v);
-  return {
-    errs,
-    patch: {
-      title: readStr(form, 'title'),
-      role: readStr(form, 'role') as GoalRole,
-      targetMin: (targetMin ?? 0) as Money,
-      targetComfort: opt(targetComfort),
-      desiredDate: opt(readStr(form, 'desiredDate')),
-      deadline: opt(readStr(form, 'deadline')),
-      flexibility: readStr(form, 'flexibility') as Flexibility,
-      importance: Number(readStr(form, 'importance')) as Importance,
-      minMonthlyFunding: opt(minMonthlyFunding),
-      parentId: opt(readStr(form, 'parentId')),
-      why: readStr(form, 'why'),
-      doneCriteria: readStr(form, 'doneCriteria'),
-    },
-  };
+const view = (): GoalsView => buildGoalsView(getState(), today());
+const nodeOf = (v: GoalsView, id: string) => v.flat.find((n) => n.goal.id === id);
+
+// ───────────────────────── подсветка новой цели ─────────────────────────
+
+let flash: { ids: string[]; until: number } | null = null;
+function flashGoal(id: string): void {
+  flashGoals([id]);
+}
+/** Подсветить цели при следующей отрисовке «Целей» (новая цель, метки после распределения дохода). */
+export function flashGoals(ids: string[]): void {
+  flash = { ids, until: Date.now() + 2500 };
 }
 
-function nodeActions(n: GoalNode, v: GoalsView): HTMLElement {
-  const g = n.goal;
-  const st = getState();
-  const errBox = h('div');
-  const say = (errs: string[]) => errBox.replaceChildren(errorsBox(errs) ?? '');
+// ───────────────────────── форма цели ─────────────────────────
 
-  // назначить
-  const assignForm = h('form', { class: 'grid-form' }, field('Со счёта', accountSelect(v, 'acc')), field('Сумма, ₸', moneyInput('amount')), h('button', { class: 'btn primary', type: 'submit' }, 'Назначить'));
-  assignForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = readMoney(assignForm, 'amount');
-    if (amount === null) return say(['Введи сумму']);
-    const r = assignMoney({ id: newId('fund'), goalId: g.id, accountId: readStr(assignForm, 'acc'), amount, date: today(), decisionId: null }, { goals: v.goals, fundings: v.fundings, balances: v.balances });
-    if (!r.ok) return say([r.error]);
-    await update((s) => ({ ...s, fundings: [...s.fundings, r.value] }));
-    toast(`Назначено ${fmt(amount)} на «${g.title}»`);
-  });
+/**
+ * Три поля сверху, остальное под «Подробнее». Срок из быстрой формы — это дедлайн:
+ * по нему лестница и симулятор считают, сколько нужно откладывать (желаемая дата влияет только на горизонт).
+ */
+function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTemplates: boolean; withReason: boolean }): { form: HTMLFormElement; read: () => { patch: Partial<Goal>; errs: string[] } } {
+  let role: GoalRole = g.role ?? 'capital';
+  const title = h('input', { name: 'title', required: true, value: g.title ?? '', placeholder: TEMPLATES.find((t) => t.role === role)?.hint ?? '', autocomplete: 'off' });
+  const amount = moneyInput('targetMin', g.targetMin && g.targetMin > 0 ? g.targetMin : undefined);
+  const when = h('input', { name: 'deadline', type: 'date', value: g.deadline ?? '' });
+  const flexSel = h('select', { name: 'flexibility' }, (Object.keys(FLEX) as Flexibility[]).map((f) => h('option', { value: f, selected: f === (g.flexibility ?? 'flexible') }, FLEX[f])));
+  const impSel = h('select', { name: 'importance' }, [1, 2, 3, 4, 5].map((i) => h('option', { value: i, selected: i === (g.importance ?? 3) }, String(i))));
+  const summaryText = () => `Подробнее · важность ${impSel.value}, срок ${FLEX[flexSel.value as Flexibility]}`;
+  const summary = h('summary', null, summaryText());
+  flexSel.addEventListener('change', () => (summary.textContent = summaryText()));
+  impSel.addEventListener('change', () => (summary.textContent = summaryText()));
 
-  // снять / перенести
-  const fundedAccs = v.accounts.filter((a) => st.fundings.some((f) => f.goalId === g.id && f.accountId === a.accountId));
-  const withdrawForm = h(
+  const chips = h('div', { class: 'chips wrap', role: 'radiogroup', 'aria-label': 'Шаблон цели' });
+  const drawChips = () =>
+    chips.replaceChildren(
+      ...TEMPLATES.map((t) =>
+        chip(t.label, t.role === role, () => {
+          role = t.role;
+          title.placeholder = t.hint;
+          if (t.flexibility) flexSel.value = t.flexibility;
+          if (t.importance) impSel.value = String(t.importance);
+          summary.textContent = summaryText();
+          drawChips();
+        }),
+      ),
+    );
+  drawChips();
+
+  const form = h(
     'form',
-    { class: 'grid-form' },
-    field('Со счёта', h('select', { name: 'acc' }, fundedAccs.map((a) => h('option', { value: a.accountId }, a.title)))),
-    field('Сумма, ₸', moneyInput('amount')),
-    field('Действие', h('select', { name: 'mode' }, h('option', { value: 'withdraw' }, 'снять с цели (деньги станут свободными)'), ...v.accounts.map((a) => h('option', { value: `move:${a.accountId}` }, `перенести назначение на «${a.title}»`)))),
-    h('button', { class: 'btn', type: 'submit' }, 'Выполнить'),
-  );
-  withdrawForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = readMoney(withdrawForm, 'amount');
-    if (amount === null) return say(['Введи сумму']);
-    const acc = readStr(withdrawForm, 'acc');
-    const mode = readStr(withdrawForm, 'mode');
-    // снять можно только настоящую метку; перенос проверяет место на целевом счёте с учётом привязок (D59)
-    const ctx = { goals: v.goals, fundings: mode === 'withdraw' ? st.fundings : v.fundings, balances: v.balances };
-    const r = mode === 'withdraw'
-      ? withdrawMoney({ id: newId('fund'), goalId: g.id, accountId: acc, amount, date: today(), decisionId: null }, ctx)
-      : moveFunding({ id: newId('move'), goalId: g.id, fromAccountId: acc, toAccountId: mode.slice(5), amount, date: today(), decisionId: null }, ctx);
-    if (!r.ok) return say([r.error]);
-    const added = Array.isArray(r.value) ? r.value : [r.value];
-    await update((s) => ({ ...s, fundings: [...s.fundings, ...added] }));
-    toast('Готово');
-  });
-
-  // изменить (с причиной)
-  const editForm = h('form', { class: 'grid-form' }, ...goalFields(g, v.goals, g.id), field('Причина изменения (обязательно)', h('input', { name: 'reason', required: true })), h('button', { class: 'btn primary', type: 'submit' }, 'Сохранить изменения'));
-  editForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const { patch, errs } = readGoalFields(editForm);
-    if (errs.length) return say(errs);
-    const original = st.goals.find((x) => x.id === g.id)!;
-    // сумма резерва по правилу не перезаписывается вычисленным значением
-    if (original.targetRule && patch.targetMin === g.targetMin) patch.targetMin = original.targetMin;
-    const r = updateGoal(original, { ...patch, unconfirmed: false }, readStr(editForm, 'reason'), today(), st.goals);
-    if (!r.ok) return say([r.error]);
-    await update((s) => ({ ...s, goals: s.goals.map((x) => (x.id === g.id ? r.value : x)) }));
-    toast('Цель изменена');
-  });
-
-  // статус
-  const statusForm = h(
-    'form',
-    { class: 'grid-form' },
-    field('Новый статус', h('select', { name: 'status' }, options(STATUSES, STATUS_LABELS, g.status))),
-    field('Причина (обязательно)', h('input', { name: 'reason', required: true })),
-    h('button', { class: 'btn', type: 'submit' }, 'Сменить статус'),
-  );
-  statusForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const original = st.goals.find((x) => x.id === g.id)!;
-    const r = changeStatus(original, readStr(statusForm, 'status') as GoalStatus, readStr(statusForm, 'reason'), today(), { goals: st.goals, fundings: st.fundings });
-    if (!r.ok) return say([r.error]);
-    await update((s) => ({ ...s, goals: s.goals.map((x) => (x.id === g.id ? r.value : x)) }));
-    toast('Статус изменён');
-  });
-
-  // привязка счёта целиком (D59) — прямо в карточке цели
-  const boundHere = st.settings.accounts.filter((a) => a.boundGoalId === g.id);
-  const bindable = v.allAccounts.filter((a) => a.status === 'available' || a.status === 'empty' || a.status === 'fully_assigned');
-  const setBinding = (accountId: string, goalId: string | undefined) =>
-    update((s) => {
-      const prev = s.settings.accounts.find((x) => x.accountId === accountId);
-      const base = prev ?? { accountId, excluded: false, liquidity: { kind: 'instant' as const } };
-      const { boundGoalId: _old, ...rest } = base;
-      const next = { ...rest, reviewed: true, ...(goalId ? { boundGoalId: goalId } : {}) };
-      return { ...s, settings: { ...s.settings, accounts: [...s.settings.accounts.filter((x) => x.accountId !== accountId), next].sort((x, y) => (x.accountId < y.accountId ? -1 : 1)) } };
-    });
-  const bindSel = h('select', null, bindable.map((a) => h('option', { value: a.accountId }, `${a.title} — ${fmt(a.balance)}`)));
-  const bindBlock = h(
-    'div',
-    { class: 'stack' },
-    h('p', { class: 'muted' }, 'Весь остаток счёта будет за этой целью и сам будет расти при пополнении. Подходит для отдельного счёта под цель — заначки, депозита.'),
-    boundHere.length
-      ? h('ul', { class: 'plain' }, boundHere.map((b) => h('li', { class: 'row' }, `«${v.allAccounts.find((a) => a.accountId === b.accountId)?.title ?? b.accountId}» привязан`, h('button', { class: 'btn small', type: 'button', onclick: () => setBinding(b.accountId, undefined).then(() => toast('Счёт отвязан')) }, 'Отвязать'))))
-      : null,
-    bindable.length
-      ? h('div', { class: 'row' }, bindSel, h('button', { class: 'btn primary', type: 'button', onclick: () => setBinding(bindSel.value, g.id).then(() => toast('Счёт привязан к цели')) }, 'Привязать'))
-      : h('small', { class: 'muted' }, 'Нет счетов, которые можно привязать: исключённые и уже привязанные к другим целям не подходят.'),
-  );
-
-  const del = deleteGoal(g.id, { goals: st.goals, fundings: st.fundings, accounts: st.settings.accounts });
-  const deleteBlock = del.ok
-    ? confirmButton('Удалить цель', 'Точно удалить?', () => update((s) => ({ ...s, goals: del.value.goals, fundings: del.value.fundings })).then(() => toast(`Цель «${g.title}» удалена`)))
-    : h('small', { class: 'muted' }, `Удалить нельзя. ${del.error.replace(/\.$/, '')}. Или смени статус на «отменена» — тогда история сохранится.`);
-
-  const funds = st.fundings.filter((f) => f.goalId === g.id);
-  const accTitle = (id: string) => v.accounts.find((a) => a.accountId === id)?.title ?? id;
-  return h(
-    'details',
-    { class: 'goal-actions-wrap', 'data-key': `${g.id}:actions` },
-    h('summary', { class: 'btn small' }, 'Действия'),
-    h(
-    'div',
-    { class: 'goal-actions' },
-    errBox,
-    g.status !== 'cancelled' && g.status !== 'done' ? h('details', { class: 'add', 'data-key': `${g.id}:assign` }, h('summary', null, 'Назначить деньги'), assignForm) : null,
-    fundedAccs.length ? h('details', { class: 'add', 'data-key': `${g.id}:withdraw` }, h('summary', null, 'Снять или перенести'), withdrawForm) : null,
-    h('details', { class: 'add', 'data-key': `${g.id}:edit` }, h('summary', null, 'Изменить'), editForm),
-    h('details', { class: 'add', 'data-key': `${g.id}:bind` }, h('summary', null, boundHere.length ? 'Счёт привязан' : 'Привязать счёт целиком'), bindBlock),
-    h('details', { class: 'add', 'data-key': `${g.id}:status` }, h('summary', null, 'Статус'), statusForm),
+    { class: 'stack', id },
+    opts.withTemplates ? chips : null,
+    field('Название', title),
+    field('Сколько нужно, ₸', amount, g.targetRule ? 'считается по правилу подушки — можно задать вручную' : undefined),
+    field('К какому сроку (необязательно)', when),
     h(
       'details',
-      { class: 'add', 'data-key': `${g.id}:history` },
-      h('summary', null, `История (${g.history.length + funds.length})`),
-      table(
-        ['Дата', 'Что', 'Было → стало', 'Причина'],
-        [
-          ...g.history.map((x) => [fmtDate(x.date), x.field, `${String(x.from ?? '—')} → ${String(x.to ?? '—')}`, x.reason]),
-          ...funds.map((f) => [fmtDate(f.date), f.amount > 0 ? 'назначено' : 'снято', `${fmt(f.amount, true)} · ${accTitle(f.accountId)}`, f.decisionId ? `решение ${f.decisionId}` : 'вручную']),
-        ],
+      { class: 'fold', 'data-key': `${id}:more` },
+      summary,
+      h(
+        'div',
+        { class: 'stack' },
+        field('Важность (1–5)', impSel),
+        field('Срок', flexSel, 'жёсткий — позже нельзя; гибкий — можно сдвинуть'),
+        field('Желаемая дата (раньше срока)', h('input', { name: 'desiredDate', type: 'date', value: g.desiredDate ?? '' })),
+        field('Комфортная сумма, ₸', moneyInput('targetComfort', g.targetComfort, 'необязательно')),
+        field('Откладывать в месяц не меньше, ₸', moneyInput('minMonthlyFunding', g.minMonthlyFunding, 'необязательно')),
+        field(
+          'Часть другой цели',
+          h('select', { name: 'parentId' }, h('option', { value: '' }, 'нет'), goals.filter((x) => x.id !== g.id).map((x) => h('option', { value: x.id, selected: x.id === g.parentId }, x.title))),
+        ),
+        field('Зачем', h('input', { name: 'why', value: g.why ?? '', autocomplete: 'off' })),
+        field('Когда цель выполнена', h('input', { name: 'doneCriteria', value: g.doneCriteria ?? '', autocomplete: 'off' })),
       ),
     ),
-    h('div', { class: 'goal-delete' }, deleteBlock),
-    ),
+    opts.withReason ? field('Почему меняешь', h('input', { name: 'reason', required: true, autocomplete: 'off' }), 'сохранится в истории цели') : null,
   );
+
+  const read = () => {
+    const errs: string[] = [];
+    const targetMin = readMoney(form, 'targetMin');
+    if (targetMin === null && !g.targetRule) errs.push('Сколько нужно: введи сумму');
+    const opt = <T,>(v: T | '' | undefined | null): T | undefined => (v === '' || v === null || v === undefined ? undefined : v);
+    const money = (name: string, label: string) => {
+      if (!readStr(form, name)) return undefined;
+      const m = readMoney(form, name);
+      if (m === null) errs.push(`${label}: введи число или оставь пустым`);
+      return m ?? undefined;
+    };
+    const targetComfort = money('targetComfort', 'Комфортная сумма');
+    const minMonthlyFunding = money('minMonthlyFunding', 'Откладывать в месяц');
+    return {
+      errs,
+      patch: {
+        title: readStr(form, 'title'),
+        role,
+        targetMin: (targetMin ?? g.targetMin ?? 0) as Money,
+        targetComfort,
+        deadline: opt(readStr(form, 'deadline')),
+        desiredDate: opt(readStr(form, 'desiredDate')),
+        flexibility: readStr(form, 'flexibility') as Flexibility,
+        importance: Number(readStr(form, 'importance')) as Importance,
+        minMonthlyFunding,
+        parentId: opt(readStr(form, 'parentId')),
+        why: readStr(form, 'why'),
+        doneCriteria: readStr(form, 'doneCriteria'),
+      },
+    };
+  };
+  return { form, read };
 }
 
-function goalCard(n: GoalNode, v: GoalsView): HTMLElement {
-  const g = n.goal;
-  const pct = Math.min(1000, n.pctPermille) / 10;
-  const dim = g.status === 'paused' || g.status === 'cancelled' || g.status === 'done';
-  return h(
-    'li',
-    { class: `goal${dim ? ' dim' : ''}` },
-    h(
-      'div',
-      { class: 'goal-head' },
-      h('strong', null, g.title),
-      h('span', { class: 'badge' }, ROLE_LABELS[g.role]),
-      g.status !== 'active' ? h('span', { class: 'badge warn' }, STATUS_LABELS[g.status]) : null,
-      g.unconfirmed ? h('span', { class: 'badge bad' }, 'подтвердить сумму') : null,
-      n.achieved ? h('span', { class: 'badge ok' }, 'минимум достигнут') : null,
-    ),
-    h('div', { class: 'bar', title: `${pct}%` }, h('span', { style: `width:${pct}%` })),
-    h(
-      'div',
-      { class: 'goal-meta muted' },
-      `${fmt(n.progress)} из ${fmt(g.targetMin)}${g.targetComfort ? ` (комфорт ${fmt(g.targetComfort)})` : ''} · ${pct.toFixed(1)}%`,
-      n.direct !== n.progress ? ` · напрямую ${fmt(n.direct)}` : '',
-      ` · важность ${g.importance} · ${HORIZON_LABELS[n.horizon]}`,
-      g.deadline ? ` · до ${fmtDate(g.deadline)}` : g.desiredDate ? ` · желательно к ${fmtDate(g.desiredDate)}` : '',
-      g.targetRule ? ' · сумма по правилу резерва' : '',
-    ),
-    (() => {
-      const b = v.fundings.filter((f) => f.goalId === g.id && f.id.startsWith('bound:'));
-      return b.length
-        ? h('div', { class: 'goal-meta muted' }, `в том числе весь остаток: ${b.map((f) => `«${v.accounts.find((a) => a.accountId === f.accountId)?.title ?? f.accountId}» ${fmt(f.amount)}`).join(', ')} — привязка в «Настройки → Счета»`)
-        : null;
-    })(),
-    nodeActions(n, v),
-    n.children.length ? h('ul', { class: 'tree' }, n.children.map((c) => goalCard(c, v))) : null,
-  );
-}
-
-function createSection(v: GoalsView): HTMLElement {
+defineSheet('goal-new', () => {
   const st = getState();
-  const errBox = h('div');
-  const form = h('form', { class: 'grid-form' }, ...goalFields({}, v.goals), h('button', { class: 'btn primary', type: 'submit' }, 'Создать цель'));
+  const err = h('div');
+  const { form, read } = goalForm('goal-new-form', {}, st.goals, { withTemplates: true, withReason: false });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { patch, errs } = readGoalFields(form);
-    if (errs.length) return errBox.replaceChildren(errorsBox(errs) ?? '');
-    const r = createGoal({ ...patch, id: newId('goal'), title: patch.title!, role: patch.role!, targetMin: patch.targetMin!, importance: patch.importance! }, st.goals, today());
-    if (!r.ok) return errBox.replaceChildren(errorsBox([r.error]) ?? '');
+    const { patch, errs } = read();
+    if (errs.length) return err.replaceChildren(errorsBox(errs) ?? '');
+    const r = createGoal({ ...patch, id: newId('goal'), title: patch.title!, role: patch.role!, targetMin: patch.targetMin!, importance: patch.importance! }, getState().goals, today());
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    const id = r.value.id;
+    flashGoal(id);
     await update((s) => ({ ...s, goals: [...s.goals, r.value] }));
-    toast('Цель создана');
+    closeSheet();
+    toast(`Цель «${r.value.title}» создана`, { action: { label: 'Закрепить деньги', run: () => openSheet('goal-fund', id) } });
   });
-  return section(
-    'Новая цель',
-    h('details', { class: 'add' }, h('summary', null, '+ Создать цель'), form, errBox),
-    !st.goals.length
-      ? h(
-          'div',
-          { class: 'row' },
-          h(
-            'button',
-            {
-              class: 'btn primary',
-              type: 'button',
-              onclick: async () => {
-                await update((s) => ({ ...s, goals: starterGoals(today()) }));
-                toast('Создан «Резерв» — его сумма считается сама по базовым расходам');
-              },
-            },
-            'Начать с резерва',
-          ),
-          h('small', { class: 'muted' }, 'Подушка на непредвиденное нужна всем; её сумма — N месяцев базовых расходов. Остальные цели создай сами: «+ Создать цель».'),
-          // пример из инструкции — только для демонстрации и проверок (?demo=1), это цели одного человека
-          new URLSearchParams(location.search).has('demo')
-            ? h('button', { class: 'btn', type: 'button', onclick: async () => { await update((s) => ({ ...s, goals: exampleGoals(today()) })); toast('Созданы цели из примера — подтверди суммы'); } }, 'Создать пример из инструкции')
-            : null,
-        )
-      : null,
-  );
+  return {
+    title: 'Новая цель',
+    body: h('div', { class: 'stack' }, form, err),
+    bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-new-form' }, 'Создать цель')),
+  };
+});
+
+// ───────────────────────── карточка и экран ─────────────────────────
+
+function stateTag(n: GoalNode): HTMLElement | null {
+  const g = n.goal;
+  if (g.unconfirmed) return h('span', { class: 'tag warn' }, 'подтверди сумму');
+  if (g.status !== 'active') return h('span', { class: g.status === 'done' ? 'tag good' : 'tag' }, STATUS_LABELS[g.status]);
+  if (n.achieved) return h('span', { class: 'tag good' }, 'минимум есть');
+  return null;
 }
 
+function goalCard(n: GoalNode, v: GoalsView, depth = 0): HTMLElement[] {
+  const g = n.goal;
+  const dim = g.status === 'paused' || g.status === 'cancelled' || g.status === 'done';
+  const width = Math.min(100, n.pctPermille / 10);
+  const bound = v.fundings.filter((f) => f.goalId === g.id && f.id.startsWith('bound:'));
+  const card = h(
+    'a',
+    { class: `goal-card${depth ? ' child' : ''}${dim ? ' dim' : ''}${flash && flash.ids.includes(g.id) && Date.now() < flash.until ? ' flash' : ''}`, href: sheetHref('goal', g.id), 'data-goal': g.id, style: depth > 1 ? `margin-left:${16 * depth}px;width:calc(100% - ${16 * depth}px)` : undefined },
+    h('div', { class: 'gh' }, h('span', { class: 'gt' }, g.title), stateTag(n)),
+    h('div', { class: `bar${n.achieved ? ' done' : ''}`, role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(width)), 'aria-label': `Прогресс «${g.title}»` }, h('span', { style: `width:${width}%` })),
+    h('div', { class: 'gm' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · ${percent(n)}`),
+    h('div', { class: 'gm' }, g.deadline || g.desiredDate ? `${deadlineText(g)} · ${horizonText(n.horizon)}` : 'без срока'),
+    bound.length ? h('div', { class: 'gm' }, `весь остаток: ${bound.map((f) => v.allAccounts.find((a) => a.accountId === f.accountId)?.title ?? f.accountId).join(', ')}`) : null,
+  );
+  return [card, ...n.children.flatMap((c) => goalCard(c, v, depth + 1))];
+}
+
+registerExplain('goals', 'Как посчитано: «Цели»', () => view().explanation);
+
 export function renderGoals(): HTMLElement {
-  const v = buildGoalsView(getState(), today());
+  const v = view();
   const st = getState();
+  const hasData = ov().hasData;
   const root = h('div', { class: 'screen' });
 
+  // назначено больше, чем есть на счёте: красный блок с готовыми вариантами
   for (const o of v.overAssigned) {
     const acc = v.accounts.find((a) => a.accountId === o.accountId);
     root.append(
       h(
         'div',
-        { class: 'notice error' },
+        { class: 'badline stack' },
         h('div', null, `«${acc?.title ?? o.accountId}»: ${o.text}.`, info('overAssigned')),
         h(
           'div',
-          { class: 'row' },
+          { class: 'btn-row' },
           o.options.map((x) =>
             h(
               'button',
@@ -318,10 +231,9 @@ export function renderGoals(): HTMLElement {
                 class: 'btn',
                 type: 'button',
                 onclick: async () => {
-                  const r = withdrawMoney({ id: newId('fund'), goalId: x.goalId, accountId: o.accountId, amount: x.amount, date: today(), decisionId: null, note: 'назначено больше, чем есть' }, { goals: v.goals, fundings: st.fundings, balances: v.balances });
+                  const r = withdrawMoney({ id: newId('fund'), goalId: x.goalId, accountId: o.accountId, amount: x.amount, date: today(), decisionId: null, note: 'закреплено больше, чем есть' }, { goals: v.goals, fundings: st.fundings, balances: v.balances });
                   if (!r.ok) return toast(r.error, 'error');
-                  await update((s) => ({ ...s, fundings: [...s.fundings, r.value] }));
-                  toast(`Снято ${fmt(x.amount)} с «${x.title}»`);
+                  await act((s) => ({ ...s, fundings: [...s.fundings, r.value] }), `Снято ${fmt(x.amount)} с «${x.title}»`);
                 },
               },
               `Снять ${fmt(x.amount)} с «${x.title}»`,
@@ -332,48 +244,288 @@ export function renderGoals(): HTMLElement {
     );
   }
 
+  // сводка одной строкой и «＋ Цель» справа
   root.append(
     h(
       'div',
-      { class: 'stats' },
-      stat(h('span', null, 'Назначено целям', info('assigned')), moneySpan(v.totalAssigned)),
-      stat(h('span', null, 'Свободно', info('free')), moneySpan(v.freeMoney), 'после назначений и резерва под обязательства', v.freeMoney < 0 ? 'bad' : ''),
-      stat(h('span', null, 'Базовые расходы', info('baseline')), moneySpan(v.baseline.median), `медиана за ${v.baseline.months.length} мес.`),
+      { class: 'goals-sum' },
+      hasData
+        ? h(
+            'div',
+            { class: 'gs-text' },
+            h('span', null, 'За целями ', h('strong', null, fmt(v.totalAssigned)), info('assigned')),
+            h('span', { class: v.freeMoney < 0 ? 'neg' : '' }, 'свободно ', h('strong', null, fmt(v.freeMoney)), info('free')),
+          )
+        : h('div', { class: 'gs-text' }, h('span', null, 'Сколько свободно, будет видно после ', h('a', { href: '#/import' }, 'загрузки бэкапа'))),
+      h('a', { class: 'btn primary', href: sheetHref('goal-new') }, '＋ Цель'),
     ),
   );
-  const ex = explainBlock(v.explanation);
-  if (ex) root.append(ex);
 
-  root.append(
-    section(
-      'Дерево целей',
-      v.tree.length ? h('ul', { class: 'tree' }, v.tree.map((n) => goalCard(n, v))) : h('p', { class: 'muted' }, 'Целей пока нет.'),
-    ),
-  );
-  root.append(
-    section(
-      'Деньги на счетах',
-      h('p', { class: 'muted' }, 'Назначение — это метка на деньгах, а не перевод. Назначить можно не больше свободного остатка счёта.'),
-      table(
-        ['Счёт', 'Баланс', 'Свободно', ''],
-        v.allAccounts.map((a) => [
-          a.title,
-          moneySpan(a.balance, { muted: a.status === 'excluded' || a.status === 'needs_review' }),
-          a.status === 'available' ? moneySpan(a.free) : '—',
-          a.status === 'available' ? '' : h('small', { class: 'muted' }, a.reason),
-        ]),
+  const offer = hasData ? cushionOffer() : null;
+  if (offer) root.append(offer);
+
+  if (v.tree.length) {
+    root.append(sub('Цели'), h('div', { class: 'goal-list' }, v.tree.flatMap((n) => goalCard(n, v))));
+  } else {
+    root.append(
+      h(
+        'div',
+        { class: 'card stack' },
+        h('strong', null, 'Целей пока нет'),
+        h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.'),
+        h('a', { class: 'btn wide', href: sheetHref('goal-new') }, 'Создать свою цель ›'),
+        // пример из инструкции — только для демонстрации и проверок (?demo=1): это цели одного человека
+        new URLSearchParams(location.search).has('demo')
+          ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример из инструкции')
+          : null,
       ),
-    ),
-  );
-  root.append(createSection(v));
+    );
+  }
+
+  if (hasData) root.append(explainLink('goals'));
   if (st.goals.length) {
     root.append(
       h(
         'div',
-        { class: 'row' },
-        confirmButton('Удалить все цели и назначения', 'Точно? История пропадёт', () => update((s) => ({ ...s, goals: [], fundings: [] })).then(() => toast('Цели удалены'))),
+        { class: 'foot-note' },
+        confirmButton('Удалить все цели', 'Удалить', () => update((s) => ({ ...s, goals: [], fundings: [] })).then(() => toast('Цели удалены')), 'danger link', 'Все цели и закреплённые суммы пропадут вместе с историей. Деньги на счетах не изменятся.'),
       ),
     );
   }
+
+  // новая цель: прокрутить к ней и подсветить
+  if (flash && Date.now() < flash.until) {
+    const id = flash.ids[0];
+    if (id) setTimeout(() => document.querySelector(`[data-goal="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+  }
   return root;
 }
+
+// ───────────────────────── подэкран цели: действия ─────────────────────────
+
+defineSheet('goal', (id) => {
+  const v = view();
+  const n = nodeOf(v, id);
+  if (!n) return null;
+  const g = n.goal;
+  const st = getState();
+  const open = g.status !== 'cancelled' && g.status !== 'done';
+  const funded = st.fundings.some((f) => f.goalId === g.id) && v.accounts.some((a) => st.fundings.some((f) => f.goalId === g.id && f.accountId === a.accountId));
+  const bound = st.settings.accounts.some((a) => a.boundGoalId === g.id);
+  const histN = g.history.length + st.fundings.filter((f) => f.goalId === g.id).length;
+  const del = deleteGoal(g.id, { goals: st.goals, fundings: st.fundings, accounts: st.settings.accounts });
+
+  const remove = async () => {
+    if (!del.ok) return;
+    const i = await ask({ title: `Удалить «${g.title}»?`, text: 'История цели пропадёт. Если хочешь её сохранить — смени статус на «отменена».', actions: [{ label: 'Удалить', kind: 'danger' }] });
+    if (i !== 0) return;
+    closeSheet();
+    await act((s) => ({ ...s, goals: del.value.goals, fundings: del.value.fundings }), `Цель «${g.title}» удалена`);
+  };
+
+  return {
+    title: g.title,
+    body: h(
+      'div',
+      { class: 'stack' },
+      h(
+        'div',
+        { class: 'card stack' },
+        h('div', { class: 'gh' }, h('strong', null, `${fmt(n.progress)} из ${fmt(g.targetMin)}`), stateTag(n)),
+        h('div', { class: `bar${n.achieved ? ' done' : ''}` }, h('span', { style: `width:${Math.min(100, n.pctPermille / 10)}%` })),
+        h('div', { class: 'muted' }, `${percent(n)} · ${deadlineText(g)} · важность ${g.importance}`),
+        n.remainingMin > 0 ? h('div', { class: 'muted' }, `осталось ${fmt(n.remainingMin)}`) : null,
+        n.direct !== n.progress ? h('div', { class: 'muted' }, `напрямую ${fmt(n.direct)}, остальное — в частях цели`) : null,
+        g.targetRule ? h('div', { class: 'muted' }, 'сумма считается по правилу подушки: месяцы обычных базовых трат', info('baseline')) : null,
+        g.why ? h('div', { class: 'muted' }, `Зачем: ${g.why}`) : null,
+      ),
+      rows(
+        open ? row({ title: 'Закрепить деньги', sub: 'деньги остаются на счёте — это метка', href: sheetHref('goal-fund', g.id) }) : null,
+        funded ? row({ title: 'Снять или перенести', href: sheetHref('goal-unfund', g.id) }) : null,
+        row({ title: 'Изменить', href: sheetHref('goal-edit', g.id) }),
+        row({ title: bound ? 'Счёт привязан целиком' : 'Привязать счёт целиком', href: sheetHref('goal-bind', g.id) }),
+        row({ title: 'Статус', value: STATUS_LABELS[g.status], href: sheetHref('goal-status', g.id) }),
+        row({ title: 'История', value: String(histN), href: sheetHref('goal-history', g.id) }),
+      ),
+      del.ok
+        ? h('button', { class: 'btn danger wide', type: 'button', onclick: remove }, 'Удалить цель')
+        : h('p', { class: 'muted' }, `Удалить нельзя: ${del.error.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())}. Можно сменить статус на «отменена» — история сохранится.`),
+    ),
+  };
+});
+
+// закрепить деньги: выбор счёта строками (бывший блок «Деньги на счетах»)
+defineSheet('goal-fund', (id) => {
+  const v = view();
+  const n = nodeOf(v, id);
+  if (!n) return null;
+  const g = n.goal;
+  // настоящие счета первыми, оценка сбережений вне MoneyManager — последней
+  const estimate = new Set(ov().capital.accounts.filter((p) => p.source === 'savings_flow').map((p) => p.accountId));
+  const avail = v.allAccounts.filter((a) => a.status === 'available').sort((a, b) => Number(estimate.has(a.accountId)) - Number(estimate.has(b.accountId)) || b.free - a.free);
+  const other = v.allAccounts.filter((a) => a.status !== 'available' && a.status !== 'excluded');
+  let acc = avail[0]?.accountId ?? '';
+  const err = h('div');
+  const amount = moneyInput('amount');
+  const form = h('form', { id: 'goal-fund-form', class: 'stack' });
+  const list = h('div', { class: 'rows', role: 'radiogroup', 'aria-label': 'Счёт' });
+  const quick = h('div', { class: 'chips wrap' });
+  const drawQuick = () => {
+    const a = avail.find((x) => x.accountId === acc);
+    const items: [string, Money][] = [];
+    if (a && n.remainingMin > 0) items.push([`Сколько не хватает · ${fmt(Math.min(n.remainingMin, a.free) as Money)}`, Math.min(n.remainingMin, a.free) as Money]);
+    if (a) items.push([`Всё свободное · ${fmt(a.free)}`, a.free]);
+    quick.replaceChildren(...items.map(([l, m]) => chip(l, false, () => (amount.value = String(Math.floor(m / 100))))));
+  };
+  const draw = () => {
+    list.replaceChildren(
+      ...avail.map((a) => row({ title: a.title, sub: `свободно ${fmt(a.free)}${estimate.has(a.accountId) ? ' · оценка' : ''}`, value: a.accountId === acc ? '✓' : undefined, cls: a.accountId === acc ? 'on' : '', chevron: false, onClick: () => { acc = a.accountId; draw(); drawQuick(); } })),
+    );
+  };
+  draw();
+  drawQuick();
+  form.append(sub('Со счёта'), avail.length ? list : h('p', { class: 'muted' }, 'Нет счетов со свободными деньгами.'), field('Сколько, ₸', amount), quick, err);
+  if (other.length) form.append(h('details', { class: 'fold', 'data-key': 'fund:other' }, h('summary', null, `Почему нет других счетов (${other.length})`), rows(other.map((a) => row({ title: a.title, sub: a.reason, value: fmt(a.balance) })))));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const m = readMoney(form, 'amount');
+    if (m === null) return err.replaceChildren(errorsBox(['Введи сумму']) ?? '');
+    const cur = view();
+    const r = assignMoney({ id: newId('fund'), goalId: g.id, accountId: acc, amount: m, date: today(), decisionId: null }, { goals: cur.goals, fundings: cur.fundings, balances: cur.balances });
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    closeSheet();
+    await act((s) => ({ ...s, fundings: [...s.fundings, r.value] }), `${fmt(m)} закреплено за «${g.title}»`);
+  });
+  return {
+    title: `Закрепить за «${g.title}»`,
+    body: h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'Деньги остаются на счёте — это метка. Закрепить можно не больше свободного остатка.'), form),
+    bar: avail.length ? stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-fund-form' }, 'Закрепить')) : undefined,
+  };
+});
+
+defineSheet('goal-unfund', (id) => {
+  const v = view();
+  const st = getState();
+  const g = v.goals.find((x) => x.id === id);
+  if (!g) return null;
+  const fundedAccs = v.accounts.filter((a) => st.fundings.some((f) => f.goalId === g.id && f.accountId === a.accountId));
+  const err = h('div');
+  const form = h(
+    'form',
+    { id: 'goal-unfund-form', class: 'stack' },
+    field('Со счёта', h('select', { name: 'acc' }, fundedAccs.map((a) => h('option', { value: a.accountId }, a.title)))),
+    field('Сколько, ₸', moneyInput('amount')),
+    field('Что сделать', h('select', { name: 'mode' }, h('option', { value: 'withdraw' }, 'Снять с цели'), ...v.accounts.map((a) => h('option', { value: `move:${a.accountId}` }, `Перенести на «${a.title}»`))), 'перенос — когда ты сам перевёл деньги на другой счёт'),
+    err,
+  );
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = readMoney(form, 'amount');
+    if (amount === null) return err.replaceChildren(errorsBox(['Введи сумму']) ?? '');
+    const acc = readStr(form, 'acc');
+    const mode = readStr(form, 'mode');
+    const cur = view();
+    // снять можно только настоящую метку; перенос проверяет место на целевом счёте с учётом привязок (D59)
+    const ctx = { goals: cur.goals, fundings: mode === 'withdraw' ? getState().fundings : cur.fundings, balances: cur.balances };
+    const r = mode === 'withdraw'
+      ? withdrawMoney({ id: newId('fund'), goalId: g.id, accountId: acc, amount, date: today(), decisionId: null }, ctx)
+      : moveFunding({ id: newId('move'), goalId: g.id, fromAccountId: acc, toAccountId: mode.slice(5), amount, date: today(), decisionId: null }, ctx);
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    const added = Array.isArray(r.value) ? r.value : [r.value];
+    closeSheet();
+    await act((s) => ({ ...s, fundings: [...s.fundings, ...added] }), mode === 'withdraw' ? `Снято ${fmt(amount)} с «${g.title}»` : 'Перенесено');
+  });
+  return { title: 'Снять или перенести', body: form, bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-unfund-form' }, 'Готово')) };
+});
+
+defineSheet('goal-edit', (id) => {
+  const st = getState();
+  const original = st.goals.find((x) => x.id === id);
+  if (!original) return null;
+  const shown = view().goals.find((x) => x.id === id) ?? original;
+  const err = h('div');
+  const { form, read } = goalForm('goal-edit-form', shown, st.goals, { withTemplates: true, withReason: true });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { patch, errs } = read();
+    if (errs.length) return err.replaceChildren(errorsBox(errs) ?? '');
+    // сумма подушки по правилу не перезаписывается вычисленным значением
+    if (original.targetRule && patch.targetMin === shown.targetMin) patch.targetMin = original.targetMin;
+    const r = updateGoal(original, { ...patch, unconfirmed: false }, readStr(form, 'reason'), today(), st.goals);
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    closeSheet();
+    await act((s) => ({ ...s, goals: s.goals.map((x) => (x.id === id ? r.value : x)) }), 'Цель изменена');
+  });
+  return { title: 'Изменить цель', body: h('div', { class: 'stack' }, form, err), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-edit-form' }, 'Сохранить')) };
+});
+
+defineSheet('goal-status', (id) => {
+  const st = getState();
+  const g = st.goals.find((x) => x.id === id);
+  if (!g) return null;
+  const err = h('div');
+  let status: GoalStatus = g.status;
+  const list = h('div', { class: 'rows', role: 'radiogroup', 'aria-label': 'Статус' });
+  const draw = () => list.replaceChildren(...(Object.keys(STATUS_LABELS) as GoalStatus[]).map((s) => row({ title: STATUS_LABELS[s], value: s === status ? '✓' : undefined, cls: s === status ? 'on' : '', chevron: false, onClick: () => { status = s; draw(); } })));
+  draw();
+  const form = h('form', { id: 'goal-status-form', class: 'stack' }, list, field('Почему', h('input', { name: 'reason', required: true, autocomplete: 'off' }), 'сохранится в истории цели'), err);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cur = getState();
+    const r = changeStatus(cur.goals.find((x) => x.id === id)!, status, readStr(form, 'reason'), today(), { goals: cur.goals, fundings: cur.fundings });
+    if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
+    closeSheet();
+    await act((s) => ({ ...s, goals: s.goals.map((x) => (x.id === id ? r.value : x)) }), `Статус: ${STATUS_LABELS[status]}`);
+  });
+  return { title: 'Статус цели', body: form, bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-status-form' }, 'Сменить')) };
+});
+
+// привязка счёта целиком (D59)
+defineSheet('goal-bind', (id) => {
+  const v = view();
+  const st = getState();
+  const g = v.goals.find((x) => x.id === id);
+  if (!g) return null;
+  const boundHere = st.settings.accounts.filter((a) => a.boundGoalId === g.id);
+  const bindable = v.allAccounts.filter((a) => a.status === 'available' || a.status === 'empty' || a.status === 'fully_assigned');
+  const title = (accId: string) => v.allAccounts.find((a) => a.accountId === accId)?.title ?? accId;
+  const setBinding = (accountId: string, goalId: string | undefined, msg: string) =>
+    act((s) => {
+      const prev = s.settings.accounts.find((x) => x.accountId === accountId);
+      const base = prev ?? { accountId, excluded: false, liquidity: { kind: 'instant' as const } };
+      const { boundGoalId: _old, ...rest } = base;
+      const next = { ...rest, reviewed: true, ...(goalId ? { boundGoalId: goalId } : {}) };
+      return { ...s, settings: { ...s.settings, accounts: [...s.settings.accounts.filter((x) => x.accountId !== accountId), next].sort((x, y) => (x.accountId < y.accountId ? -1 : 1)) } };
+    }, msg);
+  return {
+    title: 'Счёт целиком',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', { class: 'muted' }, 'Весь остаток счёта будет за этой целью и сам вырастет при пополнении. Подходит для отдельного счёта под цель — заначки, депозита.'),
+      boundHere.length ? [sub('Привязан'), rows(boundHere.map((b) => row({ title: title(b.accountId), value: h('span', { class: 'chip' }, 'Отвязать'), onClick: () => void setBinding(b.accountId, undefined, 'Счёт отвязан') })))] : null,
+      bindable.length
+        ? [sub('Можно привязать'), rows(bindable.map((a) => row({ title: a.title, sub: fmt(a.balance), value: h('span', { class: 'chip' }, 'Привязать'), onClick: () => void setBinding(a.accountId, g.id, `«${a.title}» привязан к «${g.title}»`) })))]
+        : h('p', { class: 'muted' }, 'Нет счетов, которые можно привязать: неучитываемые и уже привязанные к другим целям не подходят.'),
+    ),
+  };
+});
+
+const FIELD_LABELS: Record<string, string> = {
+  created: 'создана', title: 'название', role: 'шаблон', targetMin: 'сумма', targetComfort: 'комфортная сумма', deadline: 'срок', desiredDate: 'желаемая дата',
+  flexibility: 'гибкость срока', importance: 'важность', minMonthlyFunding: 'взнос в месяц', parentId: 'часть цели', why: 'зачем', doneCriteria: 'когда выполнена', status: 'статус', unconfirmed: 'сумма подтверждена',
+};
+
+defineSheet('goal-history', (id) => {
+  const v = view();
+  const st = getState();
+  const g = st.goals.find((x) => x.id === id);
+  if (!g) return null;
+  const accTitle = (a: string) => v.allAccounts.find((x) => x.accountId === a)?.title ?? a;
+  const show = (x: unknown) => (x === null || x === undefined || x === '' ? '—' : typeof x === 'number' && x > 1000 ? fmt(x as Money) : String(x));
+  const items = [
+    ...g.history.map((x) => ({ date: x.date, title: x.field === 'created' ? 'Создана' : `${FIELD_LABELS[x.field] ?? x.field}: ${show(x.from)} → ${show(x.to)}`, sub: x.field === 'created' ? '' : x.reason })),
+    ...st.fundings.filter((f) => f.goalId === id).map((f) => ({ date: f.date, title: `${f.amount > 0 ? 'Закреплено' : 'Снято'} ${fmt((f.amount > 0 ? f.amount : -f.amount) as Money)}`, sub: `${accTitle(f.accountId)} · ${f.decisionId ? 'по распределению дохода' : 'вручную'}` })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  return { title: `История «${g.title}»`, body: rows(items.map((i) => row({ title: i.title, sub: [fmtDate(i.date), i.sub].filter(Boolean).join(' · ') }))) };
+});

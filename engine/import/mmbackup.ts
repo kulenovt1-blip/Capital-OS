@@ -33,6 +33,21 @@ export const MM_SCHEMA = {
   categoryType: { income: 'Income', expense: 'Expense' },
 } as const;
 
+/**
+ * Название системной категории без названия — по иконке MoneyManager (D83, заменяет D12).
+ * Известные иконки — словарём; остальные — «Без названия» (переименовать можно в приложении).
+ */
+const ICON_NAMES: Record<string, string> = {
+  ic_fee: 'Комиссия',
+};
+export function categoryNameFromIcon(icon: string): string {
+  return ICON_NAMES[icon] ?? 'Без названия';
+}
+/** Подпись категории для показа: старые сохранённые «icon:…» — тоже человеческим словом. */
+export function categoryDisplayName(label: string): string {
+  return label.startsWith('icon:') ? categoryNameFromIcon(label.slice(5)) : label;
+}
+
 /** Название счёта для показа: пустое → «(без названия, начало id)». */
 export function accountDisplayTitle(title: string, uid: string): string {
   const t = title.trim();
@@ -122,7 +137,7 @@ export function readMoneyManager(db: SqliteDb, meta: { entryName: string; prefix
     return {
       id: str(r.uid),
       title,
-      label: title || (icon ? `icon:${icon}` : `без названия (${str(r.uid)})`),
+      label: title || categoryNameFromIcon(icon),
       type: t === MM_SCHEMA.categoryType.income ? 'income' : t === MM_SCHEMA.categoryType.expense ? 'expense' : 'unknown',
       icon,
       removed: flag(r.isRemoved),

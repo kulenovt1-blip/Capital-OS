@@ -65,9 +65,9 @@ const ACTIONS: [RegExp, NoticeAction][] = [
   [/^unclassified$/, { route: 'classes', section: 'categories', label: 'Разметить' }],
   [/^capital\.savings/, { route: 'settings', section: 'savings', label: 'Настроить накопления' }],
   [/^capital\.(payables|receivables)_negative$/, { route: 'settings', section: 'debts', label: 'Указать долги' }],
-  [/^capital\.double_debt$/, { route: 'settings', section: 'obligations', label: 'Открыть обязательства' }],
+  [/^capital\.double_debt$/, { route: 'settings', section: 'obligations', label: 'Долги и рассрочки' }],
   [/^capital\.excluded$/, { route: 'settings', section: 'accounts', label: 'Открыть счета' }],
-  [/^obligation\./, { route: 'settings', section: 'obligations', label: 'Открыть обязательства' }],
+  [/^obligation\./, { route: 'settings', section: 'obligations', label: 'Долги и рассрочки' }],
   [/^goals?\./, { route: 'goals', label: 'Открыть цели' }],
   [/^free\.negative$/, { route: 'income', label: 'Что делать' }],
 ];
@@ -159,8 +159,8 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const assigned = fm.result.assignedLiquid;
   const freeMoney = fm.result.free;
   explanation.push(
-    step('overview.reserve', untilIncome.length ? `Резерв под платежи до ${day(nextIncome.date)}: ${money(reserveUntilIncome)} — ${untilIncome.map((u) => `«${u.title}» ${money(u.amount)} ${day(u.date)}`).join(', ')}` : `Платежей по обязательствам до ${day(nextIncome.date)} нет`, { amount: reserveUntilIncome, ...(untilIncome.length ? {} : { detail: true }) }),
-    step('overview.free', `Свободно ${money(freeMoney)} = ${formula([['ликвидно', capital.liquidNow, 1], ['назначено целям', assigned, -1], ['резерв под платежи', reserveUntilIncome, -1]])}`, { amount: freeMoney, level: freeMoney < 0 ? 'warn' : 'info' }),
+    step('overview.reserve', untilIncome.length ? `Резерв под платежи до ${day(nextIncome.date)}: ${money(reserveUntilIncome)} — ${untilIncome.map((u) => `«${u.title}» ${money(u.amount)} ${day(u.date)}`).join(', ')}` : `Платежей по долгам и рассрочкам до ${day(nextIncome.date)} нет`, { amount: reserveUntilIncome, ...(untilIncome.length ? {} : { detail: true }) }),
+    step('overview.free', `Свободно ${money(freeMoney)} = ${formula([['на руках', capital.liquidNow, 1], ['за целями', assigned, -1], ['под платежи', reserveUntilIncome, -1]])}`, { amount: freeMoney, level: freeMoney < 0 ? 'warn' : 'info' }),
   );
 
   // цели: суммы по правилам, дерево, превышения назначений
@@ -171,7 +171,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const overAssigned = overAssignment(fundings, balances, resolved.goals);
   if (state.goals.length) explanation.push(...baseline.explanation, ...resolved.explanation);
 
-  if (!hasData) notices.push({ code: 'import.missing', level: 'info', text: 'Данных пока нет: загрузи бэкап MoneyManager на экране «Импорт»' });
+  if (!hasData) notices.push({ code: 'import.missing', level: 'info', text: 'Данных пока нет: загрузи бэкап MoneyManager в «Ещё → Импорт»' });
   if (reconcile && !reconcile.ok) notices.push({ code: 'reconcile.fail', level: 'error', text: `Сверка не сошлась по ${reconcile.accounts.filter((a) => a.status !== 'ok').length} счетам — цифры ниже неточны` });
   if (classification && !classification.complete) {
     const total = sum(classification.unclassified.map((g) => g.total));
@@ -187,7 +187,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   }
   for (const b of invalidBindings(state.settings.accounts, capital.accounts, state.goals)) {
     const t = capital.accounts.find((p) => p.accountId === b.accountId)?.title ?? b.accountId;
-    notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Настройки → Счета»` });
+    notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Ещё → Счета»` });
   }
   if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} предупреждений — см. экран «Импорт»` });
   for (const s of capital.explanation) if (s.level === 'warn') notices.push({ code: s.code, level: 'warn', text: s.text });

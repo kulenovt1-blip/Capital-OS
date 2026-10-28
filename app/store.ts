@@ -4,6 +4,7 @@
  */
 import { emptyState, parseState, serializeState, type AppState, type IsoDate } from '../engine/index';
 import { storage } from './storage';
+import { toast } from './dom';
 
 const KEY = 'state';
 let state: AppState = emptyState();
@@ -43,6 +44,16 @@ export async function update(fn: (s: AppState) => AppState): Promise<void> {
   } catch (e) {
     console.error('Не удалось сохранить', e);
   }
+}
+
+/**
+ * Обратимое действие (D76): изменить и показать «Сделано · Отменить» на 5 секунд.
+ * Отмена возвращает состояние целиком к моменту до действия.
+ */
+export async function act(fn: (s: AppState) => AppState, message: string): Promise<void> {
+  const before = state;
+  await update(fn);
+  toast(message, { undo: () => update(() => before).then(() => toast('Отменено')) });
 }
 
 export async function replaceState(s: AppState): Promise<void> {

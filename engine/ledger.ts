@@ -235,7 +235,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
       const s = settingsById.get(SAVINGS_FLOW_ACCOUNT_ID);
       push({ accountId: SAVINGS_FLOW_ACCOUNT_ID, title: 'Сбережения вне MoneyManager (по переводам)', source: 'savings_flow', balance: net, excluded: s?.excluded ?? false, liquidity: s?.liquidity ?? { kind: 'instant' } });
       explanation.push(
-        step('capital.savings_flow', `Переводы на сбережения вне MoneyManager оценены по сумме: ${money(net)}. Если эти деньги потом вернулись в MoneyManager (например, счётом с начальным остатком), это двойной счёт — укажи это в «Настройки → Куда уходили переводы на сбережения»`, { level: sf.confirmed ? 'info' : 'warn', amount: net, refs: { accountId: SAVINGS_FLOW_ACCOUNT_ID } }),
+        step('capital.savings_flow', `Переводы на сбережения вне MoneyManager оценены по сумме: ${money(net)}. Если эти деньги потом вернулись в MoneyManager (например, счётом с начальным остатком), это двойной счёт. Куда уходили переводы на сбережения — ответь в «Ещё → Счета»`, { level: sf.confirmed ? 'info' : 'warn', amount: net, refs: { accountId: SAVINGS_FLOW_ACCOUNT_ID } }),
       );
     }
   }
@@ -272,14 +272,14 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
     explanation.push(
       ack
         ? step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг до начала учёта, сумма неизвестна — считается 0`, { amount: rawReceivables, detail: true })
-        : step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг выдан до начала учёта (в данных ${money(rawReceivables)}). Пока он считается 0. Укажи сумму в «Настройки → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawReceivables }),
+        : step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг выдан до начала учёта (в данных ${money(rawReceivables)}). Пока он считается 0. Укажи сумму в «Ещё → Редкое → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawReceivables }),
     );
   }
   if (rawPayables < 0) {
     explanation.push(
       ack
         ? step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг до начала учёта, сумма неизвестна — считается 0`, { amount: rawPayables, detail: true })
-        : step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг взят до начала учёта (в данных ${money(rawPayables)}). Пока он считается 0, чтобы не завышать капитал. Укажи сумму в «Настройки → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawPayables }),
+        : step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг взят до начала учёта (в данных ${money(rawPayables)}). Пока он считается 0, чтобы не завышать капитал. Укажи сумму в «Ещё → Редкое → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawPayables }),
     );
   }
 
@@ -288,11 +288,11 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
   const zeros = included.length - nonZero.length;
   const locked = included.filter((p) => p.availableFrom > today);
   explanation.unshift(
-    step('capital.gross', `Капитал брутто ${money(gross)} = ${nonZero.map((p) => `«${p.title}» ${money(p.balance)}`).join(' + ') || '0'}${zeros ? ` (ещё ${zeros} ${plural(zeros, 'счёт', 'счёта', 'счетов')} с нулевым остатком)` : ''}`, { amount: gross }),
-    step('capital.liabilities', total === 0 ? 'Обязательств нет' : `Обязательства ${money(total)} = ${formula([['свои рассрочки', installmentsOwn, 1], ['семейные рассрочки', installmentsFamily, 1], ['долги вручную', debtsManual, 1], ['долги по операциям', payables, 1]])}`, { amount: total }),
-    step('capital.net', total === 0 ? `Капитал нетто ${money(net)} = капитал брутто` : `Капитал нетто ${money(net)} = ${money(gross)} − ${money(total)}`, { amount: net }),
-    step('capital.receivables', `Дебиторка (тебе должны) ${money(receivables)} — показана отдельно, в нетто не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
-    step('capital.liquid', `Ликвидно сейчас ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
+    step('capital.gross', `Всего на счетах ${money(gross)} = ${nonZero.map((p) => `«${p.title}» ${money(p.balance)}`).join(' + ') || '0'}${zeros ? ` (ещё ${zeros} ${plural(zeros, 'счёт', 'счёта', 'счетов')} с нулевым остатком)` : ''}`, { amount: gross }),
+    step('capital.liabilities', total === 0 ? 'Долгов и рассрочек нет' : `Долги и рассрочки ${money(total)} = ${formula([['свои рассрочки', installmentsOwn, 1], ['семейные рассрочки', installmentsFamily, 1], ['долги вручную', debtsManual, 1], ['долги по операциям', payables, 1]])}`, { amount: total }),
+    step('capital.net', total === 0 ? `Капитал ${money(net)} = всё, что есть (долгов нет)` : `Капитал ${money(net)} = ${money(gross)} всего − ${money(total)} долгов и рассрочек`, { amount: net }),
+    step('capital.receivables', `Тебе должны ${money(receivables)} — показано отдельно, в капитал не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
+    step('capital.liquid', `На руках ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
   );
   return { asOf: today, accounts, gross, liabilities, receivables, net, netWithReceivables, liquidNow, explanation };
 }
