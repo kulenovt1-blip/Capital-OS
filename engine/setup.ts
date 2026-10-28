@@ -18,6 +18,8 @@ export interface SetupStep {
   /** Что именно сейчас не так (для несделанного шага). */
   status: string;
   action: NoticeAction;
+  /** Шаг ещё нельзя пройти: нет данных (D79). Без данных шаг не бывает «сделан». */
+  locked?: boolean;
 }
 
 export function setupSteps(state: AppState, today: IsoDate): SetupStep[] {
@@ -31,8 +33,8 @@ export function setupSteps(state: AppState, today: IsoDate): SetupStep[] {
     done: o.hasData && !!o.reconcile?.ok,
     optional: false,
     why: 'Без бэкапа приложение не знает ни одного счёта и ни одной операции.',
-    status: !o.hasData ? 'данных нет' : o.reconcile?.ok ? 'сверка сошлась' : 'сверка не сошлась — цифрам доверять нельзя',
-    action: { route: 'import', label: 'Открыть импорт' },
+    status: !o.hasData ? 'данных нет' : o.reconcile?.ok ? 'сверка сошлась' : 'загружен с расхождением',
+    action: { route: 'import', label: !o.hasData ? 'Загрузить' : o.reconcile?.ok ? 'Открыть импорт' : 'Посмотреть' },
   });
   const review = state.imported ? accountsNeedingReview(state.settings.accounts, state.imported.accounts) : [];
   add({
@@ -47,7 +49,7 @@ export function setupSteps(state: AppState, today: IsoDate): SetupStep[] {
   const unclassified = o.classification?.unclassified ?? [];
   add({
     id: 'classes',
-    title: 'Разметить категории по классам',
+    title: 'Разметить категории',
     done: o.hasData && unclassified.length === 0,
     optional: false,
     why: 'Пока категория не размечена, приложение не знает, трата это, доход, долг или перевод: резерв, свободные деньги и прогноз неточны.',
@@ -125,6 +127,8 @@ export function setupSteps(state: AppState, today: IsoDate): SetupStep[] {
     status: state.lastBackupAt ? `последний ${state.lastBackupAt}${fresh ? '' : ' — больше месяца назад'}` : 'ещё не скачивался',
     action: { route: 'settings', section: 'backup', label: 'Скачать' },
   });
+  // без данных ни один шаг, кроме импорта, не бывает сделан: честный счётчик (D79)
+  if (!o.hasData) for (const s of steps) if (s.id !== 'import') Object.assign(s, { done: false, status: 'после импорта', locked: true });
   return steps;
 }
 

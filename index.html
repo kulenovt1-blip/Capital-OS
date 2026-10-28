@@ -3,12 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#14532d" />
+    <meta name="theme-color" content="#f4f4ef" />
     <meta name="description" content="Capital OS — личный инструмент для решений о деньгах. Данные не покидают устройство." />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <title>Capital OS</title>
+    <script>
+      // тема и размер текста — до отрисовки, чтобы экран не мигал (D76)
+      try {
+        var t = localStorage.getItem('capos-theme') || 'auto';
+        var dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.fs = localStorage.getItem('capos-fs') === '1' ? '1' : '0';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"><p style="padding:24px">Загрузка…</p></div>

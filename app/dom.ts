@@ -34,34 +34,62 @@ export function section(title: Child, ...children: Child[]): HTMLElement {
   return h('section', { class: 'card' }, h('h2', null, title), ...children);
 }
 
-/** Кнопка с подтверждением в два нажатия — без системных диалогов. */
-export function confirmButton(label: string, confirmLabel: string, action: () => void, cls = 'danger'): HTMLButtonElement {
-  let armed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const b = h('button', { class: `btn ${cls}`, type: 'button' }, label);
-  b.addEventListener('click', () => {
-    if (armed) {
-      clearTimeout(timer);
-      action();
-      return;
-    }
-    armed = true;
-    b.textContent = confirmLabel;
-    b.classList.add('armed');
-    timer = setTimeout(() => {
-      armed = false;
-      b.textContent = label;
-      b.classList.remove('armed');
-    }, 4000);
+export interface AskAction {
+  label: string;
+  kind?: 'primary' | 'danger' | 'plain';
+}
+
+/**
+ * Окно снизу (D76): заголовок, пояснение, кнопки стопкой, «Отмена» последней.
+ * Возвращает номер нажатой кнопки или null (отмена, Esc, нажатие мимо).
+ */
+export function ask(o: { title: string; text?: string; actions: AskAction[]; cancel?: string }): Promise<number | null> {
+  return new Promise((resolve) => {
+    const prev = document.activeElement as HTMLElement | null;
+    const done = (v: number | null) => {
+      wrap.remove();
+      document.removeEventListener('keydown', esc);
+      prev?.focus?.();
+      resolve(v);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') done(null);
+    };
+    const acts = h(
+      'div',
+      { class: 'acts' },
+      o.actions.map((a, i) => h('button', { class: `btn ${a.kind === 'danger' ? 'danger' : a.kind === 'plain' ? '' : 'primary'}`, type: 'button', onclick: () => done(i) }, a.label)),
+      h('button', { class: 'btn', type: 'button', onclick: () => done(null) }, o.cancel ?? 'Отмена'),
+    );
+    const box = h('div', { class: 'box', role: 'dialog', 'aria-modal': 'true', 'aria-label': o.title }, h('h2', null, o.title), o.text ? h('p', null, o.text) : null, acts);
+    const wrap = h('div', { class: 'ask', onclick: (e: Event) => e.target === wrap && done(null) }, box);
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', esc);
+    (acts.querySelector('button') as HTMLButtonElement | null)?.focus();
   });
-  return b;
+}
+
+/** Кнопка для необратимого действия: подтверждение окном снизу (D76). */
+export function confirmButton(label: string, confirmLabel: string, action: () => void, cls = 'danger', text?: string): HTMLButtonElement {
+  return h(
+    'button',
+    {
+      class: `btn ${cls}`,
+      type: 'button',
+      onclick: async () => {
+        const r = await ask({ title: confirmLabel, ...(text ? { text } : {}), actions: [{ label, kind: cls.includes('danger') ? 'danger' : 'primary' }] });
+        if (r === 0) action();
+      },
+    },
+    label,
+  );
 }
 
 export function field(label: Child, input: HTMLElement, hint?: string): HTMLLabelElement {
   return h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input, hint ? h('small', { class: 'hint' }, hint) : null);
 }
 
-export function table(headers: string[], rows: Child[][], cls = ''): HTMLTableElement {
+export function table(headers: string[], rows: Child[][], cls = 'stackable'): HTMLTableElement {
   return h(
     'table',
     { class: `tbl ${cls}` },
@@ -84,22 +112,66 @@ export function readFileBytes(file: File): Promise<Uint8Array> {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(text: string, level: 'info' | 'error' = 'info'): void {
+let toastUndo = false;
+
+export interface ToastOptions {
+  /** «Отменить» в сообщении: 5 секунд с полоской-таймером (D76). */
+  undo?: () => void | Promise<void>;
+  level?: 'info' | 'error';
+}
+
+/** Сообщение внизу над панелью. С «Отменить» — 5 секунд и полоска; смахивается пальцем. */
+export function toast(text: string, opts: ToastOptions | 'info' | 'error' = {}): void {
+  const o: ToastOptions = typeof opts === 'string' ? { level: opts } : opts;
   let el = document.getElementById('toast');
   if (!el) {
-    el = h('div', { id: 'toast', role: 'status' });
+    el = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' });
     document.body.appendChild(el);
+    let x0: number | null = null;
+    el.addEventListener('pointerdown', (e) => (x0 = e.clientX));
+    el.addEventListener('pointerup', (e) => {
+      if (x0 !== null && Math.abs(e.clientX - x0) > 60) hideToast(true);
+      x0 = null;
+    });
   }
-  el.textContent = text;
-  el.className = `show ${level}`;
+  const ms = o.undo ? 5000 : 3500;
+  toastUndo = !!o.undo;
+  el.replaceChildren(
+    ...([
+    h('span', null, text),
+    o.undo
+      ? h(
+          'button',
+          {
+            type: 'button',
+            onclick: async () => {
+              hideToast(true);
+              await o.undo!();
+            },
+          },
+          'Отменить',
+        )
+      : null,
+    o.undo ? h('span', { class: 'tp', style: `animation-duration:${ms}ms` }) : null,
+    ].filter(Boolean) as Node[]),
+  );
+  el.className = `on${o.level === 'error' ? ' error' : ''}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el!.classList.remove('show'), 3500);
+  toastTimer = setTimeout(() => hideToast(true), ms);
+}
+
+/** Спрятать сообщение. При переходе на другой экран гаснет только сообщение без «Отменить». */
+export function hideToast(force = false): void {
+  if (!force && toastUndo) return;
+  const el = document.getElementById('toast');
+  if (el) el.className = '';
+  toastUndo = false;
 }
 
 /** Кнопка ⓘ с пояснением понятия. Открывается по нажатию (на телефоне нет наведения), закрывается повторным нажатием, Esc или нажатием вне. */
 export function infoButton(title: string, text: string): HTMLElement {
   const pop = h('div', { class: 'info-pop', role: 'tooltip', hidden: true }, h('strong', null, title), h('p', null, text));
-  const btn = h('button', { class: 'info', type: 'button', 'aria-label': `Пояснение: ${title}`, 'aria-expanded': 'false' }, 'i');
+  const btn = h('button', { class: 'info', type: 'button', 'aria-label': `Пояснение: ${title}`, 'aria-expanded': 'false' });
   const wrap = h('span', { class: 'info-wrap' }, btn, pop);
   const close = () => {
     pop.hidden = true;

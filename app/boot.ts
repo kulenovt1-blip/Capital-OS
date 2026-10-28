@@ -1,14 +1,30 @@
-/** Сборка приложения из экранов. Этапы добавляют свои экраны здесь. */
+/** Сборка приложения из экранов (D81): 5 пунктов нижней панели и подэкраны «Ещё». */
 import { addRoute, start } from './main';
+import { renderOverview } from './screens/overview';
 import { renderGoals } from './screens/goals';
 import { renderIncome } from './screens/income';
 import { renderForecast } from './screens/forecast';
+import { renderMore } from './screens/more';
+import { renderView } from './screens/view';
+import { renderImport } from './screens/import';
 import { renderClasses } from './screens/classes';
-import { renderSetup, setupDone } from './screens/setup';
+import { renderSetup } from './screens/setup';
+import { renderSettings } from './screens/settings';
 
-addRoute({ path: 'setup', title: 'Первые шаги', render: () => renderSetup(), hidden: setupDone }, 'import');
-addRoute({ path: 'goals', title: 'Цели', render: () => renderGoals() }, 'import');
-addRoute({ path: 'income', title: 'Поступление', render: (r) => renderIncome(r) }, 'import');
-addRoute({ path: 'forecast', title: 'Прогноз', render: (r) => renderForecast(r) }, 'import');
-addRoute({ path: 'classes', title: 'Классы', render: () => renderClasses() }, 'settings');
+addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
+addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
+addRoute({ path: 'income', title: 'Доход', nav: 'income', render: (r) => renderIncome(r) });
+addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecast(r) });
+addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
+addRoute({ path: 'setup', title: 'Настройка', nav: 'more', parent: 'more', render: () => renderSetup() });
+addRoute({ path: 'import', title: 'Импорт', nav: 'more', parent: 'more', render: (r) => renderImport(r) });
+addRoute({ path: 'markup', title: 'Разметка', nav: 'more', parent: 'more', render: () => renderClasses() });
+addRoute({ path: 'accounts', title: 'Счета', nav: 'more', parent: 'more', render: () => renderSettings('accounts') });
+addRoute({ path: 'incomes', title: 'Доходы', nav: 'more', parent: 'more', render: () => renderSettings('income') });
+addRoute({ path: 'debts', title: 'Долги и рассрочки', nav: 'more', parent: 'more', render: () => renderSettings('obligations') });
+addRoute({ path: 'backup', title: 'Бэкап', nav: 'more', parent: 'more', render: () => renderSettings('backup') });
+addRoute({ path: 'view', title: 'Вид', nav: 'more', parent: 'more', render: (r) => renderView(r) });
+addRoute({ path: 'install', title: 'Установить', nav: 'more', parent: 'more', render: () => renderSettings('install') });
+addRoute({ path: 'rare', title: 'Редкое', nav: 'more', parent: 'more', render: () => renderSettings('debts') });
+addRoute({ path: 'advanced', title: 'Для продвинутых', nav: 'more', parent: 'more', render: () => renderSettings('calc') });
 void start();
