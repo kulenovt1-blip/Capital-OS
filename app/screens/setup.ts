@@ -24,7 +24,7 @@ const HEADS: Record<SetupStep['id'], string> = {
   classes: 'Разметь категории',
   income: 'Когда приходят деньги?',
   savings: 'Где сбережения вне MoneyManager?',
-  debts: 'Долги до начала данных',
+  debts: 'Долги на начало учёта',
   obligations: 'Рассрочки из операций',
   goals: 'Первая цель',
   backup: 'Бэкап',

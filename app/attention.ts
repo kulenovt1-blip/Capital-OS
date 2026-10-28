@@ -70,7 +70,7 @@ export function attentionItems(): AttentionItem[] {
     else if (s.id === 'savings') {
       const est = o.capital.accounts.find((p) => p.source === 'savings_flow');
       out.push({ title: `Сбережения вне MoneyManager: проверь ${est ? fmt(est.balance) : 'оценку'}`, href });
-    } else if (s.id === 'debts') out.push({ title: 'Долги до начала данных: указать или «не знаю»', href });
+    } else if (s.id === 'debts') out.push({ title: 'Долги на начало учёта: указать или «не знаю»', href });
     else if (s.id === 'obligations') {
       const n = o.installments.suggestions.length;
       out.push({ title: `${nWord(n, 'рассрочка', 'рассрочки', 'рассрочек')} не заведены`, href });

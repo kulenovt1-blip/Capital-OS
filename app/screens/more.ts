@@ -40,7 +40,7 @@ export function renderMore(): HTMLElement {
       tile('#/backup', 'Бэкап', st.lastBackupAt ? `последний ${fmtDay(st.lastBackupAt)}` : 'ещё не скачивался', backupAge === null || backupAge > 30 ? 'warn' : ''),
       tile('#/view', 'Вид', `тема: ${theme}`),
       tile('#/install', 'Установить', 'как приложение'),
-      tile('#/rare', 'Редкое', 'долги до начала данных, ручные счета, поправки'),
+      tile('#/rare', 'Редкое', 'долги на начало учёта, ручные счета, поправки'),
       tile('#/advanced', 'Для продвинутых', 'правила, параметры, сценарии'),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION}`),

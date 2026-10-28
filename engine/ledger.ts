@@ -235,7 +235,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
       const s = settingsById.get(SAVINGS_FLOW_ACCOUNT_ID);
       push({ accountId: SAVINGS_FLOW_ACCOUNT_ID, title: 'Сбережения вне MoneyManager (по переводам)', source: 'savings_flow', balance: net, excluded: s?.excluded ?? false, liquidity: s?.liquidity ?? { kind: 'instant' } });
       explanation.push(
-        step('capital.savings_flow', `Переводы на сбережения вне MoneyManager оценены по сумме: ${money(net)}. Если эти деньги потом вернулись в MoneyManager (например, счётом с начальным остатком), это двойной счёт — укажи это в «Настройки → Куда уходили переводы на сбережения»`, { level: sf.confirmed ? 'info' : 'warn', amount: net, refs: { accountId: SAVINGS_FLOW_ACCOUNT_ID } }),
+        step('capital.savings_flow', `Переводы на сбережения вне MoneyManager оценены по сумме: ${money(net)}. Если эти деньги потом вернулись в MoneyManager (например, счётом с начальным остатком), это двойной счёт. Куда уходили переводы на сбережения — ответь в «Ещё → Счета»`, { level: sf.confirmed ? 'info' : 'warn', amount: net, refs: { accountId: SAVINGS_FLOW_ACCOUNT_ID } }),
       );
     }
   }
@@ -272,14 +272,14 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
     explanation.push(
       ack
         ? step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг до начала учёта, сумма неизвестна — считается 0`, { amount: rawReceivables, detail: true })
-        : step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг выдан до начала учёта (в данных ${money(rawReceivables)}). Пока он считается 0. Укажи сумму в «Настройки → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawReceivables }),
+        : step('capital.receivables_negative', `Тебе вернули на ${money(neg(rawReceivables))} больше, чем ты выдал в данных: долг выдан до начала учёта (в данных ${money(rawReceivables)}). Пока он считается 0. Укажи сумму в «Ещё → Редкое → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawReceivables }),
     );
   }
   if (rawPayables < 0) {
     explanation.push(
       ack
         ? step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг до начала учёта, сумма неизвестна — считается 0`, { amount: rawPayables, detail: true })
-        : step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг взят до начала учёта (в данных ${money(rawPayables)}). Пока он считается 0, чтобы не завышать капитал. Укажи сумму в «Настройки → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawPayables }),
+        : step('capital.payables_negative', `Ты вернул на ${money(neg(rawPayables))} больше, чем занял в данных: долг взят до начала учёта (в данных ${money(rawPayables)}). Пока он считается 0, чтобы не завышать капитал. Укажи сумму в «Ещё → Редкое → Долги на начало учёта» или нажми там «Не знаю — считать 0»`, { level: 'warn', amount: rawPayables }),
     );
   }
 

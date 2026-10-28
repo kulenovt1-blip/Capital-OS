@@ -171,7 +171,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const overAssigned = overAssignment(fundings, balances, resolved.goals);
   if (state.goals.length) explanation.push(...baseline.explanation, ...resolved.explanation);
 
-  if (!hasData) notices.push({ code: 'import.missing', level: 'info', text: 'Данных пока нет: загрузи бэкап MoneyManager на экране «Импорт»' });
+  if (!hasData) notices.push({ code: 'import.missing', level: 'info', text: 'Данных пока нет: загрузи бэкап MoneyManager в «Ещё → Импорт»' });
   if (reconcile && !reconcile.ok) notices.push({ code: 'reconcile.fail', level: 'error', text: `Сверка не сошлась по ${reconcile.accounts.filter((a) => a.status !== 'ok').length} счетам — цифры ниже неточны` });
   if (classification && !classification.complete) {
     const total = sum(classification.unclassified.map((g) => g.total));
@@ -187,7 +187,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   }
   for (const b of invalidBindings(state.settings.accounts, capital.accounts, state.goals)) {
     const t = capital.accounts.find((p) => p.accountId === b.accountId)?.title ?? b.accountId;
-    notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Настройки → Счета»` });
+    notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Ещё → Счета»` });
   }
   if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} предупреждений — см. экран «Импорт»` });
   for (const s of capital.explanation) if (s.level === 'warn') notices.push({ code: s.code, level: 'warn', text: s.text });

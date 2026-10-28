@@ -483,7 +483,7 @@ export function resolveGoalTargets(goals: readonly Goal[], baseMedian: Money, re
  * Остальные цели человек создаёт сам: у каждого они свои.
  */
 export function starterGoals(date: IsoDate): Goal[] {
-  const r = createGoal({ id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, targetRule: { kind: 'months_of_base' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Резерв = N месяцев базовых расходов (N — в «Настройки → Расчёты»)' }, [], date);
+  const r = createGoal({ id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, targetRule: { kind: 'months_of_base' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Резерв = N месяцев базовых расходов (N — в «Ещё → Для продвинутых → Параметры»)' }, [], date);
   if (!r.ok) throw new Error(r.error);
   return [r.value];
 }

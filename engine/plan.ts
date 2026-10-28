@@ -50,10 +50,10 @@ export function forecastExpenses(state: AppState, today: IsoDate, ops: readonly 
       } else if (history.length >= 3) {
         monthly = mulDiv(sumN, 1, history.length);
         how = `средняя за ${history.length} мес.`;
-        warnings.push(step('plan.irregular_short', `«${c.label}»: истории ${history.length} мес. — меньше года, сезонность не видна. Задай оценку на год на экране «Классы»`, { level: 'warn' }));
+        warnings.push(step('plan.irregular_short', `«${c.label}»: истории ${history.length} мес. — меньше года, сезонность не видна. Задай оценку на год в «Разметке → Свои типы»`, { level: 'warn' }));
       } else {
         monthly = ZERO;
-        warnings.push(step('plan.irregular_short', `«${c.label}»: истории меньше 3 месяцев и нет оценки на год — в прогнозе 0. Задай оценку на экране «Классы»`, { level: 'warn' }));
+        warnings.push(step('plan.irregular_short', `«${c.label}»: истории меньше 3 месяцев и нет оценки на год — в прогнозе 0. Задай оценку в «Разметке → Свои типы»`, { level: 'warn' }));
         continue;
       }
     } else {

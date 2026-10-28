@@ -9,7 +9,7 @@ import { renderView } from './screens/view';
 import { renderImport } from './screens/import';
 import { renderClasses } from './screens/classes';
 import { renderSetup } from './screens/setup';
-import { renderSettings } from './screens/settings';
+import { renderAccounts, renderAdvanced, renderBackup, renderDebts, renderIncomes, renderInstall, renderRare } from './screens/settings';
 
 addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
 addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
@@ -19,12 +19,12 @@ addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore(
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'import', title: 'Импорт', nav: 'more', parent: 'more', render: (r) => renderImport(r) });
 addRoute({ path: 'markup', title: 'Разметка', nav: 'more', parent: 'more', render: (r, sec) => renderClasses(r, sec) });
-addRoute({ path: 'accounts', title: 'Счета', nav: 'more', parent: 'more', render: () => renderSettings('accounts') });
-addRoute({ path: 'incomes', title: 'Доходы', nav: 'more', parent: 'more', render: () => renderSettings('income') });
-addRoute({ path: 'debts', title: 'Долги и рассрочки', nav: 'more', parent: 'more', render: () => renderSettings('obligations') });
-addRoute({ path: 'backup', title: 'Бэкап', nav: 'more', parent: 'more', render: () => renderSettings('backup') });
+addRoute({ path: 'accounts', title: 'Счета', nav: 'more', parent: 'more', render: (_r, sec) => renderAccounts(sec) });
+addRoute({ path: 'incomes', title: 'Доходы', nav: 'more', parent: 'more', render: () => renderIncomes() });
+addRoute({ path: 'debts', title: 'Долги и рассрочки', nav: 'more', parent: 'more', render: () => renderDebts() });
+addRoute({ path: 'backup', title: 'Бэкап', nav: 'more', parent: 'more', render: () => renderBackup() });
 addRoute({ path: 'view', title: 'Вид', nav: 'more', parent: 'more', render: (r) => renderView(r) });
-addRoute({ path: 'install', title: 'Установить', nav: 'more', parent: 'more', render: () => renderSettings('install') });
-addRoute({ path: 'rare', title: 'Редкое', nav: 'more', parent: 'more', render: () => renderSettings('debts') });
-addRoute({ path: 'advanced', title: 'Для продвинутых', nav: 'more', parent: 'more', render: () => renderSettings('calc') });
+addRoute({ path: 'install', title: 'Установить', nav: 'more', parent: 'more', render: () => renderInstall() });
+addRoute({ path: 'rare', title: 'Редкое', nav: 'more', parent: 'more', render: (_r, sec) => renderRare(sec) });
+addRoute({ path: 'advanced', title: 'Для продвинутых', nav: 'more', parent: 'more', render: (_r, sec) => renderAdvanced(sec) });
 void start();

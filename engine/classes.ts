@@ -189,7 +189,7 @@ export function classFromAnswers(a: WizardAnswers): WizardOutcome {
   }
   if (a.returnsOrRepaid) return { kind: 'redirect', to: 'debt', text: 'Это не трата, а долг: используй встроенные классы «Выдал в долг» / «Вернул долг» — тогда возврат не посчитается доходом, а капитал не исказится' };
   if (a.ownTransfer) return { kind: 'redirect', to: 'transfer', text: 'Это перевод между своими счетами: в MoneyManager оформи его переводом — он не расход и капитал не меняет' };
-  if (a.installment) return { kind: 'redirect', to: 'obligation', text: 'Платежи по рассрочке размечай классом рассрочки и заведи обязательство в «Настройки → Обязательства» — иначе прогноз посчитает платёж дважды' };
+  if (a.installment) return { kind: 'redirect', to: 'obligation', text: 'Платежи по рассрочке размечай классом рассрочки и заведи её в «Ещё → Долги и рассрочки» — иначе прогноз посчитает платёж дважды' };
   const ends = a.ends ?? undefined;
   let behavior: Behavior;
   if (a.essential) behavior = 'base';

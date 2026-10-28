@@ -479,3 +479,8 @@ table.tbl.four tr.on > * { background: var(--surface-sunken); }
 table.tbl.four { table-layout: fixed; }
 table.tbl.four th, table.tbl.four td { padding: 12px 8px; font-size: calc(14px * var(--fz)); overflow-wrap: anywhere; }
 table.tbl.four thead th { font-size: calc(13px * var(--fz)); letter-spacing: 0.02em; }
+table.tbl.four.rules th, table.tbl.four.rules td { text-align: left; vertical-align: middle; }
+table.tbl.four.rules th:first-child { width: 46%; }
+table.tbl.four.rules td:last-child { width: 60px; text-align: right; }
+table.tbl.four.rules .btn.small { min-width: 44px; min-height: 44px; }
+table.tbl.four.rules th, table.tbl.four.rules td { padding-top: 6px; padding-bottom: 6px; }

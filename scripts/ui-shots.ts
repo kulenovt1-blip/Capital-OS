@@ -80,9 +80,11 @@ const SCREENS: [string, string][] = [
   ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
   ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-move'], ['goal-fund', '#/goals~goal-fund/goal-move'], ['goal-edit', '#/goals~goal-edit/goal-move'],
   ['fc-events', '#/forecast~fc-events'], ['fc-whatif', '#/forecast~fc-whatif'], ['fc-whatif-result', '#/forecast~fc-whatif'],
+  ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
+  ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
 ];
 /** Набор экранов: «before» — старые адреса; дальше — новые (старые ведут на них же). */
-const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'fc-events', 'fc-whatif', 'fc-whatif-result'];
+const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'backup', 'install', 'rare', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios', 'account-sheet', 'savings', 'rare-manual', 'income-kinds'];
 const PLAN: [string, string[]][] =
   stage === 'before'
     ? [
