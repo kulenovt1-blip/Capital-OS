@@ -420,3 +420,19 @@ svg.chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3;
 .row-legacy { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .preview { list-style: none; padding: 0; margin: 0; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Экран без нижней панели (мастер) */
+body.lock { padding-bottom: 120px; }
+body.lock .sticky-bar { bottom: 0; }
+body.lock #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) { body.lock { padding-left: 0; } body.lock .sticky-bar { left: 0; } body.lock #toast { left: 12px; } }
+.row.on .title { font-weight: 800; }
+.row .main a { color: inherit; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.file-btn { position: relative; }
+.file-btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* длинная метка справа не сжимает название в столбик */
+.row .main { min-width: 45%; }
+.row > .val { flex-shrink: 1; max-width: 55%; }
+.row > .val .tag, .row > .val .chip { display: inline-block; max-width: 100%; white-space: normal; text-align: right; line-height: 1.25; height: auto; }
+.row > .val .tag { padding-block: 3px; }

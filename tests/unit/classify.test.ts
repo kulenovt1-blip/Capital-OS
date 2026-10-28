@@ -162,7 +162,7 @@ describe('классификация синтетического бэкапа',
     expect(rep.complete).toBe(false);
     const labels = rep.unclassified.map((u) => u.label);
     expect(labels).toContain('Продукты');
-    expect(labels).toContain('icon:ic_fee');
+    expect(labels).toContain('Комиссия'); // D83: имя из иконки, а не код
     expect(labels).toContain('Старое');
   });
 });

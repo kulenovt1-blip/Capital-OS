@@ -336,7 +336,7 @@ function obligationsSection(st: AppState, o: Overview): HTMLElement {
 }
 
 /** Находки автозаполнения: карточка на каждую рассрочку из операций (D67). */
-function suggestionsBlock(st: AppState, o: Overview): HTMLElement | null {
+export function suggestionsBlock(st: AppState, o: Overview): HTMLElement | null {
   const list = o.installments.suggestions;
   if (!list.length) return null;
   return h(
@@ -436,7 +436,7 @@ function suggestionCard(st: AppState, s: InstallmentSuggestion): HTMLElement {
 const dismiss = (key: string) => update((x) => ({ ...x, settings: { ...x.settings, dismissedInstallments: [...new Set([...x.settings.dismissedInstallments, key])].sort() } }));
 
 /** Расхождения заведённых рассрочек с операциями — с кнопкой исправления. */
-function checksBlock(st: AppState, o: Overview): HTMLElement | null {
+export function checksBlock(st: AppState, o: Overview): HTMLElement | null {
   const checks = o.installments.checks;
   if (!checks.length) return null;
   return h(

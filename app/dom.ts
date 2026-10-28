@@ -17,7 +17,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props |
   return el;
 }
 
-function append(el: Node, children: Child[]): void {
+/** Добавить детей (null и false пропускаются). */
+export function append(el: Node, children: Child[]): void {
   for (const c of children) {
     if (c === null || c === undefined || c === false) continue;
     if (Array.isArray(c)) append(el, c);

@@ -76,13 +76,25 @@ const STATES: Record<string, () => AppState> = {
 const SCREENS: [string, string][] = [
   ['overview', '#/overview'], ['setup', '#/setup'], ['goals', '#/goals'], ['income', '#/income'], ['income-result', '#/income'],
   ['forecast', '#/forecast'], ['import', '#/import'], ['classes', '#/classes'], ['settings', '#/settings'], ['calc', '#/settings/calc'],
+  ['more', '#/more'], ['markup', '#/markup'], ['accounts', '#/accounts'], ['incomes', '#/incomes'], ['debts', '#/debts'],
+  ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
 ];
-const PLAN: [string, string[]][] = [
-  ['configured', SCREENS.map(([n]) => n)],
-  ['imported', ['overview', 'setup', 'import', 'classes', 'forecast']],
-  ['empty', ['overview', 'setup', 'goals', 'forecast']],
-  ['broken', ['overview', 'import', 'income', 'forecast']],
-];
+/** Набор экранов: «before» — старые адреса; дальше — новые (старые ведут на них же). */
+const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc'];
+const PLAN: [string, string[]][] =
+  stage === 'before'
+    ? [
+        ['configured', ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'classes', 'settings', 'calc']],
+        ['imported', ['overview', 'setup', 'import', 'classes', 'forecast']],
+        ['empty', ['overview', 'setup', 'goals', 'forecast']],
+        ['broken', ['overview', 'import', 'income', 'forecast']],
+      ]
+    : [
+        ['configured', NEW],
+        ['imported', ['overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'import', 'markup', 'forecast', 'goals']],
+        ['empty', ['overview', 'setup', 'goals', 'forecast', 'import', 'more']],
+        ['broken', ['overview', 'import', 'income', 'forecast', 'goals', 'more']],
+      ];
 const VARIANTS = [
   { name: 'phone', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: 'light' as const },
   { name: 'laptop', viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, colorScheme: 'light' as const },

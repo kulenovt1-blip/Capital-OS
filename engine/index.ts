@@ -12,7 +12,7 @@ export * from './ledger';
 export * from './obligations';
 export * from './state';
 export * from './overview';
-export { importMmbackup, extractDatabase, MM_SCHEMA } from './import/mmbackup';
+export { importMmbackup, extractDatabase, MM_SCHEMA, categoryDisplayName, categoryNameFromIcon } from './import/mmbackup';
 export * from './goals';
 export * from './goals-view';
 export * from './allocate';

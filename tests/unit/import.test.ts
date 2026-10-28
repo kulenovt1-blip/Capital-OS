@@ -31,7 +31,8 @@ describe('импорт .mmbackup (синтетический бэкап)', () =>
   it('системной категории без названия даёт имя из иконки', () => {
     const fee = data.categories.find((c) => c.id === 'cat-fee')!;
     expect(fee.title).toBe('');
-    expect(fee.label).toBe('icon:ic_fee');
+    // D83 (заменяет D12): известная иконка — человеческим словом, а не кодом
+    expect(fee.label).toBe('Комиссия');
     expect(data.categories.find((c) => c.id === 'cat-old')!.removed).toBe(true);
   });
 
