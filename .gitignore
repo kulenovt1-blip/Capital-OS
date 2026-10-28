@@ -8,3 +8,4 @@ coverage/
 real-data/
 .env
 tests/.tmp/
+ui-shots/
