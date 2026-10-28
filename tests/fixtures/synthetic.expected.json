@@ -1,0 +1,33 @@
+{
+ "balances": {
+  "acc-kaspi": 47999583,
+  "acc-cash": 5396669,
+  "acc-halyk": 0,
+  "acc-tech": 777700
+ },
+ "counts": {
+  "transactions": 157,
+  "transfers": 11
+ },
+ "byCategory": {
+  "cat-food": 70,
+  "cat-transport": 8,
+  "cat-phone": 8,
+  "cat-fun": 4,
+  "cat-family": 8,
+  "cat-savings-out": 5,
+  "cat-lent": 1,
+  "cat-repay": 1,
+  "cat-installment": 16,
+  "cat-exchange": 1,
+  "cat-fee": 1,
+  "cat-salary": 10,
+  "cat-stipend": 8,
+  "cat-savings-in": 1,
+  "cat-lent-back": 1,
+  "cat-borrow": 1,
+  "cat-bonus": 8,
+  "cat-old": 1
+ },
+ "uncategorized": 4
+}

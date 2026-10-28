@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.dev/
+# реальные бэкапы пользователя никогда не коммитятся
+*.mmbackup
+!tests/fixtures/*.mmbackup
+real-data/
+.env
+tests/.tmp/
