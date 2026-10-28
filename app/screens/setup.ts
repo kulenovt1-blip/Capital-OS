@@ -44,7 +44,12 @@ function body(s: SetupStep, rerender: () => void): HTMLElement {
     case 'classes':
       return markupList(rerender);
     case 'income':
-      return h('div', { class: 'stack' }, incomeList(), incomeQuickForm());
+      // после добавления дохода — сразу следующий шаг: на одно нажатие меньше
+      return h('div', { class: 'stack' }, incomeList(), incomeQuickForm(() => {
+        const l = steps().filter((x) => !x.optional && x.id !== 'backup');
+        const n = l[l.findIndex((x) => x.id === 'income') + 1];
+        if (n) go(`#/setup/${n.id}`);
+      }));
     case 'savings':
       return savingsQuestion();
     case 'debts':

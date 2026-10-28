@@ -109,7 +109,7 @@ export function step0(i: Step0Input): Step0Result {
 
   explanation.push(
     step('step0.horizon', `Горизонт до следующего дохода: ${H} дн. (до ${day(i.nextIncome)})`, { date: i.nextIncome }),
-    step('step0.r1', `R1 — платежи по обязательствам до ${day(i.nextIncome)}: ${money(R1)}${payments.length ? ' (' + payments.map((p) => `«${p.title}» ${money(p.amount)} ${day(p.date)}`).join(', ') + ')' : ''}`, { amount: R1 }),
+    step('step0.r1', `R1 — платежи по долгам и рассрочкам до ${day(i.nextIncome)}: ${money(R1)}${payments.length ? ' (' + payments.map((p) => `«${p.title}» ${money(p.amount)} ${day(p.date)}`).join(', ') + ')' : ''}`, { amount: R1 }),
   );
   if (i.obligationGoalFunds > 0) explanation.push(step('step0.r1_goals', `Из них покрыто деньгами целей-обязательств: ${money(min(R1, i.obligationGoalFunds))}`));
   if (coverByFree > 0) explanation.push(step('step0.r1_free', `Покрыто свободными деньгами на счетах: ${money(coverByFree)}`));
@@ -121,7 +121,7 @@ export function step0(i: Step0Input): Step0Result {
   const options: string[] = [];
   if (!ok) {
     const deficitNow = sub(ZERO, available);
-    explanation.push(step('step0.deficit', `Дефицит ${money(deficitNow)}: поступления не хватает на обязательства и расходы до следующего дохода. Стратегии не строятся`, { level: 'error', amount: deficitNow }));
+    explanation.push(step('step0.deficit', `Дефицит ${money(deficitNow)}: дохода не хватает на платежи и обычные траты до следующего. Стратегии не строятся`, { level: 'error', amount: deficitNow }));
     for (const p of payments) options.push(`Перенести или разбить платёж «${p.title}» ${money(p.amount)} от ${day(p.date)} — договориться с банком или продавцом`);
     const goals = [...i.goalsWithLiquidFunds].filter((g) => g.amount > 0).sort((a, b) => (a.importance ?? 0) - (b.importance ?? 0) || (a.goalId < b.goalId ? -1 : 1));
     for (const g of goals) options.push(`Снять до ${money(min(g.amount, deficitNow))} с цели «${g.title}» (сейчас ${money(g.amount)} на ликвидных счетах)`);
@@ -373,7 +373,7 @@ export function defaultFocus(others: readonly Goal[]): GoalId[] {
 export function validateCustomStrategy(c: CustomStrategy, goals: readonly Goal[]): string[] {
   const errs: string[] = [];
   const reserve = eligibleGoals(goals).list.filter(isReserve).sort((a, b) => b.importance - a.importance || (a.id < b.id ? -1 : 1))[0];
-  if (reserve && c.reserveTarget < reserve.targetMin) errs.push(`Резерв ${money(c.reserveTarget)} ниже минимума ${money(reserve.targetMin)} — своя стратегия не может нарушать уровень 1`);
+  if (reserve && c.reserveTarget < reserve.targetMin) errs.push(`Резерв ${money(c.reserveTarget)} ниже минимума ${money(reserve.targetMin)} — свой вариант не может оставить подушку ниже минимума`);
   const pct = c.rest.reduce((s, r) => s + r.pctBp, 0);
   if (pct > 10000) errs.push(`Доли остатка в сумме ${pct / 100}% — больше 100%`);
   if (c.rest.some((r) => r.pctBp < 0) || c.minimums.some((m) => m.amount < 0)) errs.push('Отрицательные суммы и доли не допускаются');

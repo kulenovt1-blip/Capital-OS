@@ -20,7 +20,7 @@ export const BEHAVIOR_LABELS: Record<Behavior, string> = {
   irregular: 'нерегулярный',
   temporary: 'временный',
   excluded: 'вне прогноза',
-  installment: 'рассрочка (через обязательства)',
+  installment: 'рассрочка (по графику платежей)',
   work: 'работа',
   other: 'прочий доход',
 };

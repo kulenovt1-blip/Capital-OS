@@ -1,7 +1,7 @@
 /** «Разметка» (D84, бывшие «Классы»): категории → типы; свои типы — во второй вкладке. Слово «класс» на экране не используется. */
 import {
-  BEHAVIOR_HINTS, BEHAVIOR_LABELS, CLASS_LABELS, canDeleteClass, classFromAnswers, classRegistry, classifyAll, createCustomClass, setCategoryClass, suggestClassForCategory, behaviorFits,
-  type Behavior, type ClassDef, type ClassOverride, type OpClass, type WizardAnswers,
+  BEHAVIOR_HINTS, BEHAVIOR_LABELS, canDeleteClass, classFromAnswers, classRegistry, createCustomClass, behaviorFits,
+  type Behavior, type ClassDef, type ClassOverride, type WizardAnswers,
 } from '../../engine/index';
 import { confirmButton, field, h, toast } from '../dom';
 import { getState, update } from '../store';

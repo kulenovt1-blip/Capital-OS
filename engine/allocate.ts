@@ -74,7 +74,7 @@ export function compareStrategies(ci: CompareInput): CompareResult {
     if (st.id === 'D') {
       const errs = st.custom ? validateCustomStrategy(st.custom, ci.goals) : ['не заданы параметры'];
       if (errs.length) {
-        explanation.push(step('compare.d_invalid', `Своя стратегия не построена: ${errs.join('; ')}`, { level: 'warn' }));
+        explanation.push(step('compare.d_invalid', `Свой вариант не построен: ${errs.join('; ')}`, { level: 'warn' }));
         continue;
       }
     }

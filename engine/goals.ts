@@ -454,7 +454,7 @@ export function freeMoney(positions: readonly AccountPosition[], fundings: reado
     result: { free, assignedLiquid, liquidUnassigned },
     explanation: [
       step('free.liquid', `На руках и не закреплено: ${money(liquidUnassigned)} = ${parts.join(' + ') || '0'}`, { amount: liquidUnassigned }),
-      step('free.total', `Свободно ${money(free)} = ${money(liquidUnassigned)} − резерв под обязательства ${money(reserve)}`, { amount: free, level: free < 0 ? 'warn' : 'info' }),
+      step('free.total', `Свободно ${money(free)} = ${money(liquidUnassigned)} − под платежи ${money(reserve)}`, { amount: free, level: free < 0 ? 'warn' : 'info' }),
     ],
   };
 }

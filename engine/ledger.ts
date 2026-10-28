@@ -288,11 +288,11 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
   const zeros = included.length - nonZero.length;
   const locked = included.filter((p) => p.availableFrom > today);
   explanation.unshift(
-    step('capital.gross', `Капитал брутто ${money(gross)} = ${nonZero.map((p) => `«${p.title}» ${money(p.balance)}`).join(' + ') || '0'}${zeros ? ` (ещё ${zeros} ${plural(zeros, 'счёт', 'счёта', 'счетов')} с нулевым остатком)` : ''}`, { amount: gross }),
-    step('capital.liabilities', total === 0 ? 'Обязательств нет' : `Обязательства ${money(total)} = ${formula([['свои рассрочки', installmentsOwn, 1], ['семейные рассрочки', installmentsFamily, 1], ['долги вручную', debtsManual, 1], ['долги по операциям', payables, 1]])}`, { amount: total }),
-    step('capital.net', total === 0 ? `Капитал нетто ${money(net)} = капитал брутто` : `Капитал нетто ${money(net)} = ${money(gross)} − ${money(total)}`, { amount: net }),
-    step('capital.receivables', `Дебиторка (тебе должны) ${money(receivables)} — показана отдельно, в нетто не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
-    step('capital.liquid', `Ликвидно сейчас ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
+    step('capital.gross', `Всего на счетах ${money(gross)} = ${nonZero.map((p) => `«${p.title}» ${money(p.balance)}`).join(' + ') || '0'}${zeros ? ` (ещё ${zeros} ${plural(zeros, 'счёт', 'счёта', 'счетов')} с нулевым остатком)` : ''}`, { amount: gross }),
+    step('capital.liabilities', total === 0 ? 'Долгов и рассрочек нет' : `Долги и рассрочки ${money(total)} = ${formula([['свои рассрочки', installmentsOwn, 1], ['семейные рассрочки', installmentsFamily, 1], ['долги вручную', debtsManual, 1], ['долги по операциям', payables, 1]])}`, { amount: total }),
+    step('capital.net', total === 0 ? `Капитал ${money(net)} = всё, что есть (долгов нет)` : `Капитал ${money(net)} = ${money(gross)} всего − ${money(total)} долгов и рассрочек`, { amount: net }),
+    step('capital.receivables', `Тебе должны ${money(receivables)} — показано отдельно, в капитал не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
+    step('capital.liquid', `На руках ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
   );
   return { asOf: today, accounts, gross, liabilities, receivables, net, netWithReceivables, liquidNow, explanation };
 }

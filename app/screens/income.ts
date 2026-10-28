@@ -281,7 +281,7 @@ export function renderIncome(rerender: () => void): HTMLElement {
     ),
   );
   if (!last.inBalance) root.append(h('p', { class: 'muted' }, 'Денег ещё нет в бэкапе: метки встанут только на то, что уже лежит на счёте свободным. Если не хватит — загрузи свежий бэкап и выбери «Да».'));
-  for (const s of r.explanation.filter((x) => x.code === 'compare.d_invalid')) root.append(h('div', { class: 'warnline' }, s.text.replace('Своя стратегия', 'Свой вариант')));
+  for (const s of r.explanation.filter((x) => x.code === 'compare.d_invalid')) root.append(h('div', { class: 'warnline' }, s.text));
   if (selected >= r.rows.length) selected = 0;
 
   const cards = r.rows.map((x, i) => variantCard(x, i, r, rerender));

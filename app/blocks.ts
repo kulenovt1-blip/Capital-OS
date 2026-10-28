@@ -7,7 +7,7 @@ import {
   starterGoals, suggestClassForCategory, validateIncomeItem, type AppState, type Category, type IncomeKind, type IncomeScheduleItem, type OpClass, type ClassDef,
 } from '../engine/index';
 import { field, h } from './dom';
-import { act, getState, today, update } from './store';
+import { act, getState, today } from './store';
 import { ov } from './ctx';
 import { chip, errorsBox, fmt, moneyInput, newId, nWord, readMoney, readStr, row, rows, typeLabel } from './ui';
 import { closeSheet, defineSheet, sheetHref } from './main';

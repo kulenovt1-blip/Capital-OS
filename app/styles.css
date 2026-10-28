@@ -453,7 +453,7 @@ body.lock #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 /* «Доход» (D86) */
 input.big-input { height: 64px; font-size: calc(28px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; }
 .income-head { margin: 16px 0 8px; }
-.income-head .label { font-size: calc(12px * var(--fz)); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; display: flex; align-items: center; }
+.income-head .label { font-size: calc(13px * var(--fz)); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; display: flex; align-items: center; }
 .income-head .value { font-size: calc(36px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .income-head .muted a { color: inherit; }
 .variant .warnline { margin: 0; }

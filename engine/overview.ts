@@ -65,9 +65,9 @@ const ACTIONS: [RegExp, NoticeAction][] = [
   [/^unclassified$/, { route: 'classes', section: 'categories', label: 'Разметить' }],
   [/^capital\.savings/, { route: 'settings', section: 'savings', label: 'Настроить накопления' }],
   [/^capital\.(payables|receivables)_negative$/, { route: 'settings', section: 'debts', label: 'Указать долги' }],
-  [/^capital\.double_debt$/, { route: 'settings', section: 'obligations', label: 'Открыть обязательства' }],
+  [/^capital\.double_debt$/, { route: 'settings', section: 'obligations', label: 'Долги и рассрочки' }],
   [/^capital\.excluded$/, { route: 'settings', section: 'accounts', label: 'Открыть счета' }],
-  [/^obligation\./, { route: 'settings', section: 'obligations', label: 'Открыть обязательства' }],
+  [/^obligation\./, { route: 'settings', section: 'obligations', label: 'Долги и рассрочки' }],
   [/^goals?\./, { route: 'goals', label: 'Открыть цели' }],
   [/^free\.negative$/, { route: 'income', label: 'Что делать' }],
 ];
@@ -159,7 +159,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const assigned = fm.result.assignedLiquid;
   const freeMoney = fm.result.free;
   explanation.push(
-    step('overview.reserve', untilIncome.length ? `Резерв под платежи до ${day(nextIncome.date)}: ${money(reserveUntilIncome)} — ${untilIncome.map((u) => `«${u.title}» ${money(u.amount)} ${day(u.date)}`).join(', ')}` : `Платежей по обязательствам до ${day(nextIncome.date)} нет`, { amount: reserveUntilIncome, ...(untilIncome.length ? {} : { detail: true }) }),
+    step('overview.reserve', untilIncome.length ? `Резерв под платежи до ${day(nextIncome.date)}: ${money(reserveUntilIncome)} — ${untilIncome.map((u) => `«${u.title}» ${money(u.amount)} ${day(u.date)}`).join(', ')}` : `Платежей по долгам и рассрочкам до ${day(nextIncome.date)} нет`, { amount: reserveUntilIncome, ...(untilIncome.length ? {} : { detail: true }) }),
     step('overview.free', `Свободно ${money(freeMoney)} = ${formula([['на руках', capital.liquidNow, 1], ['за целями', assigned, -1], ['под платежи', reserveUntilIncome, -1]])}`, { amount: freeMoney, level: freeMoney < 0 ? 'warn' : 'info' }),
   );
 

@@ -251,7 +251,7 @@ describe('«Как посчитано»: коротко по умолчанию'
     const by = (code: string) => o.capital.explanation.find((s) => s.code === code)!;
     // в синтетике обязательства — только долг по операциям 2 000 ₸
     // суммы форматируются с неразрывным пробелом — сравниваем с обычным
-    expect(by('capital.liabilities').text.replace(/\s/g, ' ')).toBe('Обязательства 2 000 ₸ = долги по операциям 2 000 ₸');
+    expect(by('capital.liabilities').text.replace(/\s/g, ' ')).toBe('Долги и рассрочки 2 000 ₸ = долги по операциям 2 000 ₸');
     // Halyk = 0 ₸ — не в сумме, а одной припиской
     expect(by('capital.gross').text).not.toMatch(/Halyk/);
     expect(by('capital.gross').text).toMatch(/ещё 1 счёт с нулевым остатком/);

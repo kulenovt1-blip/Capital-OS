@@ -461,7 +461,7 @@ export function assumptions(i: SimInput, scenario: Scenario): string[] {
   for (const d of i.deposits) {
     a.push(`Вклад «${d.title}»: ${money(d.balance)}, ${d.rateBp / 100}% годовых, капитализация ${d.capitalization === 'daily' ? 'ежедневная' : 'ежемесячная'}; деньги и проценты недоступны до ${day(d.availableFrom)}`);
   }
-  if (i.payments.length) a.push(`Платежи по обязательствам: ${i.payments.length} шт. на ${money(sum(i.payments.map((p) => p.amount)))} по графикам`);
+  if (i.payments.length) a.push(`Платежи по долгам и рассрочкам: ${i.payments.length} шт. на ${money(sum(i.payments.map((p) => p.amount)))} по графикам`);
   for (const e of i.events) a.push(`Событие «${e.title}» ${day(e.date)}: ${eventLabel(e)}`);
   a.push(`Месячный прирост закрепляется за целями по варианту «${STRATEGY_LABELS[i.strategy.id]}»; это метки на деньгах, на капитал не влияют`);
   a.push('Вероятности не считаются: это расчёт «если всё будет так», а не прогноз шансов');
