@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, detectNewIncomes, flattenTree, type Overview } from '../../engine/index';
+import { addDays, cushionStatus, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress } from '../ctx';
@@ -99,8 +99,11 @@ function heroBlock(o: Overview): HTMLElement {
 /** Подушка — одной строкой: готова или сколько осталось (D96). */
 function cushionRow(o: Overview): HTMLElement | null {
   const n = flattenTree(o.goalTree).find((x) => x.goal.role === 'safety' && x.goal.parentId === undefined && x.goal.status === 'active');
-  if (!n) return rows(row({ title: 'Подушки нет', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
-  const ready = n.goal.targetMin > 0 && n.progress >= n.goal.targetMin;
+  const status = cushionStatus(n);
+  if (!n || status === 'none') return rows(row({ title: 'Подушки нет', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
+  // сумму не посчитать — так и сказать, а не «0 ₸ из 0 ₸» (D103)
+  if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'не хватает данных о тратах — проверь раскладку трат или задай сумму сам', href: '#/goals~cushion', cls: 'warn' }));
+  const ready = status === 'ready';
   return rows(
     row({
       title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
@@ -167,8 +170,13 @@ export function renderOverview(): HTMLElement {
   const total30 = o.upcoming30.reduce((s, u) => s + u.amount, 0);
   const shown = c.accounts.filter((x) => !x.excluded);
   const excluded = c.accounts.filter((x) => x.excluded);
-  const lockedSum = sp.locked.reduce((a, x) => a + x.balance, 0);
-  const lockedLine = sp.locked.length ? `из них ${fmt(lockedSum as never)} снять можно с ${fmtDay(sp.locked.map((x) => x.availableFrom).sort()[0]!)}` : null;
+  // по каждой дате — своя сумма (D103): «320 000 с 05.12» вместо «20 000 с 05.12 и 300 000 с 01.02» вводило в заблуждение
+  const groups = lockedByDate(sp.locked);
+  const lockedLine = groups.length
+    ? groups.length === 1
+      ? `из них ${fmt(groups[0]!.amount)} снять можно с ${fmtDay(groups[0]!.date)}`
+      : `пока не снять: ${groups.slice(0, 2).map((g) => `${fmt(g.amount)} до ${fmtDay(g.date)}`).join(', ')}${groups.length > 2 ? ` и ещё ${groups.length - 2}` : ''}`
+    : null;
   const details = h(
     'details',
     { class: 'fold', 'data-key': 'overview:details', open: getState().settings.showDetails ? true : undefined },
@@ -204,7 +212,7 @@ export function renderOverview(): HTMLElement {
     h(
       'div',
       { class: 'cells' },
-      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'На руках всего'), h('div', { class: 'v' }, fmt(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
+      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmt(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmt(sp.inSavings))),
     ),
     newIncomeLine(),

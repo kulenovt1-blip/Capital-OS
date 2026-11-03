@@ -10,10 +10,10 @@ import { importMmbackup } from '../../engine/import/mmbackup';
 import { classifyAll, setCategoryClass } from '../../engine/classify';
 import { createGoal, resolveGoalTargets, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
-import { mergeAccountSettings, accountKindOf } from '../../engine/settings';
+import { mergeAccountSettings, accountKindOf, accountKindGuess } from '../../engine/settings';
 import { tenge, type Money } from '../../engine/money';
 import {
-  arrivedIncomes, autoLabelCategories, basketClass, detectNewIncomes, goalVerdicts, reorderGoals, runway,
+  arrivedIncomes, autoLabelCategories, basketClass, cushionStatus, detectNewIncomes, lockedByDate, goalVerdicts, reorderGoals, runway,
   setAsideReminders, settleSetAsides, splitIncome,
 } from '../../engine/simple';
 import { fixtureBytes } from '../support/fixtures';
@@ -173,6 +173,39 @@ describe('перенос старых данных (один раз)', () => {
     expect(accountKindOf(pos('a'), [])).toBe('spend');
     expect(accountKindOf(pos('a', { kind: 'days', days: 3 }), [])).toBe('savings');
     expect(accountKindOf(pos('a'), [{ accountId: 'a', excluded: false, liquidity: { kind: 'instant' }, kind: 'savings' }])).toBe('savings');
+  });
+});
+
+describe('этап 1 аудита (D103)', () => {
+  it('новый счёт «Вклад» — копилка по названию, но как догадка; выбор человека важнее', () => {
+    const p = (title: string) => ({ accountId: 'a', source: 'moneymanager', liquidity: { kind: 'instant' } as const, title });
+    expect(accountKindGuess(p('Вклад Halyk'), [])).toEqual({ kind: 'savings', confirmed: false });
+    expect(accountKindGuess(p('Kaspi Gold'), [])).toEqual({ kind: 'spend', confirmed: false });
+    expect(accountKindGuess(p('Вклад'), [{ accountId: 'a', excluded: false, liquidity: { kind: 'instant' }, kind: 'spend' }])).toEqual({ kind: 'spend', confirmed: true });
+    // в «Обзоре»: вклад не входит в «Можно тратить» и помечен «проверь»
+    const s = state();
+    const data = { ...s.imported!, accounts: s.imported!.accounts.map((a) => (a.id === 'acc-halyk' ? { ...a, title: 'Вклад' } : a)) };
+    const s2 = { ...s, imported: data, settings: { ...s.settings, accounts: mergeAccountSettings([], data.accounts) } };
+    const o = buildOverview(s2, TODAY);
+    expect(o.spend.kinds['acc-halyk']).toBe('savings');
+    expect(o.spend.guessedSavings).toContain('acc-halyk');
+  });
+
+  it('вклады с разными датами — по датам, а не одной суммой с самой ранней датой', () => {
+    const r = lockedByDate([
+      { balance: tenge(300_000), availableFrom: '2027-02-01' },
+      { balance: tenge(20_000), availableFrom: '2026-12-05' },
+      { balance: tenge(5_000), availableFrom: '2026-12-05' },
+    ]);
+    expect(r).toEqual([{ date: '2026-12-05', amount: tenge(25_000) }, { date: '2027-02-01', amount: tenge(300_000) }]);
+  });
+
+  it('подушка: нет данных о тратах — «не посчитать», а не «0 из 0»', () => {
+    const c = goal('c', { role: 'safety', targetMin: tenge(0), targetRule: { kind: 'months_of_base' } });
+    expect(cushionStatus(undefined)).toBe('none');
+    expect(cushionStatus({ goal: c, progress: tenge(0) })).toBe('unknown');
+    expect(cushionStatus({ goal: { ...c, targetMin: tenge(100) }, progress: tenge(100) })).toBe('ready');
+    expect(cushionStatus({ goal: { ...c, targetMin: tenge(100) }, progress: tenge(50) })).toBe('saving');
   });
 });
 

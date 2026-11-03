@@ -5,12 +5,25 @@
  */
 import { emptyState, parseState, serializeState } from '../engine/index';
 import { ask, download, h, toast } from './dom';
-import { getHealth, getState, replaceState, today } from './store';
+import { getHealth, getState, replaceState, retryPreSimpleCopy, today } from './store';
 import { looksLikeNewerVersion } from './persist';
 
 /** Плашка над экраном, пока изменения не сохраняются. null — всё в порядке. */
 export function storageBanner(): HTMLElement | null {
   const hl = getHealth();
+  if (hl.mode === 'copy-failed') {
+    // перенос на новые экраны без копии не начинается (D103): приложение показывает данные, но ничего не сохраняет
+    return h(
+      'div',
+      { class: 'storage-banner', role: 'alert' },
+      h('span', null, `Перед обновлением не удалось сохранить копию твоих данных (${hl.error}). Чтобы ничего не потерять, приложение пока ничего не сохраняет.`),
+      h('button', { class: 'btn', type: 'button', onclick: async () => {
+            const ok = await retryPreSimpleCopy();
+            toast(ok ? 'Копия сделана — можно работать' : 'Снова не получилось. Скачай данные и освободи место в браузере', ok ? 'info' : 'error');
+          } }, 'Повторить'),
+      h('button', { class: 'btn', type: 'button', onclick: () => download(`capital-os-before-update-${today()}.json`, hl.raw) }, 'Скачать данные'),
+    );
+  }
   if (hl.mode !== 'write-failed' && hl.mode !== 'no-storage') return null;
   const text =
     hl.mode === 'no-storage'

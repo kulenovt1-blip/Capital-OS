@@ -63,6 +63,8 @@ export function renderImport(rerender: () => void): HTMLElement {
       pending = null;
       let moved = 0;
       let labeled = 0;
+      const known = new Set(getState().settings.accounts.map((a) => a.accountId));
+      const hadData = !!getState().imported;
       await update((s) => {
         // новые категории размечаются сами по названию; «Отложил» — найти переводы на копилки (D96)
         const auto = autoLabelCategories(s.settings.classification, data);
@@ -72,7 +74,11 @@ export function renderImport(rerender: () => void): HTMLElement {
         moved = settled.moved;
         return settled.state;
       });
-      const extra = [labeled ? `новых категорий разложено: ${labeled}` : '', moved ? `переводы на копилку найдены: ${fmt(moved as never)}` : ''].filter(Boolean).join(' · ');
+      // новые счета при повторном импорте: сказать, кем приложение их посчитало (D103)
+      const o = ov();
+      const fresh = hadData ? o.capital.accounts.filter((p) => !known.has(p.accountId) && !p.excluded && p.source === 'moneymanager') : [];
+      const freshText = fresh.length ? `новые счета: ${fresh.map((p) => `«${p.title}» — ${o.spend.kinds[p.accountId] === 'savings' ? 'копилка' : 'для трат'}`).join(', ')} (проверь в «Счетах»)` : '';
+      const extra = [labeled ? `новых категорий разложено: ${labeled}` : '', moved ? `переводы на копилку найдены: ${fmt(moved as never)}` : '', freshText].filter(Boolean).join(' · ');
       toast(`${ok ? 'Импорт принят' : 'Импорт принят с расхождением — цифры помечены красным'}${extra ? ` · ${extra}` : ''}`);
       go(getState().settings.firstRunDone ? '#/overview' : '#/start');
     };

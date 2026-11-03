@@ -32,17 +32,25 @@ export type AccountKind = 'spend' | 'savings';
 export const SAVINGS_TITLE_RE = /копил|накоп|сбереж|депоз|вклад|резерв|savings|deposit/i;
 
 /**
- * Вид счёта (D96): заданный вручную; без него — копилка, если счёт привязан к цели, деньги не «сразу»,
- * это ручной вклад или оценка сбережений вне MoneyManager; иначе — для трат.
+ * Вид счёта (D96, D103): заданный человеком; без него — предположение: копилка, если счёт привязан к цели,
+ * деньги не «сразу», это ручной вклад, оценка сбережений вне MoneyManager или название похоже на копилку
+ * («Вклад», «Депозит», «Накопления»…); иначе — для трат. Предположение видно и меняется в «Счетах».
  */
-export function accountKindOf(p: { accountId: string; source: string; liquidity: Liquidity }, settings: readonly AccountSettings[], manual: readonly ManualAccount[] = []): AccountKind {
+export function accountKindOf(p: { accountId: string; source: string; liquidity: Liquidity; title?: string }, settings: readonly AccountSettings[], manual: readonly ManualAccount[] = []): AccountKind {
+  return accountKindGuess(p, settings, manual).kind;
+}
+
+/** Вид счёта и задан ли он человеком (`confirmed`) или угадан приложением. */
+export function accountKindGuess(p: { accountId: string; source: string; liquidity: Liquidity; title?: string }, settings: readonly AccountSettings[], manual: readonly ManualAccount[] = []): { kind: AccountKind; confirmed: boolean } {
   const s = settings.find((x) => x.accountId === p.accountId);
-  if (s?.kind) return s.kind;
-  if (s?.boundGoalId) return 'savings';
-  if (p.liquidity.kind !== 'instant') return 'savings';
-  if (p.source === 'savings_flow') return 'savings';
-  if (manual.find((m) => m.id === p.accountId)?.deposit) return 'savings';
-  return 'spend';
+  if (s?.kind) return { kind: s.kind, confirmed: true };
+  const guess = (k: AccountKind) => ({ kind: k, confirmed: false });
+  if (s?.boundGoalId) return guess('savings');
+  if (p.liquidity.kind !== 'instant') return guess('savings');
+  if (p.source === 'savings_flow') return guess('savings');
+  if (manual.find((m) => m.id === p.accountId)?.deposit) return guess('savings');
+  if (p.title && SAVINGS_TITLE_RE.test(p.title)) return guess('savings');
+  return guess('spend');
 }
 
 /** Долги, которые были до начала учёта в MoneyManager (D60). */

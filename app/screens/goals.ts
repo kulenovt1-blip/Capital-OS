@@ -312,6 +312,14 @@ function cushionCard(n: GoalNode | undefined): HTMLElement {
     );
   const g = n.goal;
   const months = g.targetRule ? `${g.targetRule.months ?? getState().settings.reserveMonths} мес.` : 'своя сумма';
+  // сумма по правилу, а данных о тратах нет — не «0 из 0», а честно «пока не посчитать» (D103)
+  if (g.targetMin <= 0)
+    return h(
+      'div',
+      { class: 'gcard', 'data-goal': g.id },
+      h('a', { class: 'gh', href: sheetHref('goal', g.id) }, h('span', { class: 'gt' }, `Подушка · ${months}`), h('span', { class: 'bad' }, 'не посчитать')),
+      h('div', { class: 'gs' }, 'Не хватает данных о тратах. Проверь ', h('a', { href: '#/baskets' }, 'раскладку трат'), ' или ', h('a', { href: sheetHref('cushion') }, 'задай сумму сам ›')),
+    );
   const ready = g.targetMin > 0 && n.progress >= g.targetMin;
   return h(
     'div',

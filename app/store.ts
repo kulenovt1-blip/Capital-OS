@@ -8,7 +8,7 @@
 import { emptyState, serializeState, type AppState, type IsoDate } from '../engine/index';
 import { storage } from './storage';
 import { toast } from './dom';
-import { canWrite, decideLoad, errorText, needsPreSimpleCopy, PRE_SIMPLE_KEY, quarantineKey, type StorageHealth } from './persist';
+import { canWrite, decideLoad, ensurePreSimpleCopy, errorText, needsPreSimpleCopy, quarantineKey, type StorageHealth } from './persist';
 
 const KEY = 'state';
 let state: AppState = emptyState();
@@ -44,12 +44,12 @@ export async function loadState(): Promise<void> {
   const d = decideLoad(raw);
   if (d.kind === 'ok') {
     state = d.state;
-    // перенос на новую модель экранов (D96): исходник — под отдельный ключ, один раз, до первой записи поверх
+    // перенос на новую модель экранов (D96, D103): сначала копия исходника с проверкой; не вышло — только чтение
     if (needsPreSimpleCopy(raw)) {
-      try {
-        if (!(await storage.get<string>(PRE_SIMPLE_KEY))) await storage.set(PRE_SIMPLE_KEY, raw as string);
-      } catch (e) {
-        console.error('Не удалось отложить копию до переноса', e);
+      const c = await ensurePreSimpleCopy(storage, raw as string);
+      if (!c.ok) {
+        health = { mode: 'copy-failed', error: c.error, raw: raw as string };
+        console.error('Копия перед переносом не сделана — запись заблокирована', c.error);
       }
     }
   }
@@ -74,7 +74,7 @@ export async function loadState(): Promise<void> {
  */
 export async function update(fn: (s: AppState) => AppState, opts: { force?: boolean } = {}): Promise<boolean> {
   if (!canWrite(health, !!opts.force)) {
-    toast('Сначала реши, что делать с сохранёнными данными', 'error');
+    toast(health.mode === 'copy-failed' ? 'Пока копия данных не сделана, изменения не сохраняются — нажми «Повторить» в красной плашке' : 'Сначала реши, что делать с сохранёнными данными', 'error');
     return false;
   }
   const next = fn(structuredClone(state));
@@ -108,6 +108,15 @@ export async function act(fn: (s: AppState) => AppState, message: string, opts: 
       if (await update(() => before)) toast('Отменено');
     },
   });
+}
+
+/** Повторить копию перед переносом (D103). true — копия сделана, запись снова разрешена. */
+export async function retryPreSimpleCopy(): Promise<boolean> {
+  if (health.mode !== 'copy-failed') return true;
+  const c = await ensurePreSimpleCopy(storage, health.raw);
+  health = c.ok ? { mode: 'ok' } : { ...health, error: c.error };
+  notify();
+  return c.ok;
 }
 
 /** Заменить состояние целиком: восстановление из бэкапа, «стереть всё», «начать заново». */

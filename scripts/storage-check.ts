@@ -6,6 +6,8 @@
  *  B. Сохранённые данные от более новой версии → экран восстановления, исходник не тронут и отложен копией;
  *     «Начать заново» работает только по явному выбору, копия остаётся.
  *  C. На экране восстановления можно восстановить бэкап из файла.
+ *  E. Копию до переноса записать не удалось → перенос не начинается: красная плашка, запись заблокирована, исходник не тронут;
+ *     «Повторить» после того, как место появилось, — копия сделана, запись снова разрешена (D103).
  *  D. Старое состояние (до D96) при первом открытии откладывается копией state.before-simple и не перезаписывается ею повторно.
  * Код выхода 1, если хоть одна проверка не прошла.
  */
@@ -139,6 +141,44 @@ let rawBefore = '';
   await page.waitForTimeout(400);
   check('D: копия не перезаписана перенесённым состоянием', (await idbGet(page, 'state.before-simple')) === legacy);
   await page.context().close();
+}
+
+// ── E ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  // запись копии падает, пока в окне не снят флаг
+  await ctx.addInitScript(() => {
+    const orig = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (v, k) {
+      if (k === 'state.before-simple' && !(window as any).__allowCopy) throw new DOMException('эмуляция', 'QuotaExceededError');
+      return orig.call(this, v, k);
+    };
+  });
+  const page = await ctx.newPage();
+  await page.goto(URL);
+  const obj = JSON.parse(serializeState(STATES.configured(), TODAY));
+  delete obj.state.settings.simpleMigrated;
+  const legacy = JSON.stringify(obj);
+  await put(page, legacy);
+  await page.goto(`${URL}#/goals`);
+  await page.reload();
+  await page.waitForTimeout(500);
+  check('E: красная плашка «не удалось сохранить копию»', await page.locator('.storage-banner').filter({ hasText: 'копию' }).isVisible());
+  check('E: копии нет', (await idbGet(page, 'state.before-simple')) === undefined);
+  await page.getByRole('link', { name: '＋ Папка' }).click();
+  await page.locator('#goal-new-form input[name=title]').fill('Проверка');
+  await page.getByRole('button', { name: 'Создать папку' }).click();
+  await page.waitForTimeout(400);
+  check('E: исходник не перезаписан', (await idbGet(page, 'state')) === legacy);
+  await page.keyboard.press('Escape');
+  await page.goto(`${URL}#/goals`);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => ((window as any).__allowCopy = true));
+  await page.getByRole('button', { name: 'Повторить' }).click();
+  await page.waitForTimeout(400);
+  check('E: «Повторить» сделал копию', (await idbGet(page, 'state.before-simple')) === legacy);
+  check('E: плашка ушла', !(await page.locator('.storage-banner').count()));
+  await ctx.close();
 }
 
 await browser.close();
