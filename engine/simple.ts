@@ -501,3 +501,22 @@ export function commitSetAside(state: AppState, byGoal: Readonly<Record<string, 
     explanation: [step('setaside.done', `Отложено ${total} на цели (${added.length})`)],
   };
 }
+
+// ───────────────────────── деньги, которые пока не снять ─────────────────────────
+
+/**
+ * Заблокированные деньги по датам (D103): каждая дата — своя сумма. Нельзя складывать вклады и подписывать
+ * самой ранней датой: 20 000 с 05.12 и 300 000 с 01.02 — это не «320 000 с 05.12».
+ */
+export function lockedByDate(locked: readonly { balance: Money; availableFrom: IsoDate }[]): { date: IsoDate; amount: Money }[] {
+  const m = new Map<IsoDate, Money>();
+  for (const x of locked) m.set(x.availableFrom, add(m.get(x.availableFrom) ?? ZERO, x.balance));
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount }));
+}
+
+/** Состояние подушки для показа (D103): нет подушки, сумму не посчитать (нет данных о тратах), набрана, копится. */
+export function cushionStatus(n: { goal: Goal; progress: Money } | undefined): 'none' | 'unknown' | 'ready' | 'saving' {
+  if (!n) return 'none';
+  if (n.goal.targetMin <= 0) return 'unknown';
+  return n.progress >= n.goal.targetMin ? 'ready' : 'saving';
+}

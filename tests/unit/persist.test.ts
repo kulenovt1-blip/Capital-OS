@@ -80,3 +80,48 @@ describe('копия до переноса на новую модель экра
     expect(needsPreSimpleCopy(undefined)).toBe(false);
   });
 });
+
+describe('копия перед переносом обязательна (D103)', () => {
+  const RAW = '{"app":"capital-os","version":1,"state":{}}';
+  function fake(opts: { failSet?: boolean; corrupt?: boolean; existing?: string } = {}) {
+    const m = new Map<string, unknown>(opts.existing ? [['state.before-simple', opts.existing]] : []);
+    let writes = 0;
+    return {
+      writes: () => writes,
+      store: {
+        async get<T>(k: string) {
+          return m.get(k) as T | undefined;
+        },
+        async set(k: string, v: unknown) {
+          writes++;
+          if (opts.failSet) throw new DOMException('нет места', 'QuotaExceededError');
+          m.set(k, opts.corrupt ? String(v).slice(0, 5) : v);
+        },
+      },
+    };
+  }
+
+  it('записалась и прочиталась так же — копия есть', async () => {
+    const { ensurePreSimpleCopy } = await import('../../app/persist');
+    const f = fake();
+    expect(await ensurePreSimpleCopy(f.store, RAW)).toEqual({ ok: true });
+  });
+
+  it('запись упала или прочиталось не то — копии нет, запись приложения заблокирована', async () => {
+    const { ensurePreSimpleCopy, canWrite } = await import('../../app/persist');
+    const failed = await ensurePreSimpleCopy(fake({ failSet: true }).store, RAW);
+    expect(failed.ok).toBe(false);
+    const corrupt = await ensurePreSimpleCopy(fake({ corrupt: true }).store, RAW);
+    expect(corrupt).toEqual({ ok: false, error: 'копия записалась не полностью' });
+    const h = { mode: 'copy-failed' as const, error: 'x', raw: RAW };
+    expect(canWrite(h, false)).toBe(false);
+    expect(canWrite(h, true)).toBe(true);
+  });
+
+  it('копия уже есть — не перезаписывается', async () => {
+    const { ensurePreSimpleCopy } = await import('../../app/persist');
+    const f = fake({ existing: 'старая копия' });
+    expect(await ensurePreSimpleCopy(f.store, RAW)).toEqual({ ok: true });
+    expect(f.writes()).toBe(0);
+  });
+});

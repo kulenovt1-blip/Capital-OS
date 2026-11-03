@@ -84,6 +84,8 @@ defineSheet('arrived-pick', () => {
 });
 
 async function commit(byGoal: Record<string, Money>, a: Arrived, total: Money): Promise<void> {
+  // денег ещё нет в бэкапе — отметки встали бы на старые деньги на счёте (D103)
+  if (!a.inBalance) return toast('Этих денег ещё нет в бэкапе. Загрузи свежий бэкап — тогда подтвердишь', 'error');
   const acc = a.accountId ?? spendAccount();
   if (!acc) return toast('Нет счёта для трат, куда пришли деньги', 'error');
   const before = getState();
@@ -140,10 +142,16 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
     items.length ? h('ul', null, items) : h('div', { class: 'gs' }, 'Целей пока нет — всё остаётся на жизнь. ', h('a', { href: '#/goals' }, 'Добавить цель ›')),
     h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
     sp.payments.length ? h('div', { class: 'gs' }, `Уже вычтено: ${sp.payments.map((p) => `${p.title} ${fmt(p.amount)} (${fmtDay(p.date)})`).join(', ')}`) : null,
-    sp.setAside > 0
+    sp.setAside > 0 && !a.inBalance
+      ? [
+          h('div', { class: 'warnline' }, 'Это расчёт заранее: денег ещё нет в бэкапе. Когда придут — загрузи свежий бэкап, и здесь можно будет подтвердить.'),
+          h('a', { class: 'btn primary wide', href: '#/import' }, 'Загрузить свежий бэкап'),
+        ]
+      : null,
+    sp.setAside > 0 && a.inBalance
       ? h('button', { class: 'btn primary wide big', type: 'button', onclick: () => void commit(Object.fromEntries(sp.lines.map((l) => [l.goalId, l.amount])), a, sp.setAside) }, 'Отложил')
       : null,
-    h('a', { class: 'btn wide', href: sheetHref('setaside-other') }, 'Отложить другую сумму'),
+    a.inBalance ? h('a', { class: 'btn wide', href: sheetHref('setaside-other') }, 'Отложить другую сумму') : null,
   );
 }
 
@@ -220,7 +228,7 @@ export function renderArrived(rerender: () => void): HTMLElement {
     );
   } else {
     root.append(adviceCard(sp, a));
-    if (sp.setAside > 0) root.append(h('p', { class: 'one-line' }, `Приложение ничего не переводит: если согласен — переведи ${fmt(sp.setAside)} на копилку в банке и нажми «Отложил». До следующего бэкапа эта сумма уже не считается деньгами на жизнь.`));
+    if (sp.setAside > 0 && a.inBalance) root.append(h('p', { class: 'one-line' }, `Приложение ничего не переводит: если согласен — переведи ${fmt(sp.setAside)} на копилку в банке и нажми «Отложил». До следующего бэкапа эта сумма уже не считается деньгами на жизнь.`));
   }
   if (opId) root.append(h('button', { class: 'btn link', type: 'button', onclick: () => void markHandled(opId, `${fmt(a.amount)} · ${a.title}`) }, 'Не надо — уже распределил'));
   root.append(rows(row({ title: 'Другие способы распределить', sub: 'быстрее к одной цели, больше в подушку', href: '#/income-more' })));

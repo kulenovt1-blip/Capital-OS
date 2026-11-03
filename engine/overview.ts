@@ -8,7 +8,7 @@ import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport } from './classify';
 import { baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
 import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
-import { accountKindOf, accountsNeedingReview, type AccountKind } from './settings';
+import { accountKindGuess, accountsNeedingReview, type AccountKind } from './settings';
 import { daysBetween } from './date';
 import { add, mulDiv } from './money';
 import { obligationStatus, upcomingPayments, type ObligationStatus, type UpcomingPayment } from './obligations';
@@ -89,6 +89,8 @@ export function regularClassIds(reg: readonly ClassDef[], today: IsoDate): OpCla
 export interface SpendView {
   /** Вид каждого учитываемого счёта. */
   kinds: Record<string, AccountKind>;
+  /** Счета, отмеченные копилкой по догадке приложения (не человеком) — показать «проверь» (D103). */
+  guessedSavings: string[];
   /** Σ счетов «для трат», доступных сегодня. */
   spendNow: Money;
   /** Отложено, но ещё на счетах для трат (назначения целям на них). */
@@ -266,10 +268,13 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   let onHand = ZERO;
   let inSavings = ZERO;
   const locked: SpendView['locked'] = [];
+  const guessedSavings: string[] = [];
   for (const p of capital.accounts) {
     if (p.excluded) continue;
-    const k = accountKindOf(p, state.settings.accounts, state.manualAccounts);
+    const g = accountKindGuess(p, state.settings.accounts, state.manualAccounts);
+    const k = g.kind;
     kinds[p.accountId] = k;
+    if (k === 'savings' && !g.confirmed && p.source === 'moneymanager') guessedSavings.push(p.accountId);
     onHand = add(onHand, p.balance);
     if (k === 'savings') inSavings = add(inSavings, p.balance);
     if (p.availableFrom > today && p.balance > 0) locked.push({ accountId: p.accountId, title: p.title, balance: p.balance, availableFrom: p.availableFrom });
@@ -280,7 +285,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const days = Math.max(1, daysBetween(today, nextIncome.date));
   const usualMonthly = add(baseline.median, regular.median);
   const spend: SpendView = {
-    kinds, spendNow, setAsideOnSpend, canSpend, days,
+    kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, usualPerDay: mulDiv(usualMonthly, 12, 365),
     onHand, inSavings, locked, obligationsMonthly, regularMedian: regular.median,

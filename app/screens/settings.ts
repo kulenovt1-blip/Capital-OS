@@ -83,7 +83,7 @@ export function renderAccounts(section?: string): HTMLElement {
   const line = (p: (typeof counted)[number]) =>
     row({
       title: p.title,
-      sub: [p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
+      sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
       value: fmt(p.balance),
       href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId),
       mark: bad.has(p.accountId),

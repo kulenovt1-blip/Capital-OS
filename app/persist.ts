@@ -29,6 +29,30 @@ export function needsPreSimpleCopy(raw: unknown): boolean {
   return typeof raw === 'string' && raw.length > 0 && !/"simpleMigrated":\s*true/.test(raw);
 }
 
+/** Минимум хранилища, нужный для копии (в тестах — подделка). */
+export interface KvStore {
+  get<T>(key: string): Promise<T | undefined>;
+  set(key: string, value: unknown): Promise<void>;
+}
+
+/**
+ * Копия исходных данных перед переносом (D103): записать и прочитать обратно — копия считается сделанной,
+ * только если прочитанное совпадает с исходником байт в байт. Уже лежащая копия — не перезаписывается.
+ * Не получилось — перенос не начинается: приложение работает только на чтение, пока копия не будет сделана.
+ */
+export async function ensurePreSimpleCopy(store: KvStore, raw: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const existing = await store.get<string>(PRE_SIMPLE_KEY);
+    if (typeof existing === 'string' && existing.length > 0) return { ok: true };
+    await store.set(PRE_SIMPLE_KEY, raw);
+    const back = await store.get<string>(PRE_SIMPLE_KEY);
+    if (back !== raw) return { ok: false, error: 'копия записалась не полностью' };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errorText(e) };
+  }
+}
+
 /**
  * Ключ, под которым откладывается нечитаемое состояние: по содержимому (FNV-1a + длина).
  * Те же данные при повторных открытиях — та же копия (место не растёт), другие данные — другая копия (прежние не перезаписываются).
@@ -50,11 +74,13 @@ export type StorageHealth =
   /** Запись не удалась (место, запрет браузера). Изменения только в памяти. */
   | { mode: 'write-failed'; error: string }
   /** Хранилище браузера недоступно совсем. Работаем в памяти. */
-  | { mode: 'no-storage'; error: string };
+  | { mode: 'no-storage'; error: string }
+  /** Перед переносом на новую модель не удалось сделать копию (D103). Только чтение, пока копия не сделана. */
+  | { mode: 'copy-failed'; error: string; raw: string };
 
 /** Можно ли сейчас писать обычные изменения. Восстановление из бэкапа и «начать заново» разрешены всегда (force). */
 export function canWrite(h: StorageHealth, force: boolean): boolean {
-  return force || h.mode !== 'unreadable';
+  return force || (h.mode !== 'unreadable' && h.mode !== 'copy-failed');
 }
 
 /** Похоже ли, что данные записала более новая версия приложения (тогда помогает обновить страницу). */
