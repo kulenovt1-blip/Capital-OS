@@ -83,7 +83,7 @@ export function buildGoalsView(state: AppState, today: IsoDate): GoalsView {
       reason = 'на счёте нет денег';
     } else if (free <= 0) {
       status = 'fully_assigned';
-      reason = 'все деньги на счёте уже закреплены за целями';
+      reason = 'все деньги на счёте уже отложены на цели';
     } else status = 'available';
     return { accountId: p.accountId, title: p.title, balance: p.balance, free, status, reason };
   });

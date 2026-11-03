@@ -18,7 +18,7 @@ import { renderAccounts, renderAdvanced, renderBackup, renderDebts, renderIncome
 
 addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
 addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
-addRoute({ path: 'income', title: 'Пришли деньги', nav: 'income', render: (r) => renderArrived(r) });
+addRoute({ path: 'income', title: 'Доход', nav: 'income', render: (r) => renderArrived(r) });
 addRoute({ path: 'income-more', title: 'Другие способы', nav: 'income', parent: 'income', render: (r) => renderIncome(r) });
 addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecastSimple(r) });
 addRoute({ path: 'forecast-more', title: 'Хуже или лучше', nav: 'forecast', parent: 'forecast', render: (r) => renderForecast(r) });

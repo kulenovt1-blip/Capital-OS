@@ -1,6 +1,7 @@
 /**
  * «Пришли деньги» (D96, вместо «Доход» с «Проверить решение»): сколько пришло (из бэкапа или руками) →
- * одна цифра «Отложи X» с разбивкой по целям → сколько останется на жизнь до следующего дохода → «Отложил».
+ * одна цифра «Можно отложить X» с разбивкой по целям → сколько останется на жизнь до следующего дохода →
+ * «переведи в банке» → «Перевёл в банке — подтвердить» (D105).
  * Старый экран сравнения вариантов — «Другие способы распределить».
  */
 import { arrivedIncomes, commitSetAside, splitAmount, splitIncome, type ArrivedIncome, type Money, type SimpleSplit } from '../../engine/index';
@@ -94,7 +95,7 @@ async function commit(byGoal: Record<string, Money>, a: Arrived, total: Money): 
   pick = null;
   flashGoals(Object.keys(byGoal));
   await update(() => r.value);
-  toast(`Отложено ${fmt(total)}. Переведи их на копилку в банке`, { undo: () => update(() => before).then(() => toast('Отменено')) });
+  toast(`Отмечено: ${fmt(total)} на цели. Перевод проверится по следующему бэкапу`, { undo: () => update(() => before).then(() => toast('Отменено')) });
   go('#/overview');
 }
 
@@ -113,7 +114,7 @@ defineSheet('setaside-other', () => {
     plan = m && m > 0 ? splitAmount(getState(), today(), m) : null;
     preview.replaceChildren(plan && plan.lines.length ? rows(plan.lines.map((l) => row({ title: l.title, value: fmt(l.amount) }))) : h('p', { class: 'muted' }, 'Сумма разложится по целям в порядке списка.'));
   };
-  const form = h('form', { id: 'setaside-other-form', class: 'stack' }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Сколько отложить, ₸'), amount), preview, err);
+  const form = h('form', { id: 'setaside-other-form', class: 'stack' }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Сколько отложить, ₸'), amount), preview, transferNote(), err);
   amount.addEventListener('input', draw);
   queueMicrotask(draw);
   form.addEventListener('submit', async (e) => {
@@ -124,8 +125,22 @@ defineSheet('setaside-other', () => {
     closeSheet();
     await commit(plan.byGoal, a, total);
   });
-  return { title: 'Отложить другую сумму', body: form, bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'setaside-other-form' }, 'Отложил')) };
+  return { title: 'Отложить другую сумму', body: form, bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'setaside-other-form' }, CONFIRM)) };
 });
+
+/** Кнопка подтверждения: человек сначала переводит в банке, потом отмечает здесь (D105). */
+const CONFIRM = 'Перевёл в банке — подтвердить';
+
+/** Предупреждение перед кнопкой: приложение само ничего не переводит. */
+function transferNote(amount?: Money): HTMLElement {
+  return h(
+    'div',
+    { class: 'warnline' },
+    h('strong', null, 'Приложение ничего не переводит. '),
+    amount ? `Сначала переведи ${fmt(amount)} на копилку в банке, потом нажми кнопку. ` : 'Сначала переведи эту сумму на копилку в банке, потом нажми кнопку. ',
+    'С этой минуты сумма не считается деньгами на жизнь, а следующий бэкап покажет, дошёл ли перевод.',
+  );
+}
 
 function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
   const enough = sp.usualPerDay > 0 ? (sp.lifePerDay >= sp.usualPerDay ? ' — хватает.' : ' — меньше обычного, придётся ужаться.') : '.';
@@ -140,7 +155,7 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
     { class: 'advice' },
     h('div', { class: 'big' }, sp.setAside > 0 ? `Можно отложить ${fmt(sp.setAside)}` : 'Откладывать не нужно'),
     items.length ? h('ul', null, items) : h('div', { class: 'gs' }, 'Целей пока нет — всё остаётся на жизнь. ', h('a', { href: '#/goals' }, 'Добавить цель ›')),
-    h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
+    h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день на всё`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
     sp.payments.length ? h('div', { class: 'gs' }, `Уже вычтено: ${sp.payments.map((p) => `${p.title} ${fmt(p.amount)} (${fmtDay(p.date)})`).join(', ')}`) : null,
     sp.setAside > 0 && !a.inBalance
       ? [
@@ -149,7 +164,10 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
         ]
       : null,
     sp.setAside > 0 && a.inBalance
-      ? h('button', { class: 'btn primary wide big', type: 'button', onclick: () => void commit(Object.fromEntries(sp.lines.map((l) => [l.goalId, l.amount])), a, sp.setAside) }, 'Отложил')
+      ? [
+          transferNote(sp.setAside),
+          h('button', { class: 'btn primary wide', type: 'button', onclick: () => void commit(Object.fromEntries(sp.lines.map((l) => [l.goalId, l.amount])), a, sp.setAside) }, CONFIRM),
+        ]
       : null,
     a.inBalance ? h('a', { class: 'btn wide', href: sheetHref('setaside-other') }, 'Отложить другую сумму') : null,
   );
@@ -184,7 +202,7 @@ export function renderArrived(rerender: () => void): HTMLElement {
   const a = current(found);
   if (!a) {
     root.append(
-      h('p', { class: 'muted' }, 'Новых поступлений в бэкапе нет. Когда придут деньги — загрузи свежий бэкап или введи сумму: приложение подскажет, сколько можно отложить и сколько останется на жизнь.'),
+      h('p', { class: 'muted' }, 'Пришли деньги? Новых поступлений в бэкапе пока нет. Когда придут — загрузи свежий бэкап или введи сумму: приложение подскажет, сколько можно отложить и сколько останется на жизнь.'),
       h('a', { class: 'btn wide', href: '#/import' }, 'Загрузить свежий бэкап'),
       manualForm(rerender),
       rows(row({ title: 'Другие способы распределить', sub: 'сравнить варианты: больше в подушку, быстрее к одной цели', href: '#/income-more' })),
@@ -228,7 +246,6 @@ export function renderArrived(rerender: () => void): HTMLElement {
     );
   } else {
     root.append(adviceCard(sp, a));
-    if (sp.setAside > 0 && a.inBalance) root.append(h('p', { class: 'one-line' }, `Приложение ничего не переводит: если согласен — переведи ${fmt(sp.setAside)} на копилку в банке и нажми «Отложил». До следующего бэкапа эта сумма уже не считается деньгами на жизнь.`));
   }
   if (opId) root.append(h('button', { class: 'btn link', type: 'button', onclick: () => void markHandled(opId, `${fmt(a.amount)} · ${a.title}`) }, 'Не надо — уже распределил'));
   root.append(rows(row({ title: 'Другие способы распределить', sub: 'быстрее к одной цели, больше в подушку', href: '#/income-more' })));

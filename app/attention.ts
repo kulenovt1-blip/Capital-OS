@@ -57,9 +57,9 @@ export function attentionItems(): AttentionItem[] {
   for (const a of (o.reconcile?.accounts ?? []).filter((x) => x.status !== 'ok')) {
     out.push({ title: `Сверка: «${a.title}» ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)} — цифрам нельзя верить`, href: '#/import', bad: true });
   }
-  // «Отложил», а перевода на копилку в свежем бэкапе нет (D96)
+  // отмечен перевод на копилку, а в свежем бэкапе его нет (D96, D105)
   for (const r of setAsideReminders(getState(), o)) {
-    out.push({ title: `Отложил ${fmt(r.amount)} ${fmtDay(r.since)}, но перевода с «${r.title}» на копилку в бэкапе нет`, href: '#/accounts' });
+    out.push({ title: `Нет перевода ${fmt(r.amount)} на копилку`, href: '#/accounts' });
   }
   const free = unassignedSavings(o);
   if (free > 0 && o.goals.some((g) => g.status === 'active')) out.push({ title: `В копилках ${fmt(free)} не распределены по целям`, href: '#/goals~distribute' });

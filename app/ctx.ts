@@ -98,7 +98,7 @@ export function trust(): Trust {
   const notes: TrustReason[] = [];
   const est = o.capital.accounts.find((p) => p.source === 'savings_flow' && !p.excluded && p.balance !== 0);
   if (est && st.settings.savingsFlows.confirmed) notes.push({ text: `«${est.title}» — ${fmtExact(est.balance)}: это оценка по переводам, а не баланс банка`, href: '#/accounts/savings' });
-  if (o.baseline.months.length < 3) notes.push({ text: `Истории трат ${nWord(o.baseline.months.length, 'полный месяц', 'полных месяца', 'полных месяцев')} — «обычно уходит» и прогноз приблизительные`, href: '#/baskets' });
+  if (o.baseline.months.length < 3 && o.baseline.months.length < st.settings.baselineMonths) notes.push({ text: `Истории трат ${nWord(o.baseline.months.length, 'полный месяц', 'полных месяца', 'полных месяцев')} — «обычно уходит» и прогноз приблизительные`, href: '#/baskets' });
   if (bad.length) {
     const a = bad[0]!;
     return { level: 'bad', label: `Сверка: ${a.title} ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
