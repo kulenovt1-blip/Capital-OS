@@ -652,13 +652,13 @@ export function renderBackup(): HTMLElement {
     if (!f) return;
     const r = parseState(await f.text());
     if (!r.ok) return toast(r.error, 'error');
-    await act(() => r.value, 'Бэкап восстановлен');
+    // восстановление разрешено и при нечитаемых данных — это и есть выход из такой ситуации (D91)
+    await act(() => r.value, 'Бэкап восстановлен', { force: true });
   });
   const erase = async () => {
     const i = await ask({ title: 'Стереть все данные?', text: 'Импорт, разметка, цели, доходы и настройки пропадут с этого устройства. Отменить будет нельзя — сначала скачай бэкап.', actions: [{ label: 'Стереть всё', kind: 'danger' }] });
     if (i !== 0) return;
-    await replaceState(emptyState());
-    toast('Данные стёрты');
+    if (await replaceState(emptyState())) toast('Данные стёрты');
   };
   return h(
     'div',

@@ -7,7 +7,8 @@
 import { initInstall } from './install';
 import './styles.css';
 import { h, clear, hideToast, type Child } from './dom';
-import { loadState, subscribe, today } from './store';
+import { getHealth, loadState, subscribe, today } from './store';
+import { recoveryScreen, storageBanner } from './recovery';
 import { trust } from './ctx';
 import { initTheme } from './theme';
 
@@ -226,6 +227,15 @@ function render(): void {
     location.replace(`#/${to}${p.sheet ? `~${p.sheet}${p.arg ? `/${p.arg}` : ''}` : ''}`);
     return;
   }
+  // данные не прочитались — вместо приложения экран восстановления (D91), никаких записей поверх
+  if (getHealth().mode === 'unreadable') {
+    clear(app);
+    app.append(recoveryScreen());
+    document.body.classList.remove('sheet-open', 'has-bar');
+    document.body.classList.add('lock');
+    document.title = 'Не удалось открыть данные · Capital OS';
+    return;
+  }
   const r = current(p);
   const key = (d: Element) => (d as HTMLElement).dataset.key ?? d.querySelector(':scope > summary')?.textContent ?? '';
   const openDetails = new Set([...app.querySelectorAll('details[open]')].map(key));
@@ -238,6 +248,7 @@ function render(): void {
     ...([
     h('a', { class: 'skip', href: '#screen-title', onclick: (e: Event) => (e.preventDefault(), document.getElementById('screen-title')?.focus()) }, 'К содержимому'),
     r.lock ? null : nav(r.nav),
+    storageBanner(),
     header(r),
     h('main', { id: 'main' }, r.render(render, p.section)),
     sh,
