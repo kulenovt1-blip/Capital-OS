@@ -168,7 +168,7 @@ export function trustChip(): HTMLElement {
   const t = trust();
   return h(
     'a',
-    { class: `trust ${t.level === 'bad' ? 'bad' : t.level === 'warn' ? 'warn' : ''}`, href: sheetHref('trust'), 'aria-label': `Доверие к цифрам: ${t.label}` },
+    { class: `trust ${t.level === 'bad' ? 'bad' : t.level === 'warn' ? 'warn' : t.level === 'ok' ? 'ok' : ''}`, href: sheetHref('trust'), 'aria-label': `Доверие к цифрам: ${t.label}` },
     h('span', { class: 'td' }),
     h('span', null, t.label),
   );
@@ -188,12 +188,33 @@ defineSheet('trust', () => {
   };
 });
 
+/**
+ * Куда ведёт «‹ Назад» в шапке (D101): туда, откуда пришёл (как кнопка «назад» телефона),
+ * а если экран открыт по ссылке извне — к родителю по разделам.
+ */
+const trail: string[] = [];
+const screenKey = () => '#/' + location.hash.replace(/^#\/?/, '').split('~')[0];
+function noteScreen(): void {
+  const k = screenKey();
+  if (trail[trail.length - 1] === k) return;
+  if (trail[trail.length - 2] === k) trail.pop();
+  else trail.push(k);
+  if (trail.length > 50) trail.splice(0, trail.length - 50);
+}
+
 function header(r: Route): HTMLElement {
   const parent = r.parent ? routes.find((x) => x.path === r.parent) : undefined;
+  const prev = trail.length > 1 ? trail[trail.length - 2]! : null;
+  const prevRoute = prev ? routes.find((x) => x.path === prev.slice(2).split('/')[0]) : undefined;
+  const back = parent
+    ? prev
+      ? h('button', { class: 'back', type: 'button', onclick: () => history.back() }, '‹ ', prevRoute?.title ?? 'Назад')
+      : h('a', { class: 'back', href: `#/${parent.path}` }, '‹ ', parent.title)
+    : null;
   return h(
     'header',
-    { class: 'top' },
-    parent ? h('a', { class: 'back', href: `#/${parent.path}` }, '‹ ', parent.title) : h('div', { class: 'date' }, dateLine()),
+    { class: `top${parent ? ' sub-top' : ''}` },
+    back ?? h('div', { class: 'date' }, dateLine()),
     h('div', { class: 'ttl-row' }, h('h1', { tabindex: '-1', id: 'screen-title' }, r.title), trustChip()),
   );
 }
@@ -227,6 +248,7 @@ function render(): void {
     location.replace(`#/${to}${p.sheet ? `~${p.sheet}${p.arg ? `/${p.arg}` : ''}` : ''}`);
     return;
   }
+  noteScreen();
   // данные не прочитались — вместо приложения экран восстановления (D91), никаких записей поверх
   if (getHealth().mode === 'unreadable') {
     clear(app);

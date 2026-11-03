@@ -90,7 +90,7 @@ function variantCard(v: StrategyRow, i: number, r: CompareResult, rerender: () =
     })
     .sort((a, b) => (a[1] ?? '9999').localeCompare(b[1] ?? '9999'))
     .slice(0, 2)
-    .map(([g, d]) => `${title(g)} ${d ? `к ${formatMonthRu(d as never)}` : '— не успеваешь за срок прогноза'}`);
+    .map(([g, d]) => `${title(g)} ${d ? `к ${formatMonthRu(d as never)}` : '— не накопится за 3 года'}`);
   const summary = [v.reserveMonthsTenths !== null ? `Подушка ${tenths(v.reserveMonthsTenths)} мес.` : null, ...dates].filter(Boolean).join(' · ');
   const now = Object.entries(v.byGoal).filter(([, m]) => m > 0).sort((a, b) => b[1] - a[1]);
   const goalIds = [...new Set([...Object.keys(v.byGoal), ...Object.keys(v.goalDates)])].filter((g) => goals.some((x) => x.id === g));
@@ -135,7 +135,7 @@ function variantCard(v: StrategyRow, i: number, r: CompareResult, rerender: () =
           const d = v.goalDates[g];
           return row({
             title: title(g),
-            sub: [d ? `минимум к ${formatMonthRu(d)}` : 'не успеваешь за срок прогноза', !isPlan && shift ? `${shift > 0 ? 'позже' : 'раньше'} на ${Math.abs(shift)} мес.` : null].filter(Boolean).join(' · '),
+            sub: [d ? `минимум к ${formatMonthRu(d)}` : 'не накопится за 3 года', !isPlan && shift ? `${shift > 0 ? 'позже' : 'раньше'} на ${Math.abs(shift)} мес.` : null].filter(Boolean).join(' · '),
             value: v.byGoal[g] ? fmt(v.byGoal[g]!) : '—',
           });
         }),

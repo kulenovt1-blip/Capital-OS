@@ -552,3 +552,12 @@ details.acc > .row.sub-row { padding-left: 28px; background: var(--surface-sunke
 .hint-card.stack { flex-direction: column; align-items: stretch; padding: 14px 16px; }
 a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .rows .row.sub-row { padding-left: 32px; } .rows .row.sub-row .title { font-weight: 400; color: var(--ink-2); }
+
+/* D101: данные в порядке — зелёная точка; шапка подэкрана с «‹ Назад» не уезжает при прокрутке */
+.trust.ok .td { background: var(--good); }
+.top.sub-top { position: sticky; top: 0; z-index: 20; background: var(--bg); padding-top: calc(8px + env(safe-area-inset-top, 0px)); border-bottom: 1px solid var(--divider); }
+.top.sub-top h1 { font-size: calc(24px * var(--fz)); }
+.top button.back { border: 0; background: none; font: inherit; font-weight: 600; cursor: pointer; }
+.top.sub-top .ttl-row { flex-wrap: nowrap; }
+.top.sub-top h1 { font-size: calc(22px * var(--fz)); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top.sub-top .trust { flex-shrink: 1; min-width: 0; max-width: 48%; }
