@@ -87,7 +87,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': 'Прогноз' },
       h('div', { class: 'label' }, `Через ${word} у тебя будет`),
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
-      h('div', { class: 'subline' }, 'если всё пойдёт как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
+      h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
       h('div', { class: 'subline' }, rwText),
     ),
   );
@@ -139,7 +139,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   }
   const att = attention(items);
   if (att) root.append(att);
-  root.append(rows(row({ title: 'График и таблица по сценариям', sub: 'на 2–3 года, если будет хуже или лучше', href: '#/forecast-more' })), explainLink('forecast', 'Из чего прогноз'));
+  root.append(rows(row({ title: 'Если станет хуже или лучше', sub: 'что будет, если станет хуже или лучше', href: '#/forecast-more' })), explainLink('forecast', 'Из чего прогноз'));
   return root;
 }
 
