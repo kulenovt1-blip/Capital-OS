@@ -112,9 +112,21 @@ describe('перенос старых данных (один раз)', () => {
     expect(byId.get('reserve')!.targetRule).toEqual({ kind: 'months_of_base', basis: 'essential' });
     expect(byId.get('reserve')!.targetComfort).toBeUndefined();
     expect(byId.get('reserve')!.order).toBe(0);
-    expect(byId.get('trip')!.order).toBe(10);
+    expect(byId.get('trip')!.order).toBe(20);
     expect(s.settings.planStrategy).toBe('S');
     expect(s.settings.simpleMigrated).toBe(true);
+  });
+
+  it('резерв внутри другой цели и нет корневой подушки — резерв становится подушкой, родитель без подцелей — обычной целью', () => {
+    const s = state({ goals: [goal('million', { targetMin: tenge(1_000_000), importance: 5 }), goal('res', { role: 'safety', parentId: 'million', targetMin: tenge(0), targetRule: { kind: 'months_of_base' }, importance: 5 })] });
+    s.settings.simpleMigrated = false;
+    migrateToSimple(s);
+    const byId = new Map(s.goals.map((x) => [x.id, x]));
+    expect(byId.get('res')!.parentId).toBeUndefined();
+    expect(byId.get('res')!.order).toBe(0);
+    expect(byId.get('res')!.targetRule?.basis).toBe('essential');
+    expect(byId.get('million')!.folder).toBeUndefined();
+    expect(byId.get('million')!.targetMin).toBe(tenge(1_000_000));
   });
 
   it('старый бэкап переносится при чтении, новый — нет; повторное чтение ничего не меняет', () => {

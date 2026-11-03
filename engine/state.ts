@@ -161,12 +161,24 @@ export function migrateToSimple(s: AppState): void {
     const savings = !!a.boundGoalId || a.liquidity.kind !== 'instant' || !!manual?.deposit || SAVINGS_TITLE_RE.test(titles.get(a.accountId) ?? '');
     return { ...a, kind: savings ? 'savings' : 'spend' };
   });
+  // подушка всегда корневая: если корневой нет, а резерв лежит внутри другой цели — он становится подушкой (D99)
+  const live = (g: Goal) => g.status !== 'cancelled' && g.status !== 'done';
+  if (!s.goals.some((g) => g.role === 'safety' && g.parentId === undefined && live(g))) {
+    const sub = s.goals.filter((g) => g.role === 'safety' && g.parentId !== undefined && live(g)).sort((a, b) => b.importance - a.importance || (a.id < b.id ? -1 : 1))[0];
+    if (sub) {
+      s.goals = s.goals.map((g) => {
+        if (g.id !== sub.id) return g;
+        const { parentId, ...rest } = g;
+        return { ...rest, history: [...g.history, { date: g.history[g.history.length - 1]?.date ?? '1970-01-01', field: 'parentId', from: parentId, to: null, reason: 'подушка всегда отдельная (перенос на новые экраны)' }] };
+      });
+    }
+  }
   const parents = new Set(s.goals.filter((g) => g.parentId !== undefined).map((g) => g.parentId!));
   const ordered = [...s.goals].sort((a, b) => b.importance - a.importance || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const rank = new Map(ordered.map((g, i) => [g.id, i]));
   s.goals = s.goals.map((g) => {
     const next: Goal = { ...g };
-    if (next.order === undefined) next.order = (rank.get(g.id) ?? 0) * 10;
+    if (next.order === undefined) next.order = next.role === 'safety' && next.parentId === undefined ? 0 : ((rank.get(g.id) ?? 0) + 1) * 10;
     if (parents.has(g.id) && !next.folder) next.folder = true;
     if (next.role === 'safety' && next.parentId === undefined && next.targetRule && !next.targetRule.basis) next.targetRule = { ...next.targetRule, basis: 'essential' };
     if (next.targetComfort !== undefined) delete next.targetComfort;
