@@ -83,13 +83,12 @@ export const SCREENS: [string, string][] = [
   ['explain-overview', '#/overview~explain/overview'], ['help', '#/help'], ['data', '#/data'], ['prefs', '#/prefs'],
   ['fc-scenarios', '#/forecast~fc-scenarios'], ['fc-goal', '#/forecast~fc-goal/goal-trip'],
   ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-trip'], ['goal-fund', '#/goals~goal-fund/goal-trip'], ['goal-edit', '#/goals~goal-edit/goal-trip'],
-  ['fc-events', '#/forecast~fc-events'], ['fc-whatif', '#/forecast~fc-whatif'], ['fc-whatif-result', '#/forecast~fc-whatif'],
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
   ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],
-  ['plan-job', '#/forecast~plan/job'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
+  ['plan-job', '#/forecast~plan/job'], ['plan-payoff', '#/forecast~plan/payoff'], ['plan-study', '#/forecast~plan/study'], ['plan-inst', '#/forecast~plan/inst'], ['plan-inst-result', '#/forecast~plan/inst'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
 ];
 export async function put(page, json: string): Promise<void> {
   await page.evaluate(

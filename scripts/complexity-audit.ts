@@ -48,7 +48,7 @@ const JARGON = [...new Map([...Object.values(HELP).map((h: { title: string }) =>
 const PLAN: [string, string[]][] = [
   ['empty', ['overview', 'goals', 'income', 'forecast', 'more', 'import']],
   ['imported', ['overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'goals', 'forecast']],
-  ['configured', ['overview', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif',
+  ['configured', ['overview', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'plan-job', 'plan-payoff',
     'more', 'markup', 'accounts', 'account-sheet', 'incomes', 'income-kinds', 'debts', 'backup', 'rare', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios']],
 ];
 

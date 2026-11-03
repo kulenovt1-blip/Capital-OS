@@ -35,7 +35,7 @@ const FORBIDDEN: [RegExp, string][] = [
   [/\b20\d\d-\d\d\b(?!-)/, 'месяц в виде 2026-05'],
 ];
 
-const CONFIGURED = ['explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'distribute', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
+const CONFIGURED = ['plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'distribute', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
   ['imported', ['start', 'start-savings', 'start-goals', 'overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],
@@ -156,11 +156,9 @@ for (const scheme of ['light', 'dark'] as const) {
         await page.locator('input[name=amount]').first().press('Enter');
         await page.waitForTimeout(700);
       }
-      if (name === 'fc-whatif-result') {
-        await page.locator('#fc-whatif-form input[name=title]').fill('Аренда');
-        await page.locator('#fc-whatif-form input[name=amount]').fill('120000');
-        await page.getByRole('button', { name: 'Добавить событие' }).click();
-        await page.waitForTimeout(250);
+      if (name === 'plan-inst-result') {
+        await page.locator('#plan-form input[name=title]').fill('Ноутбук');
+        await page.locator('#plan-form input[name=amount]').fill('30000');
         await page.getByRole('button', { name: 'Посчитать' }).click();
         await page.waitForTimeout(700);
       }

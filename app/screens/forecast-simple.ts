@@ -10,7 +10,8 @@ import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
 import { attention, fmt, fmtDay, fmtShort, monthGen, monthWord, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
-import { eventForm, eventRow, warningItems } from './forecast';
+import { warningItems } from './forecast';
+import { KINDS, PLAN_CHIPS, eventLine } from './plan';
 
 /** Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…». */
 const HORIZONS: [number, string, string][] = [
@@ -53,80 +54,6 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
       row({ title: 'Плановые события', value: String(st.settings.plannedEvents.length), href: '#/forecast' }),
     ),
   );
-});
-
-const PRESETS: { id: string; label: string; kind: LifeEventKind; title: string }[] = [
-  { id: 'job', label: 'Новая работа', kind: 'income_start', title: 'Новая работа' },
-  { id: 'study', label: 'Конец учёбы', kind: 'income_stop', title: 'Конец учёбы' },
-  { id: 'move', label: 'Переезд', kind: 'recurring_change', title: 'Аренда после переезда' },
-  { id: 'buy', label: 'Крупная покупка', kind: 'one_off', title: 'Крупная покупка' },
-  { id: 'inst', label: 'Рассрочка', kind: 'recurring_change', title: 'Платёж по рассрочке' },
-  { id: 'loss', label: 'Потеря дохода', kind: 'income_stop', title: 'Потеря дохода' },
-  { id: 'own', label: 'Своё событие', kind: 'one_off', title: '' },
-];
-
-let draft: LifeEvent[] = [];
-let result: WhatIfResult | null = null;
-let draftPreset = '';
-
-defineSheet('plan', (presetId) => {
-  const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[PRESETS.length - 1]!;
-  if (draftPreset !== preset.id) {
-    draft = [];
-    result = null;
-    draftPreset = preset.id;
-  }
-  const st = getState();
-  const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
-  const word = HORIZONS.find(([m]) => m === k)?.[2] ?? `${k} мес.`;
-  const form = eventForm('plan-form', (e) => {
-    draft = [...draft, e];
-    const all = runWhatIf(getState(), today(), draft);
-    result = all.find((r) => r.scenarioId === 'base') ?? all[0] ?? null;
-    refresh();
-  }, preset.id === 'own' ? undefined : { kind: preset.kind, title: preset.title });
-  const goals = new Map(ov().goals.map((g) => [g.id, g.title]));
-  const res = result;
-  const delta = res ? (res.with.months[k]?.capital ?? 0) - (res.base.months[k]?.capital ?? 0) : 0;
-  const shifted = res ? Object.entries(res.deltaGoalMonths).filter(([, v]) => v !== 0) : [];
-  return {
-    title: preset.id === 'own' ? 'Своё событие' : preset.label,
-    body: h(
-      'div',
-      { class: 'stack' },
-      draft.length ? rows(draft.map((e) => eventRow(e))) : h('p', { class: 'muted' }, 'Заполни и нажми «Посчитать». В план попадёт, только если нажмёшь «Добавить в план».'),
-      res
-        ? h(
-            'div',
-            { class: 'card stack' },
-            h('strong', null, `Через ${word}: ${delta === 0 ? 'без изменений' : `${delta > 0 ? '+' : '−'}${fmtShort(Math.abs(delta) as never)}`}`),
-            shifted.length ? rows(shifted.map(([id, v]) => row({ title: goals.get(id) ?? id, value: v === null ? 'не успеваешь за срок прогноза' : `${v! > 0 ? 'позже' : 'раньше'} на ${nWord(Math.abs(v!), 'месяц', 'месяца', 'месяцев')}` }))) : h('div', { class: 'muted' }, 'Сроки целей не меняются.'),
-            res.newGaps.length ? h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(res.newGaps[0]!.start)}: до ${fmt(res.newGaps[0]!.maxDeficit)}`) : h('div', { class: 'okline' }, 'Денег хватает ✓'),
-          )
-        : null,
-      form,
-      h('button', { class: 'btn wide', type: 'submit', form: 'plan-form' }, draft.length ? 'Добавить ещё и посчитать' : 'Посчитать'),
-    ),
-    bar: stickyBar(
-      null,
-      h(
-        'button',
-        {
-          class: 'btn primary',
-          type: 'button',
-          disabled: !draft.length,
-          onclick: async () => {
-            const events = draft;
-            draft = [];
-            result = null;
-            await act((s) => ({ ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ...events] } }), nWord(events.length, 'событие добавлено', 'события добавлены', 'событий добавлено') + ' в план');
-            closeSheet();
-          },
-        },
-        'Добавить в план',
-      ),
-    ),
-  };
 });
 
 function horizonSeg(k: number): HTMLElement {
@@ -186,14 +113,25 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     );
   }
 
-  root.append(sub('Планирую…'), h('div', { class: 'chips wrap' }, PRESETS.map((p) => h('a', { class: 'chip', href: sheetHref('plan', p.id) }, p.label))));
+  root.append(
+    sub('Планирую…'),
+    h('p', { class: 'one-line' }, 'Что изменится, если… Выбери событие — посчитаю, в план попадёт только по кнопке.'),
+    h('div', { class: 'chips wrap' }, [...PLAN_CHIPS.map((k) => h('a', { class: 'chip', href: sheetHref('plan', k) }, KINDS[k].label)), h('a', { class: 'chip', href: sheetHref('plan', 'own') }, 'Другое…')]),
+  );
   if (st.settings.plannedEvents.length) {
     root.append(
+      sub('В плане'),
       rows(
         st.settings.plannedEvents.map((e) =>
-          eventRow(e, async () => {
-            const i = await ask({ title: `Убрать «${e.title}» из плана?`, actions: [{ label: 'Убрать', kind: 'danger' }] });
-            if (i === 0) await act((s) => ({ ...s, settings: { ...s.settings, plannedEvents: s.settings.plannedEvents.filter((x) => x.id !== e.id) } }), `«${e.title}» убрано`);
+          row({
+            title: e.title,
+            sub: eventLine(e),
+            value: h('span', { class: 'chip' }, 'Убрать'),
+            onClick: async () => {
+              const i = await ask({ title: `Убрать «${e.title}» из плана?`, text: 'Прогноз пересчитается без этого события.', actions: [{ label: 'Убрать', kind: 'danger' }] });
+              if (i === 0) await act((s) => ({ ...s, settings: { ...s.settings, plannedEvents: s.settings.plannedEvents.filter((x) => x.id !== e.id) } }), `«${e.title}» убрано из плана`);
+            },
+            chevron: false,
           }),
         ),
       ),

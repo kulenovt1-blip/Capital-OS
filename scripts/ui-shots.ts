@@ -20,7 +20,7 @@ const OUT = join(ROOT, 'ui-shots', stage);
 mkdirSync(OUT, { recursive: true });
 
 /** Набор экранов: «before» — старые адреса; дальше — новые (старые ведут на них же). */
-const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'backup', 'install', 'rare', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios', 'account-sheet', 'savings', 'rare-manual', 'income-kinds'];
+const NEW = ['overview', 'setup', 'goals', 'income', 'income-result', 'forecast', 'import', 'markup', 'more', 'accounts', 'incomes', 'debts', 'calc', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'plan-job', 'plan-payoff', 'plan-inst-result', 'backup', 'install', 'rare', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios', 'account-sheet', 'savings', 'rare-manual', 'income-kinds'];
 const PLAN: [string, string[]][] =
   stage === 'before'
     ? [
@@ -64,14 +64,11 @@ for (const v of VARIANTS) {
         await amount.press('Enter');
         await page.waitForTimeout(900);
       }
-      if (name === 'fc-whatif-result') {
-        await page.locator('#fc-whatif-form select[name=kind]').selectOption('recurring_change');
-        await page.locator('#fc-whatif-form input[name=title]').fill('Аренда');
-        await page.locator('#fc-whatif-form input[name=amount]').fill('120000');
-        await page.getByRole('button', { name: 'Добавить событие' }).click();
-        await page.waitForTimeout(300);
+      if (name === 'plan-inst-result') {
+        await page.locator('#plan-form input[name=title]').fill('Ноутбук');
+        await page.locator('#plan-form input[name=amount]').fill('30000');
         await page.getByRole('button', { name: 'Посчитать' }).click();
-        await page.waitForTimeout(900);
+        await page.waitForTimeout(700);
       }
       await page.screenshot({ path: join(OUT, `${stateName}-${name}-${v.name}.png`), fullPage: true });
       n++;
