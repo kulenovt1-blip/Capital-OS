@@ -14,12 +14,15 @@ import { explainLink, registerExplain } from '../explain';
 import { cushionOffer } from '../blocks';
 import { ov } from '../ctx';
 
-/** Шаблоны вместо слова «роль»: по одному на роль; «Накопления» — по умолчанию. */
+/**
+ * Примеры вместо слова «роль» (D93): необязательные — ничего не выбрано = своя цель (внутри — «накопления»).
+ * Подсказки нейтральные: никаких целей конкретного человека.
+ */
 const TEMPLATES: { role: GoalRole; label: string; hint: string; flexibility?: Flexibility; importance?: Importance }[] = [
-  { role: 'capital', label: 'Накопления', hint: 'Финансовая база' },
+  { role: 'capital', label: 'Накопления', hint: 'Накопления' },
   { role: 'safety', label: 'Подушка', hint: 'Подушка', importance: 5 },
   { role: 'quality', label: 'Покупка', hint: 'Ноутбук' },
-  { role: 'life_change', label: 'Переезд и перемены', hint: 'Переезд' },
+  { role: 'life_change', label: 'Большие перемены', hint: 'Отпуск' },
   { role: 'obligation', label: 'Долг', hint: 'Вернуть долг', flexibility: 'fixed', importance: 5 },
   { role: 'growth', label: 'Учёба и рост', hint: 'Курсы' },
 ];
@@ -65,7 +68,9 @@ export function flashGoals(ids: string[]): void {
  */
 function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTemplates: boolean; withReason: boolean }): { form: HTMLFormElement; read: () => { patch: Partial<Goal>; errs: string[] } } {
   let role: GoalRole = g.role ?? 'capital';
-  const title = h('input', { name: 'title', required: true, value: g.title ?? '', placeholder: TEMPLATES.find((t) => t.role === role)?.hint ?? '', autocomplete: 'off' });
+  // у новой цели пример не выбран: шаблоны — подсказка, а не обязательная категория
+  let picked = g.role !== undefined;
+  const title = h('input', { name: 'title', required: true, value: g.title ?? '', placeholder: picked ? (TEMPLATES.find((t) => t.role === role)?.hint ?? '') : 'Например: отпуск, ноутбук, подушка', autocomplete: 'off' });
   const amount = moneyInput('targetMin', g.targetMin && g.targetMin > 0 ? g.targetMin : undefined);
   const when = h('input', { name: 'deadline', type: 'date', value: g.deadline ?? '' });
   const flexSel = h('select', { name: 'flexibility' }, (Object.keys(FLEX) as Flexibility[]).map((f) => h('option', { value: f, selected: f === (g.flexibility ?? 'flexible') }, FLEX[f])));
@@ -75,11 +80,12 @@ function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTempl
   flexSel.addEventListener('change', () => (summary.textContent = summaryText()));
   impSel.addEventListener('change', () => (summary.textContent = summaryText()));
 
-  const chips = h('div', { class: 'chips wrap', role: 'radiogroup', 'aria-label': 'Шаблон цели' });
+  const chips = h('div', { class: 'chips wrap', role: 'radiogroup', 'aria-label': 'Пример цели' });
   const drawChips = () =>
     chips.replaceChildren(
       ...TEMPLATES.map((t) =>
-        chip(t.label, t.role === role, () => {
+        chip(t.label, picked && t.role === role, () => {
+          picked = true;
           role = t.role;
           title.placeholder = t.hint;
           if (t.flexibility) flexSel.value = t.flexibility;
@@ -94,7 +100,7 @@ function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTempl
   const form = h(
     'form',
     { class: 'stack', id },
-    opts.withTemplates ? chips : null,
+    opts.withTemplates ? h('div', { class: 'stack tight' }, h('div', { class: 'field-label' }, 'Пример — необязательно'), chips) : null,
     field('Название', title),
     field('Сколько нужно, ₸', amount, g.targetRule ? 'считается по правилу подушки — можно задать вручную' : undefined),
     field('К какому сроку (необязательно)', when),
@@ -108,7 +114,6 @@ function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTempl
         field('Важность (1–5)', impSel),
         field('Срок', flexSel, 'жёсткий — позже нельзя; гибкий — можно сдвинуть'),
         field('Желаемая дата (раньше срока)', h('input', { name: 'desiredDate', type: 'date', value: g.desiredDate ?? '' })),
-        field('Комфортная сумма, ₸', moneyInput('targetComfort', g.targetComfort, 'необязательно')),
         field('Откладывать в месяц не меньше, ₸', moneyInput('minMonthlyFunding', g.minMonthlyFunding, 'необязательно')),
         field(
           'Часть другой цели',
@@ -132,7 +137,8 @@ function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTempl
       if (m === null) errs.push(`${label}: введи число или оставь пустым`);
       return m ?? undefined;
     };
-    const targetComfort = money('targetComfort', 'Комфортная сумма');
+    // «Комфортная сумма» убрана из формы (D93); сохранённое значение не теряется
+    const targetComfort = g.targetComfort;
     const minMonthlyFunding = money('minMonthlyFunding', 'Откладывать в месяц');
     return {
       errs,
@@ -274,9 +280,9 @@ export function renderGoals(): HTMLElement {
         h('strong', null, 'Целей пока нет'),
         h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.'),
         h('a', { class: 'btn wide', href: sheetHref('goal-new') }, 'Создать свою цель ›'),
-        // пример из инструкции — только для демонстрации и проверок (?demo=1): это цели одного человека
+        // пример целей — только для демонстрации и проверок (?demo=1): это цели одного человека
         new URLSearchParams(location.search).has('demo')
-          ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример из инструкции')
+          ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример целей')
           : null,
       ),
     );

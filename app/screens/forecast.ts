@@ -10,6 +10,7 @@ import {
 import { bandChart } from '../chart';
 import { ask, field, h } from '../dom';
 import { act, getState, today } from '../store';
+import { ov } from '../ctx';
 import { attention, errorsBox, fmt, fmtShort, info, moneyInput, newId, readMoney, readStr, row, rows, seg, stickyBar, sub, type AttentionItem } from '../ui';
 import { defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
@@ -56,6 +57,91 @@ function trio(rs: SimResult[]): Trio | null {
   if (!base) return null;
   return { base, worse: by('adverse', 1) ?? base, better: by('favorable', 2) ?? base };
 }
+
+/** Сценарий совпал с базой во всех месяцах — показывать его отдельно незачем (D93). */
+const sameAs = (a: SimResult, b: SimResult) => a.months.length === b.months.length && a.months.every((m, i) => m.capital === b.months[i]!.capital);
+
+/** Что меняет сценарий — словами (D93), из его параметров. */
+function describeScenario(sc: Scenario): string[] {
+  const p = sc.patch;
+  const labels = Object.fromEntries(incomeKindRegistry(getState().settings.incomeKinds).map((k) => [k.id, k.label]));
+  const pct = (bp: number) => `${bp > 10000 ? '+' : '−'}${(Math.abs(bp - 10000) / 100).toLocaleString('ru-RU')} %`;
+  const out: string[] = [];
+  if (p.workIncomeFactorBp !== undefined && p.workIncomeFactorBp !== 10000) out.push(`доход от работы ${pct(p.workIncomeFactorBp)}`);
+  if (p.workDelayMonths) out.push(`новая работа начинается на ${p.workDelayMonths} мес. позже`);
+  if (p.irregularIncomeFactorBp !== undefined && p.irregularIncomeFactorBp !== 10000) out.push(p.irregularIncomeFactorBp === 0 ? 'нерегулярного дохода нет' : `нерегулярный доход ${pct(p.irregularIncomeFactorBp)}`);
+  for (const [k, bp] of Object.entries(p.incomeFactorsBp ?? {})) if (bp !== 10000) out.push(`доход «${labels[k] ?? k}» ${pct(bp)}`);
+  for (const [k, m] of Object.entries(p.incomeDelayMonths ?? {})) if (m) out.push(`доход «${labels[k] ?? k}» начинается на ${m} мес. позже`);
+  if (p.expenseFactorBp !== undefined && p.expenseFactorBp !== 10000) out.push(`траты ${pct(p.expenseFactorBp)}`);
+  if (p.oneOffMonthsOfBaseBp) out.push(`разовая непредвиденная трата — ${(p.oneOffMonthsOfBaseBp / 10000).toLocaleString('ru-RU')} мес. обычных трат`);
+  return out;
+}
+
+defineSheet('fc-scenarios', () => {
+  const st = getState();
+  const rs = runForecast(st, today());
+  const base = rs.find((r) => r.scenarioId === 'base') ?? rs[0];
+  return {
+    title: 'Что значит «хуже» и «лучше»',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, '«База» — если всё пойдёт как сейчас: те же доходы и траты, что в последние месяцы, с ростом цен.'),
+      ...st.settings.scenarios
+        .filter((sc) => sc.id !== 'base')
+        .map((sc) => {
+          const r = rs.find((x) => x.scenarioId === sc.id);
+          const d = describeScenario(sc);
+          const same = !!(r && base && sameAs(r, base));
+          return h(
+            'div',
+            { class: 'card stack tight' },
+            h('strong', null, scenarioWord(sc)),
+            h('div', null, d.length ? `Меняет: ${d.join('; ')}.` : 'Ничего не меняет.'),
+            same ? h('div', { class: 'muted' }, 'У тебя совпадает с «Базой»: то, что меняет этот сценарий, в твоих данных не встречается (например, нет дохода от работы).') : null,
+          );
+        }),
+      h('a', { class: 'btn', href: '#/advanced/scenarios' }, 'Изменить сценарии'),
+    ),
+  };
+});
+
+/** «Почему этот месяц» для цели (D93): сколько ей достаётся по месяцам и что мешает. */
+defineSheet('fc-goal', (id) => {
+  const st = getState();
+  const o = ov();
+  const g = o.goals.find((x) => x.id === id);
+  if (!g) return null;
+  const rs = runForecast(st, today());
+  const base = rs.find((r) => r.scenarioId === 'base') ?? rs[0];
+  if (!base) return null;
+  const kids = o.goals.filter((x) => x.parentId === g.id && x.status !== 'cancelled');
+  const reached = base.goalDates[g.id] ?? null;
+  const progress = (k: number): number => base.months[k]?.goalProgress[g.id] ?? 0;
+  const start = progress(0);
+  const allocated: number[] = base.months.map((m) => m.allocated[g.id] ?? 0);
+  const until = reached ? base.months.findIndex((m) => m.month === reached) : base.months.length - 1;
+  const got = allocated.slice(0, until + 1).filter((v) => v > 0);
+  const avg = got.length ? Math.round(got.reduce((s: number, v) => s + v, 0) / Math.max(1, until + 1)) : 0;
+  const last = base.months[base.months.length - 1]!.month;
+  const lines: (HTMLElement | null)[] = [
+    h('p', null, `Нужно ${fmt(g.targetMin)}. ${reached ? `По прогнозу набирается в ${formatMonthRu(reached)}.` : `За прогноз до ${formatMonthRu(last)} не набирается: к концу будет ${fmt(progress(base.months.length - 1) as Money)}.`}`),
+    kids.length
+      ? h(
+          'div',
+          { class: 'warnline' },
+          `Это общая цель для: ${kids.map((k) => `«${k.title}»`).join(', ')}. Деньги получают только они, а сама «${g.title}» растёт лишь из их сумм — поэтому она не набирается сверх них. Если хочешь, чтобы она копилась сама, убери у этих целей «Часть другой цели».`,
+        )
+      : null,
+    h('p', null, `Сейчас на ней ${fmt(start as Money)}. ${avg > 0 ? `В среднем ей достаётся ${fmt(avg as Money)} в месяц.` : 'Из прироста ей пока ничего не достаётся.'}`),
+    !kids.length && avg === 0 && !reached ? h('p', { class: 'muted' }, 'Свободные деньги каждого месяца сначала идут на подушку и на цели со сроком; этой цели не остаётся. Подними её важность или поставь срок.') : null,
+    sub('Первые месяцы'),
+    rows(
+      base.months.slice(0, Math.min(6, base.months.length)).map((m) => row({ title: formatMonthRu(m.month), sub: `накоплено ${fmt((m.goalProgress[g.id] ?? 0) as Money)}`, value: (m.allocated[g.id] ?? 0) > 0 ? `+${fmt((m.allocated[g.id] ?? 0) as Money)}` : '—' })) as HTMLElement[],
+    ),
+  ];
+  return { title: g.title, body: h('div', { class: 'stack' }, ...lines.filter((x): x is HTMLElement => x !== null)) };
+});
 
 const short = (m: Money | null | undefined) => (m === null || m === undefined ? '—' : fmtShort(m).replace(/ ₸$/, ''));
 
@@ -126,14 +212,18 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   const cap = (r: SimResult) => r.capitalAfter[k] ?? r.months[Math.min(k, r.months.length - 1)]?.capital ?? null;
   const lo = cap(tr.worse);
   const hi = cap(tr.better);
+  const betterSame = sameAs(tr.better, tr.base);
+  const worseSame = sameAs(tr.worse, tr.base);
+  // одно главное число — база; остальные сценарии словами, с объяснением, что они меняют (D93)
+  const alt = [worseSame || lo === null ? null : `если будет хуже — ${fmtShort(lo)}`, betterSame || hi === null ? null : `если лучше — ${fmtShort(hi)}`].filter(Boolean).join(' · ');
   root.append(
     h(
       'section',
       { class: 'hero', 'aria-label': `Капитал ${PERIOD_WORDS[period]}` },
-      h('div', { class: 'label' }, h('span', null, `Капитал ${PERIOD_WORDS[period]}`, info('net'))),
+      h('div', { class: 'label' }, h('span', null, `Всего у тебя будет ${PERIOD_WORDS[period]}`, info('net'))),
       h('div', { class: `value${(cap(tr.base) ?? 0) < 0 ? ' neg' : ''}` }, cap(tr.base) === null ? '—' : fmtShort(cap(tr.base)!)),
-      lo !== null && hi !== null && (lo !== cap(tr.base) || hi !== cap(tr.base)) ? h('div', { class: 'subline' }, `от ${short(Math.min(lo, hi) as Money)} до ${short(Math.max(lo, hi) as Money)} в плохом и хорошем сценарии`) : null,
-      h('a', { class: 'link', href: sheetHref('explain', 'forecast') }, 'Как посчитано ›'),
+      h('div', { class: 'subline' }, 'если всё пойдёт как сейчас', alt ? ` · ${alt}` : ''),
+      h('a', { class: 'link', href: sheetHref('fc-scenarios') }, 'Что значит «хуже» и «лучше» ›'),
     ),
   );
 
@@ -150,7 +240,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
       'table',
       { class: 'tbl four' },
       h('caption', { class: 'visually-hidden' }, 'Капитал по сценариям'),
-      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Срок'), h('th', { scope: 'col' }, 'Хуже'), h('th', { scope: 'col' }, 'База'), h('th', { scope: 'col' }, 'Лучше'))),
+      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Срок'), worseSame ? null : h('th', { scope: 'col' }, 'Хуже'), h('th', { scope: 'col' }, 'База'), betterSame ? null : h('th', { scope: 'col' }, 'Лучше'))),
       h(
         'tbody',
         null,
@@ -159,9 +249,9 @@ export function renderForecast(_rerender: () => void): HTMLElement {
             'tr',
             { class: m === k ? 'on' : '' },
             h('th', { scope: 'row' }, m < 12 ? `${m} мес` : m === 12 ? '1 год' : `${m / 12} года`),
-            h('td', null, short(tr.worse.capitalAfter[m])),
+            worseSame ? null : h('td', null, short(tr.worse.capitalAfter[m])),
             h('td', null, h('strong', null, short(tr.base.capitalAfter[m]))),
-            h('td', null, short(tr.better.capitalAfter[m])),
+            betterSame ? null : h('td', null, short(tr.better.capitalAfter[m])),
           ),
         ),
       ),
@@ -187,7 +277,9 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   // когда достигнешь целей
   const goals = st.goals.filter((g) => g.status === 'active' && g.id in tr.base.goalDates);
   if (goals.length) {
-    const d = (x: MonthKey | null | undefined) => (x ? formatMonthRu(x) : 'за горизонтом');
+    const lastMonth = tr.base.months[tr.base.months.length - 1]?.month;
+    // вместо «за горизонтом» — понятно: не успеваешь за срок прогноза (D93)
+    const d = (x: MonthKey | null | undefined) => (x ? formatMonthRu(x) : lastMonth ? `позже ${formatMonthRu(lastMonth)}` : 'не успеваешь');
     root.append(
       sub('Когда достигнешь целей', info('goalDate')),
       rows(
@@ -195,7 +287,9 @@ export function renderForecast(_rerender: () => void): HTMLElement {
           const b = tr.base.goalDates[g.id];
           const w = tr.worse.goalDates[g.id];
           const be = tr.better.goalDates[g.id];
-          return row({ title: g.title, sub: w === be && be === b ? undefined : `лучше: ${d(be)} · хуже: ${d(w)}`, value: d(b) });
+          // только сценарии, где дата другая: «лучше: апр» рядом с базой «апр» — шум (D93)
+          const alts = [be !== b ? `лучше: ${d(be)}` : null, w !== b ? `хуже: ${d(w)}` : null].filter(Boolean).join(' · ');
+          return row({ title: g.title, sub: alts || 'почему этот месяц ›', value: d(b), href: sheetHref('fc-goal', g.id) });
         }),
       ),
     );
@@ -203,11 +297,11 @@ export function renderForecast(_rerender: () => void): HTMLElement {
 
   // проверить решение
   root.append(
-    sub('Проверить решение'),
+    sub('А что если…'),
     rows(
-      row({ title: 'Плановые события', sub: 'переезд, аренда, новая работа — входят во все сценарии', value: st.settings.plannedEvents.length ? String(st.settings.plannedEvents.length) : undefined, href: sheetHref('fc-events') }),
-      row({ title: 'Что если', sub: 'одно решение против текущего плана', href: sheetHref('fc-whatif') }),
-      row({ title: 'Альтернативы', sub: 'два-три варианта бок о бок', href: sheetHref('fc-alt') }),
+      row({ title: 'Запланировать событие', sub: 'то, что точно будет: новая работа, крупная покупка, аренда — войдёт в прогноз', value: st.settings.plannedEvents.length ? String(st.settings.plannedEvents.length) : undefined, href: sheetHref('fc-events') }),
+      row({ title: 'Проверить одно решение', sub: 'что изменится, если, например, взять рассрочку', href: sheetHref('fc-whatif') }),
+      row({ title: 'Сравнить несколько вариантов', sub: 'два-три плана рядом', href: sheetHref('fc-alt') }),
     ),
   );
   root.append(explainLink('forecast'));
@@ -245,7 +339,7 @@ function eventForm(id: string, onEvent: (e: LifeEvent) => void): HTMLFormElement
     { class: 'stack', id },
     field('Что происходит', kindSel),
     hint,
-    field('Название', h('input', { name: 'title', required: true, placeholder: 'Переезд, аренда, ноутбук…', autocomplete: 'off' })),
+    field('Название', h('input', { name: 'title', required: true, placeholder: 'Аренда, ноутбук, новая работа…', autocomplete: 'off' })),
     field('Когда', h('input', { name: 'date', type: 'date', value: today() })),
     amountField,
     targetField,
@@ -302,7 +396,7 @@ defineSheet('fc-events', () => {
     body: h(
       'div',
       { class: 'stack' },
-      h('p', { class: 'muted' }, 'То, что точно случится: переезд, аренда, выход на работу, конец стипендии. Входит во все сценарии.'),
+      h('p', { class: 'muted' }, 'То, что точно случится: новая работа, аренда, крупная покупка, конец учёбы. Входит во все сценарии.'),
       st.settings.plannedEvents.length
         ? rows(
             st.settings.plannedEvents.map((e) =>
@@ -366,7 +460,7 @@ defineSheet('fc-whatif', () => {
               return g.length
                 ? rows(g.map((id) => {
                     const v = base.deltaGoalMonths[id];
-                    return row({ title: goalTitle(id), value: v === null || v === undefined ? 'за горизонтом' : `${v > 0 ? 'позже' : 'раньше'} на ${Math.abs(v)} мес.` });
+                    return row({ title: goalTitle(id), value: v === null || v === undefined ? 'не успеваешь за срок прогноза' : `${v > 0 ? 'позже' : 'раньше'} на ${Math.abs(v)} мес.` });
                   }))
                 : null;
             })(),

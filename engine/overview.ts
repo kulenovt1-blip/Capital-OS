@@ -3,7 +3,7 @@
  */
 import { sub, sum, ZERO, type Money } from './money';
 import { addDays, nextDayOfMonth, maxDate, type IsoDate } from './date';
-import { day, formula, money, step, type Explanation } from './explain';
+import { day, formula, money, plural, step, type Explanation } from './explain';
 import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport } from './classify';
 import { baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
@@ -89,6 +89,8 @@ export interface Overview {
   nextIncome: NextIncome;
   /** Платежи по обязательствам с датой в [сегодня, следующий доход]. */
   reserveUntilIncome: Money;
+  /** Сами эти платежи — для «Как посчитано» (D93). */
+  untilIncome: UpcomingPayment[];
   /** Назначено целям на ликвидных счетах. */
   assigned: Money;
   /** Медиана базовых расходов (E_base) — для резерва и стратегий. */
@@ -189,7 +191,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     const t = capital.accounts.find((p) => p.accountId === b.accountId)?.title ?? b.accountId;
     notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Ещё → Счета»` });
   }
-  if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} предупреждений — см. экран «Импорт»` });
+  if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} ${plural(data.warnings.length, 'замечание', 'замечания', 'замечаний')} — см. экран «Импорт»` });
   for (const s of capital.explanation) if (s.level === 'warn') notices.push({ code: s.code, level: 'warn', text: s.text });
   const stalled = new Set(installments.checks.filter((c) => c.kind === 'stalled').map((c) => c.obligationId));
   for (const o of obligations) {
@@ -218,7 +220,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
 
   for (const n of notices) if (!n.action) n.action = noticeAction(n.code);
   return {
-    today, hasData, reconcile, classification, capital, obligations, upcoming30, nextIncome, reserveUntilIncome, assigned, freeMoney,
+    today, hasData, reconcile, classification, capital, obligations, upcoming30, nextIncome, reserveUntilIncome, untilIncome, assigned, freeMoney,
     baseline, goals: resolved.goals, goalTree: tree, overAssigned, balances, fundings, installments,
     notices, explanation,
   };

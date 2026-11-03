@@ -30,6 +30,9 @@ export function initInstall(onChange: () => void): void {
   });
 }
 
+/** Приложение уже установлено (открыто как приложение или только что установлено) — плитку «Установить» не показываем (D93). */
+export const isInstalled = (): boolean => standalone() || installedNow;
+
 const standalone = (): boolean => window.matchMedia?.('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
 const offlineReady = (): boolean => 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 

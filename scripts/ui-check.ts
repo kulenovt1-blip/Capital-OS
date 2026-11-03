@@ -29,9 +29,13 @@ const FORBIDDEN: [RegExp, string][] = [
   [/undefined/, 'undefined'],
   [/\d\.\d\s?%/, 'процент с точкой'],
   [/: ,/, '«: ,»'],
+  // никаких целей и данных конкретного человека в интерфейсе (D93)
+  [/Финансовая база|Переезд в другой город|Буфер адаптации/, 'чужие личные цели'],
+  [/за горизонтом/, '«за горизонтом»'],
+  [/\b20\d\d-\d\d\b(?!-)/, 'месяц в виде 2026-05'],
 ];
 
-const CONFIGURED = ['overview', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
+const CONFIGURED = ['overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
   ['imported', ['overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],

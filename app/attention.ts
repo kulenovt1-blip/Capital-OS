@@ -25,7 +25,7 @@ function short(n: Notice): AttentionItem | null {
     case n.code === 'free.negative':
       return null; // сверка — отдельной строкой ниже; нет данных — пустой экран; минус — в главном числе
     case n.code === 'import.warnings':
-      return { title: n.text.replace(/ — см\. экран «Импорт»$/, ''), href: '#/import' };
+      return null; // замечания импорта справочные — они на экране «Импорт», а не в «Требует внимания» (D93)
     case n.code === 'goals.over_assigned':
       return { title: `${title(n.text)}: за целями больше, чем на счёте`, href: '#/goals', bad: true };
     case n.code === 'goal.achieved':

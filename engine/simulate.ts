@@ -11,7 +11,7 @@
  *  - назначения целям — метки: на капитал не влияют; месячный прирост назначается по стратегии.
  */
 import { add, applyBp, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
-import { addDays, addMonths, daysInMonth, endOfMonth, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate, type MonthKey } from './date';
+import { addDays, addMonths, daysInMonth, endOfMonth, formatMonthRu, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate, type MonthKey } from './date';
 import { day, money, step, type Explanation } from './explain';
 import type { IncomeKind } from './settings';
 import { kindBehavior } from './income-kinds';
@@ -420,10 +420,10 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
     const dl = monthKey(g.deadline);
     const at = goalDates[g.id] ?? null;
     if (at === null || at > dl) {
-      violations.push(`«${g.title}»: к сроку ${day(g.deadline)} минимум ${money(g.targetMin)} не набирается (прогноз: ${at ?? 'за горизонтом'})`);
+      violations.push(`«${g.title}»: к сроку ${day(g.deadline)} минимум ${money(g.targetMin)} не набирается (прогноз: ${at ? formatMonthRu(at) : 'не успевает за срок прогноза'})`);
     } else if (at < dl) {
       const early = monthsBetween(`${at}-01`, `${dl}-01`);
-      explanation.push(step('sim.goal_early', `«${g.title}» достигается в ${at} — раньше срока на ${early} мес.`, { refs: { goalId: g.id } }));
+      explanation.push(step('sim.goal_early', `«${g.title}» достигается в ${formatMonthRu(at)} — раньше срока на ${early} мес.`, { refs: { goalId: g.id } }));
     }
   }
   for (const gp of gaps) violations.push(`Кассовый разрыв ${day(gp.start)}–${day(gp.end)}: не хватает до ${money(gp.maxDeficit)}`);

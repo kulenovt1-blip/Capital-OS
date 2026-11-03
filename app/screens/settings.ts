@@ -12,7 +12,7 @@ import {
 } from '../../engine/index';
 import { ask, download, field, h, toast } from '../dom';
 import { act, getState, replaceState, today, update } from '../store';
-import { errorsBox, fmt, fmtDate, info, moneyInput, newId, nWord, readChecked, readMoney, readStr, row, rows, seg, stickyBar, sub, typeLabel } from '../ui';
+import { errorsBox, fmt, fmtDate, info, moneyInput, newId, nWord, readChecked, readMoney, readStr, row, rows, seg, stickyBar, sub, typeLabel, whenAvailable } from '../ui';
 import { closeSheet, defineSheet, sheetHref } from '../main';
 import { installBlock } from '../install';
 import { accountsReview, catName, incomeQuickForm } from '../blocks';
@@ -89,10 +89,11 @@ export function renderAccounts(section?: string): HTMLElement {
             ? 'не учитывается'
             : s.boundGoalId && goals.has(s.boundGoalId)
               ? `весь остаток за «${goals.get(s.boundGoalId)}»`
-              : `снять: ${liqLabel(s.liquidity)}`;
+              : whenAvailable(s.liquidity);
+        const subText = [status, p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ');
         return row({
           title: p.title,
-          sub: `${status}${p.source === 'savings_flow' ? ' · оценка' : ''}${p.source === 'manual' ? ' · ручной' : ''}`,
+          sub: subText || undefined,
           value: h('span', { class: p.excluded ? 'muted' : '' }, fmt(p.balance)),
           href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId),
           mark: bad.has(p.accountId),

@@ -45,10 +45,10 @@ function configured(): AppState {
     const r = remainingFromTerm(s, 12);
     if (r.ok) st.obligations.push(suggestionToObligation(s, { id: `ob-${s.key}`, remaining: r.remaining, today: TODAY }));
   }
-  const targets: Record<string, number> = { 'goal-move': 600_000, 'goal-move-start': 400_000, 'goal-move-buffer': 200_000, 'goal-teeth': 150_000 };
+  const targets: Record<string, number> = { 'goal-trip': 600_000, 'goal-trip-tickets': 400_000, 'goal-trip-stay': 200_000, 'goal-repair': 150_000 };
   st.goals = exampleGoals(TODAY).map((g) => (targets[g.id] ? { ...g, targetMin: tenge(targets[g.id]!), unconfirmed: false } : { ...g, unconfirmed: false }));
   st.fundings = [
-    { id: 'f1', goalId: 'goal-base', accountId: 'acc-kaspi', amount: tenge(100_000), date: TODAY, decisionId: null },
+    { id: 'f1', goalId: 'goal-savings', accountId: 'acc-kaspi', amount: tenge(100_000), date: TODAY, decisionId: null },
     { id: 'f2', goalId: 'goal-reserve', accountId: 'acc-kaspi', amount: tenge(150_000), date: TODAY, decisionId: null },
   ];
   st.lastBackupAt = TODAY;
@@ -68,7 +68,9 @@ export const SCREENS: [string, string][] = [
   ['forecast', '#/forecast'], ['import', '#/import'], ['classes', '#/classes'], ['settings', '#/settings'], ['calc', '#/settings/calc'],
   ['more', '#/more'], ['markup', '#/markup'], ['accounts', '#/accounts'], ['incomes', '#/incomes'], ['debts', '#/debts'],
   ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
-  ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-move'], ['goal-fund', '#/goals~goal-fund/goal-move'], ['goal-edit', '#/goals~goal-edit/goal-move'],
+  ['explain-overview', '#/overview~explain/overview'], ['help', '#/help'], ['data', '#/data'], ['prefs', '#/prefs'],
+  ['fc-scenarios', '#/forecast~fc-scenarios'], ['fc-goal', '#/forecast~fc-goal/goal-trip'],
+  ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-trip'], ['goal-fund', '#/goals~goal-fund/goal-trip'], ['goal-edit', '#/goals~goal-edit/goal-trip'],
   ['fc-events', '#/forecast~fc-events'], ['fc-whatif', '#/forecast~fc-whatif'], ['fc-whatif-result', '#/forecast~fc-whatif'],
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],

@@ -169,8 +169,12 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
   // подписи на концах
   const end = (arr: Money[]) => y(arr[n - 1] ?? 0);
   const yb = end(base);
-  const same = Math.abs(end(worse) - yb) < 3 && Math.abs(end(better) - yb) < 3;
-  const labels = same ? [{ y: yb, t: 'База' }] : [{ y: end(better), t: 'Лучше' }, { y: yb, t: 'База' }, { y: end(worse), t: 'Хуже' }].sort((a, b) => a.y - b.y);
+  // сценарий, совпавший с базой по всем месяцам, отдельно не подписывается и не показывается в подсказке (D93)
+  const betterSame = better.every((v, i) => v === base[i]);
+  const worseSame = worse.every((v, i) => v === base[i]);
+  const labels = [betterSame ? null : { y: end(better), t: 'Лучше' }, { y: yb, t: 'База' }, worseSame ? null : { y: end(worse), t: 'Хуже' }]
+    .filter((l): l is { y: number; t: string } => l !== null)
+    .sort((a, b) => a.y - b.y);
   for (let i = 1; i < labels.length; i++) if (labels[i]!.y - labels[i - 1]!.y < 14) labels[i]!.y = labels[i - 1]!.y + 14;
   for (const l of labels) {
     const t = s('text', { x: W - pad.r + 6, y: l.y + 4, class: 'end-label' });
@@ -192,10 +196,12 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
     cross.setAttribute('visibility', 'visible');
     tip.hidden = false;
     tip.replaceChildren(
-      h('strong', null, formatMonthRu(months[i]!)),
-      h('div', null, `Лучше: ${formatKZT(better[i] ?? (0 as Money))}`),
-      h('div', null, h('span', { class: 'sw s1' }), `База: ${formatKZT(base[i] ?? (0 as Money))}`),
-      h('div', null, `Хуже: ${formatKZT(worse[i] ?? (0 as Money))}`),
+      ...[
+        h('strong', null, formatMonthRu(months[i]!)),
+        betterSame ? null : h('div', null, `Лучше: ${formatKZT(better[i] ?? (0 as Money))}`),
+        h('div', null, h('span', { class: 'sw s1' }), `База: ${formatKZT(base[i] ?? (0 as Money))}`),
+        worseSame ? null : h('div', null, `Хуже: ${formatKZT(worse[i] ?? (0 as Money))}`),
+      ].filter((x): x is HTMLElement => x !== null),
     );
     const left = (x(i) / W) * r.width;
     tip.style.left = `${Math.min(Math.max(0, left - 95), r.width - 190)}px`;
