@@ -69,3 +69,14 @@ describe('запись', () => {
     expect(errorText(new Error('сбой'))).toBe('сбой');
   });
 });
+
+describe('копия до переноса на новую модель экранов (D96)', () => {
+  it('нужна для старого состояния, не нужна для перенесённого и пустого', async () => {
+    const { needsPreSimpleCopy } = await import('../../app/persist');
+    expect(needsPreSimpleCopy('{"state":{"settings":{}}}')).toBe(true);
+    expect(needsPreSimpleCopy('{"state":{"settings":{"simpleMigrated": true}}}')).toBe(false);
+    expect(needsPreSimpleCopy(serializeState(emptyState(), TODAY))).toBe(false);
+    expect(needsPreSimpleCopy('')).toBe(false);
+    expect(needsPreSimpleCopy(undefined)).toBe(false);
+  });
+});

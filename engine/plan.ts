@@ -143,6 +143,11 @@ export interface IncomeRequest {
   /** Поступление уже отражено в импортированных балансах (D43). */
   incomeInBalance: boolean;
   strategies: StrategyParams[];
+  /**
+   * Новый экран «Пришли деньги» (D96): траты на жизнь до дохода — обычные (повседневное + регулярное),
+   * а покрыть их могут только деньги на счетах «для трат», не копилки.
+   */
+  simple?: boolean;
 }
 
 export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest): CompareResult {
@@ -153,6 +158,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
   const liquidIds = new Set<string>();
   for (const p of o.capital.accounts) {
     if (p.excluded || p.liquidity.kind !== 'instant') continue;
+    if (req.simple && o.spend.kinds[p.accountId] !== 'spend') continue;
     liquidIds.add(p.accountId);
     liquidFree = add(liquidFree, p.balance - (assigned.get(p.accountId) ?? 0) as Money);
   }
@@ -180,7 +186,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
       today,
       nextIncome: o.nextIncome.date,
       upcoming: upcomingPayments(o.obligations, today, addMonths(today, 1200)),
-      baseMedian: o.baseline.median,
+      baseMedian: req.simple ? o.spend.usualMonthly : o.baseline.median,
       liquidFreeBefore: liquidFree,
       obligationGoalFunds,
       obligationGoalFundsByAvailability,
@@ -201,7 +207,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
  * Выбор стратегии: метки GoalFunding на счёте, куда пришли деньги, и запись решения.
  * Реальных переводов система не делает (§5.3). Метки проверяются инвариантом 1.
  */
-export function acceptAllocation(state: AppState, c: CompareResult, row: StrategyRow, accountId: string, today: IsoDate, decisionId: string, note: string): Outcome<AppState> {
+export function acceptAllocation(state: AppState, c: CompareResult, row: StrategyRow, accountId: string, today: IsoDate, decisionId: string, note: string, opts: { pending?: boolean } = {}): Outcome<AppState> {
   const o = buildOverview(state, today);
   const added: GoalFunding[] = [];
   const fundings: GoalFunding[] = [...o.fundings];
@@ -209,8 +215,9 @@ export function acceptAllocation(state: AppState, c: CompareResult, row: Strateg
     if (amount <= 0) continue;
     const r = assignMoney({ id: `${decisionId}-${goalId}`, goalId, accountId, amount, date: today, decisionId }, { goals: o.goals, fundings, balances: o.balances });
     if (!r.ok) return { ok: false, error: `${r.error}. Если поступление ещё не в импорте — сначала импортируй свежий бэкап или выбери другой счёт`, explanation: r.explanation };
-    fundings.push(r.value);
-    added.push(r.value);
+    const f = opts.pending ? { ...r.value, pending: true as const } : r.value;
+    fundings.push(f);
+    added.push(f);
   }
   const decision: Decision = {
     id: decisionId,

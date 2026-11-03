@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { buildOverview, setupProgress, setupSteps, type AppState, type Overview, type SetupStep } from '../engine/index';
+import { baseForecast, buildOverview, goalVerdicts, runway, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -21,6 +21,38 @@ function compute(): { o: Overview; steps: SetupStep[] } {
 }
 
 export const ov = (): Overview => compute().o;
+
+// прогноз «как сейчас», вердикты целей и запас прочности — тяжелее Обзора, считаются по запросу (D96)
+let fcState: AppState | null = null;
+let fcKey = '';
+let fc: { sim?: SimResult; verdicts?: Map<string, GoalVerdict>; runway?: ReturnType<typeof runway> | undefined; runwayDone?: boolean } = {};
+function fcMemo() {
+  const st = getState();
+  const k = today();
+  if (fcState !== st || fcKey !== k) {
+    fcState = st;
+    fcKey = k;
+    fc = {};
+  }
+  return fc;
+}
+export function forecastNow(): SimResult {
+  const m = fcMemo();
+  return (m.sim ??= baseForecast(getState(), today()));
+}
+export function verdicts(): Map<string, GoalVerdict> {
+  const m = fcMemo();
+  if (!getState().imported) return new Map();
+  return (m.verdicts ??= goalVerdicts(getState(), today(), forecastNow()));
+}
+export function runwayNow(): ReturnType<typeof runway> {
+  const m = fcMemo();
+  if (!m.runwayDone) {
+    m.runway = runway(getState(), today());
+    m.runwayDone = true;
+  }
+  return m.runway ?? null;
+}
 export const steps = (): SetupStep[] => compute().steps;
 export const progress = () => setupProgress(steps());
 

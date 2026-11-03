@@ -1,39 +1,20 @@
 /**
- * Экран «Цели» (D85): одна строка-сводка, «＋ Цель» вверху, карточки целей; всё остальное — в подэкранах.
- * Быстрая форма — три поля и шаблон; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
+ * Экран «Цели» (D96): подушка всегда первая, цели и папки по порядку, у цели со сроком — «успеваешь / не успеваешь».
+ * Форма — три поля; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
  */
 import {
-  STATUS_LABELS, assignMoney, deleteGoal, buildGoalsView, changeStatus, createGoal, exampleGoals, moveFunding, updateGoal, withdrawMoney,
-  type Goal, type GoalNode, type GoalRole, type GoalStatus, type GoalsView, type Horizon, type Importance, type Flexibility, type Money,
+  STATUS_LABELS, assignMoney, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, moveFunding, nextOrder, reorderGoals,
+  starterGoals, unassignedSavings, updateGoal, withdrawMoney,
+  type Goal, type GoalNode, type GoalStatus, type GoalsView, type Flexibility, type Money,
 } from '../../engine/index';
-import { ask, confirmButton, field, h, toast } from '../dom';
+import { append, ask, confirmButton, field, h, toast } from '../dom';
 import { act, getState, today, update } from '../store';
-import { chip, errorsBox, fmt, fmtDate, info, moneyInput, newId, pct, readMoney, readStr, row, rows, stickyBar, sub } from '../ui';
-import { closeSheet, defineSheet, openSheet, sheetHref } from '../main';
+import { chip, errorsBox, fmt, fmtDate, info, monthWord, toggle, moneyInput, newId, pct, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
+import { closeSheet, defineSheet, openSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
-import { cushionOffer } from '../blocks';
-import { ov } from '../ctx';
+import { ov, verdicts } from '../ctx';
 
-/**
- * Примеры вместо слова «роль» (D93): необязательные — ничего не выбрано = своя цель (внутри — «накопления»).
- * Подсказки нейтральные: никаких целей конкретного человека.
- */
-const TEMPLATES: { role: GoalRole; label: string; hint: string; flexibility?: Flexibility; importance?: Importance }[] = [
-  { role: 'capital', label: 'Накопления', hint: 'Накопления' },
-  { role: 'safety', label: 'Подушка', hint: 'Подушка', importance: 5 },
-  { role: 'quality', label: 'Покупка', hint: 'Ноутбук' },
-  { role: 'life_change', label: 'Большие перемены', hint: 'Отпуск' },
-  { role: 'obligation', label: 'Долг', hint: 'Вернуть долг', flexibility: 'fixed', importance: 5 },
-  { role: 'growth', label: 'Учёба и рост', hint: 'Курсы' },
-];
 const FLEX: Record<Flexibility, string> = { fixed: 'жёсткий', flexible: 'гибкий', open: 'без срока' };
-
-/** Горизонт словами по порогам из настроек (по умолчанию 3 / 12 / 36 мес.). */
-function horizonText(hz: Horizon): string {
-  const [a, b, c] = getState().settings.horizonMonths;
-  const m = (n: number) => (n % 12 === 0 ? (n === 12 ? 'года' : `${n / 12} лет`) : `${n} мес.`);
-  return { small: `до ${m(a)}`, medium: `до ${m(b)}`, long: `до ${m(c)}`, major: `дольше ${m(c)}` }[hz];
-}
 
 function percent(n: GoalNode): string {
   const p = n.pctPermille / 10;
@@ -48,6 +29,15 @@ function deadlineText(g: Goal): string {
 
 const view = (): GoalsView => buildGoalsView(getState(), today());
 const nodeOf = (v: GoalsView, id: string) => v.flat.find((n) => n.goal.id === id);
+const isCushion = (g: Goal) => g.role === 'safety' && g.parentId === undefined;
+
+function stateTag(n: GoalNode): HTMLElement | null {
+  const g = n.goal;
+  if (g.unconfirmed) return h('span', { class: 'tag warn' }, 'подтверди сумму');
+  if (g.status !== 'active') return h('span', { class: g.status === 'done' ? 'tag good' : 'tag' }, STATUS_LABELS[g.status]);
+  if (n.achieved) return h('span', { class: 'tag good' }, 'набрано');
+  return null;
+}
 
 // ───────────────────────── подсветка новой цели ─────────────────────────
 
@@ -63,152 +53,284 @@ export function flashGoals(ids: string[]): void {
 // ───────────────────────── форма цели ─────────────────────────
 
 /**
- * Три поля сверху, остальное под «Подробнее». Срок из быстрой формы — это дедлайн:
- * по нему лестница и симулятор считают, сколько нужно откладывать (желаемая дата влияет только на горизонт).
+ * Три поля: название, сумма, срок (D96). Папка — если есть папки. Остальное — под «Подробнее».
+ * Срок — дедлайн: по нему считается, сколько откладывать в месяц и успеваешь ли.
  */
-function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withTemplates: boolean; withReason: boolean }): { form: HTMLFormElement; read: () => { patch: Partial<Goal>; errs: string[] } } {
-  let role: GoalRole = g.role ?? 'capital';
-  // у новой цели пример не выбран: шаблоны — подсказка, а не обязательная категория
-  let picked = g.role !== undefined;
-  const title = h('input', { name: 'title', required: true, value: g.title ?? '', placeholder: picked ? (TEMPLATES.find((t) => t.role === role)?.hint ?? '') : 'Например: отпуск, ноутбук, подушка', autocomplete: 'off' });
+function goalForm(id: string, g: Partial<Goal>, goals: Goal[], opts: { withReason: boolean }): { form: HTMLFormElement; read: () => { patch: Partial<Goal>; errs: string[] } } {
+  const title = h('input', { name: 'title', required: true, value: g.title ?? '', placeholder: 'Например: отпуск, ноутбук, курсы', autocomplete: 'off' });
   const amount = moneyInput('targetMin', g.targetMin && g.targetMin > 0 ? g.targetMin : undefined);
   const when = h('input', { name: 'deadline', type: 'date', value: g.deadline ?? '' });
+  const folders = goals.filter((x) => x.folder && x.id !== g.id && x.status !== 'cancelled');
   const flexSel = h('select', { name: 'flexibility' }, (Object.keys(FLEX) as Flexibility[]).map((f) => h('option', { value: f, selected: f === (g.flexibility ?? 'flexible') }, FLEX[f])));
-  const impSel = h('select', { name: 'importance' }, [1, 2, 3, 4, 5].map((i) => h('option', { value: i, selected: i === (g.importance ?? 3) }, String(i))));
-  const summaryText = () => `Подробнее · важность ${impSel.value}, срок ${FLEX[flexSel.value as Flexibility]}`;
-  const summary = h('summary', null, summaryText());
-  flexSel.addEventListener('change', () => (summary.textContent = summaryText()));
-  impSel.addEventListener('change', () => (summary.textContent = summaryText()));
-
-  const chips = h('div', { class: 'chips wrap', role: 'radiogroup', 'aria-label': 'Пример цели' });
-  const drawChips = () =>
-    chips.replaceChildren(
-      ...TEMPLATES.map((t) =>
-        chip(t.label, picked && t.role === role, () => {
-          picked = true;
-          role = t.role;
-          title.placeholder = t.hint;
-          if (t.flexibility) flexSel.value = t.flexibility;
-          if (t.importance) impSel.value = String(t.importance);
-          summary.textContent = summaryText();
-          drawChips();
-        }),
-      ),
-    );
-  drawChips();
-
   const form = h(
     'form',
     { class: 'stack', id },
-    opts.withTemplates ? h('div', { class: 'stack tight' }, h('div', { class: 'field-label' }, 'Пример — необязательно'), chips) : null,
     field('Название', title),
-    field('Сколько нужно, ₸', amount, g.targetRule ? 'считается по правилу подушки — можно задать вручную' : undefined),
-    field('К какому сроку (необязательно)', when),
+    g.folder ? null : field('Сколько нужно, ₸', amount, g.targetRule ? 'считается по правилу подушки — можно задать вручную' : undefined),
+    field('К какому сроку (необязательно)', when, 'со сроком — приложение скажет, успеваешь ли и сколько откладывать в месяц'),
+    folders.length && !g.folder
+      ? field('В папке', h('select', { name: 'parentId' }, h('option', { value: '' }, 'нет'), folders.map((x) => h('option', { value: x.id, selected: x.id === g.parentId }, x.title))))
+      : null,
     h(
       'details',
       { class: 'fold', 'data-key': `${id}:more` },
-      summary,
+      h('summary', null, 'Подробнее'),
       h(
         'div',
         { class: 'stack' },
-        field('Важность (1–5)', impSel),
         field('Срок', flexSel, 'жёсткий — позже нельзя; гибкий — можно сдвинуть'),
-        field('Желаемая дата (раньше срока)', h('input', { name: 'desiredDate', type: 'date', value: g.desiredDate ?? '' })),
-        field('Откладывать в месяц не меньше, ₸', moneyInput('minMonthlyFunding', g.minMonthlyFunding, 'необязательно')),
-        field(
-          'Часть другой цели',
-          h('select', { name: 'parentId' }, h('option', { value: '' }, 'нет'), goals.filter((x) => x.id !== g.id).map((x) => h('option', { value: x.id, selected: x.id === g.parentId }, x.title))),
-        ),
+        g.folder ? null : field('Откладывать в месяц не меньше, ₸', moneyInput('minMonthlyFunding', g.minMonthlyFunding, 'необязательно')),
         field('Зачем', h('input', { name: 'why', value: g.why ?? '', autocomplete: 'off' })),
-        field('Когда цель выполнена', h('input', { name: 'doneCriteria', value: g.doneCriteria ?? '', autocomplete: 'off' })),
       ),
     ),
-    opts.withReason ? field('Почему меняешь', h('input', { name: 'reason', required: true, autocomplete: 'off' }), 'сохранится в истории цели') : null,
+    opts.withReason ? field('Почему меняешь (необязательно)', h('input', { name: 'reason', autocomplete: 'off' }), 'сохранится в истории цели') : null,
   );
 
   const read = () => {
     const errs: string[] = [];
-    const targetMin = readMoney(form, 'targetMin');
+    const targetMin = g.folder ? (0 as Money) : readMoney(form, 'targetMin');
     if (targetMin === null && !g.targetRule) errs.push('Сколько нужно: введи сумму');
     const opt = <T,>(v: T | '' | undefined | null): T | undefined => (v === '' || v === null || v === undefined ? undefined : v);
-    const money = (name: string, label: string) => {
-      if (!readStr(form, name)) return undefined;
-      const m = readMoney(form, name);
-      if (m === null) errs.push(`${label}: введи число или оставь пустым`);
-      return m ?? undefined;
-    };
-    // «Комфортная сумма» убрана из формы (D93); сохранённое значение не теряется
-    const targetComfort = g.targetComfort;
-    const minMonthlyFunding = money('minMonthlyFunding', 'Откладывать в месяц');
+    let minMonthlyFunding: Money | undefined;
+    if (readStr(form, 'minMonthlyFunding')) {
+      const m = readMoney(form, 'minMonthlyFunding');
+      if (m === null) errs.push('Откладывать в месяц: введи число или оставь пустым');
+      minMonthlyFunding = m ?? undefined;
+    }
     return {
       errs,
       patch: {
         title: readStr(form, 'title'),
-        role,
         targetMin: (targetMin ?? g.targetMin ?? 0) as Money,
-        targetComfort,
         deadline: opt(readStr(form, 'deadline')),
-        desiredDate: opt(readStr(form, 'desiredDate')),
-        flexibility: readStr(form, 'flexibility') as Flexibility,
-        importance: Number(readStr(form, 'importance')) as Importance,
+        flexibility: (readStr(form, 'flexibility') || 'flexible') as Flexibility,
         minMonthlyFunding,
-        parentId: opt(readStr(form, 'parentId')),
+        parentId: g.folder ? undefined : folders.length ? opt(readStr(form, 'parentId')) : g.parentId,
         why: readStr(form, 'why'),
-        doneCriteria: readStr(form, 'doneCriteria'),
       },
     };
   };
   return { form, read };
 }
 
-defineSheet('goal-new', () => {
+defineSheet('goal-new', (arg) => {
   const st = getState();
   const err = h('div');
-  const { form, read } = goalForm('goal-new-form', {}, st.goals, { withTemplates: true, withReason: false });
+  const folder = arg === 'folder';
+  const { form, read } = goalForm('goal-new-form', folder ? { folder: true } : {}, st.goals, { withReason: false });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { patch, errs } = read();
     if (errs.length) return err.replaceChildren(errorsBox(errs) ?? '');
-    const r = createGoal({ ...patch, id: newId('goal'), title: patch.title!, role: patch.role!, targetMin: patch.targetMin!, importance: patch.importance! }, getState().goals, today());
+    const cur = getState().goals;
+    const r = createGoal(
+      { ...patch, id: newId(folder ? 'folder' : 'goal'), title: patch.title!, role: 'capital', targetMin: patch.targetMin!, importance: 3, order: nextOrder(cur, patch.parentId), ...(folder ? { folder: true as const } : {}) },
+      cur,
+      today(),
+    );
     if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
     const id = r.value.id;
     flashGoal(id);
     await update((s) => ({ ...s, goals: [...s.goals, r.value] }));
     closeSheet();
-    toast(`Цель «${r.value.title}» создана`, { action: { label: 'Закрепить деньги', run: () => openSheet('goal-fund', id) } });
+    toast(folder ? `Папка «${r.value.title}» создана — добавь в неё цели` : `Цель «${r.value.title}» создана`, folder ? {} : { action: { label: 'Закрепить деньги', run: () => openSheet('goal-fund', id) } });
   });
   return {
-    title: 'Новая цель',
-    body: h('div', { class: 'stack' }, form, err),
-    bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-new-form' }, 'Создать цель')),
+    title: folder ? 'Новая папка' : 'Новая цель',
+    body: h('div', { class: 'stack' }, folder ? h('p', { class: 'muted' }, 'Папка объединяет цели: у неё общий баланс, а у каждой цели внутри — свой. Срок папки действует на все цели в ней.') : null, form, err),
+    bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'goal-new-form' }, folder ? 'Создать папку' : 'Создать цель')),
   };
 });
 
-// ───────────────────────── карточка и экран ─────────────────────────
+// ───────────────────────── подушка ─────────────────────────
 
-function stateTag(n: GoalNode): HTMLElement | null {
-  const g = n.goal;
-  if (g.unconfirmed) return h('span', { class: 'tag warn' }, 'подтверди сумму');
-  if (g.status !== 'active') return h('span', { class: g.status === 'done' ? 'tag good' : 'tag' }, STATUS_LABELS[g.status]);
-  if (n.achieved) return h('span', { class: 'tag good' }, 'минимум есть');
-  return null;
+type CushionMode = 'essential' | 'all' | 'custom';
+
+defineSheet('cushion', () => {
+  const st = getState();
+  const o = ov();
+  const g = st.goals.find((x) => isCushion(x) && x.status !== 'cancelled');
+  const shown = o.goals.find((x) => x.id === g?.id);
+  let mode: CushionMode = g ? (g.targetRule ? (g.targetRule.basis ?? 'essential') : 'custom') : 'essential';
+  let months = g?.targetRule?.months ?? st.settings.reserveMonths;
+  const ess = o.spend.usualMonthly - o.spend.regularMedian + o.spend.obligationsMonthly;
+  const all = o.spend.usualMonthly + o.spend.obligationsMonthly;
+  const amount = moneyInput('custom', g && !g.targetRule ? g.targetMin : undefined);
+  const monthsIn = h('input', { name: 'months', type: 'number', min: 1, max: 24, inputmode: 'numeric', value: String(months) });
+  const preview = h('div', { class: 'card stack' });
+  const modeBox = h('div');
+  const draw = () => {
+    months = Math.max(1, Math.min(24, Number(monthsIn.value) || 3));
+    const per = mode === 'all' ? all : ess;
+    modeBox.replaceChildren(
+      seg([['essential', 'Обязательное + жизнь'], ['all', 'Все обычные траты'], ['custom', 'Своя сумма']] as const, mode, (v) => ((mode = v), draw()), 'Из чего подушка'),
+    );
+    amount.closest('label')?.toggleAttribute('hidden', mode !== 'custom');
+    monthsIn.closest('label')?.toggleAttribute('hidden', mode === 'custom');
+    preview.replaceChildren(
+      ...(mode === 'custom'
+        ? [h('strong', null, 'Своя сумма'), h('div', { class: 'muted' }, 'Подушка не пересчитывается сама — сумму меняешь ты.')]
+        : [
+            h('strong', null, `${months} мес. × ${fmt(per as Money)} = ${fmt((per * months) as Money)}`),
+            h('div', { class: 'muted' }, mode === 'all' ? 'В месяц: повседневные и регулярные траты + платежи по долгам. Пересчитывается сама.' : 'В месяц: повседневные траты (еда, дорога, связь, быт) + платежи по долгам. Пересчитывается сама.'),
+          ]),
+    );
+  };
+  const form = h('form', { id: 'cushion-form', class: 'stack' }, modeBox, field('На сколько месяцев', monthsIn), field('Сумма подушки, ₸', amount), preview);
+  monthsIn.addEventListener('input', draw);
+  queueMicrotask(draw);
+  draw();
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const custom = readMoney(form, 'custom');
+    if (mode === 'custom' && (custom === null || custom <= 0)) return toast('Введи сумму подушки', 'error');
+    const rule = mode === 'custom' ? undefined : { kind: 'months_of_base' as const, months, basis: mode };
+    await act((s) => {
+      const cur = s.goals.find((x) => isCushion(x) && x.status !== 'cancelled');
+      if (!cur) {
+        const base = starterGoals(today())[0]!;
+        const id = s.goals.some((x) => x.id === base.id) ? newId('goal') : base.id;
+        const next: Goal = { ...base, id, title: 'Подушка', order: 0, ...(rule ? { targetRule: rule } : { targetMin: custom! }) };
+        if (!rule) delete next.targetRule;
+        return { ...s, goals: [...s.goals, next] };
+      }
+      const next: Goal = { ...cur, order: cur.order ?? 0, history: [...cur.history, { date: today(), field: 'targetRule', from: cur.targetRule ?? cur.targetMin, to: rule ?? custom, reason: 'подушка изменена' }] };
+      if (rule) next.targetRule = rule;
+      else {
+        delete next.targetRule;
+        next.targetMin = custom!;
+      }
+      return { ...s, goals: s.goals.map((x) => (x.id === cur.id ? next : x)) };
+    }, g ? 'Подушка изменена' : 'Подушка создана');
+    closeSheet();
+  });
+  return {
+    title: 'Подушка',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', { class: 'muted' }, 'Запас на случай, если доход пропадёт. Всегда копится первой.'),
+      shown && shown.targetMin > 0 ? h('p', null, `Сейчас: ${fmt(shown.targetMin)}`) : null,
+      form,
+    ),
+    bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'cushion-form' }, g ? 'Сохранить' : 'Создать подушку')),
+  };
+});
+
+// ───────────────────────── распределить свободное в копилках ─────────────────────────
+
+defineSheet('distribute', () => {
+  const o = ov();
+  const free = unassignedSavings(o);
+  const plan = distributeSavings(o, today(), 'dist');
+  const title = (id: string) => o.goals.find((g) => g.id === id)?.title ?? id;
+  const entries = Object.entries(plan.byGoal).filter(([, v]) => v > 0);
+  return {
+    title: 'Распределить копилки',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, `В копилках не закреплено за целями: `, h('strong', null, fmt(free))),
+      entries.length
+        ? [h('p', { class: 'muted' }, 'По порядку списка: подушка, потом цели сверху вниз — каждая до своей суммы.'), rows(entries.map(([id, v]) => row({ title: title(id), value: fmt(v) })))]
+        : h('p', { class: 'muted' }, 'Всем целям уже хватает — свободное остаётся в копилках.'),
+    ),
+    bar: entries.length
+      ? stickyBar(null, h('button', {
+          class: 'btn primary',
+          type: 'button',
+          onclick: async () => {
+            const p = distributeSavings(ov(), today(), newId('dist'));
+            closeSheet();
+            flashGoals(Object.keys(p.byGoal));
+            await act((s) => ({ ...s, fundings: [...s.fundings, ...p.fundings] }), 'Распределено по целям');
+          },
+        }, 'Распределить'))
+      : undefined,
+  };
+});
+
+// ───────────────────────── карточки и экран ─────────────────────────
+
+function verdictLine(g: Goal, vd: ReturnType<typeof verdicts>): { tag: HTMLElement | null; lines: string[] } {
+  const v = vd.get(g.id);
+  if (!v) return { tag: g.deadline ? null : h('span', { class: 'gs' }, 'без срока'), lines: [] };
+  if (v.remaining === 0) return { tag: h('span', { class: 'ok' }, 'готово'), lines: [] };
+  if (v.ok) return { tag: h('span', { class: 'ok' }, 'успеваешь'), lines: [`откладывай ≈ ${fmt(v.perMonth)} в месяц`] };
+  const shift = v.reachMonth ? ` — или сдвинь на ${monthWord(v.reachMonth)}` : '';
+  return { tag: h('span', { class: 'bad' }, 'не успеваешь'), lines: [`нужно ещё ${fmt(v.extraPerMonth)} в месяц${shift}`] };
 }
 
-function goalCard(n: GoalNode, v: GoalsView, depth = 0): HTMLElement[] {
-  const g = n.goal;
-  const dim = g.status === 'paused' || g.status === 'cancelled' || g.status === 'done';
+function progressBar(n: GoalNode): HTMLElement {
   const width = Math.min(100, n.pctPermille / 10);
-  const bound = v.fundings.filter((f) => f.goalId === g.id && f.id.startsWith('bound:'));
-  const card = h(
+  return h('div', { class: `progress${n.achieved ? ' done' : ''}`, role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(width)), 'aria-label': `Прогресс «${n.goal.title}»` }, h('span', { style: `width:${width}%` }));
+}
+
+function goalCard(n: GoalNode, vd: ReturnType<typeof verdicts>): HTMLElement {
+  const g = n.goal;
+  const dim = g.status !== 'active';
+  const fl = flash && flash.ids.includes(g.id) && Date.now() < flash.until ? ' flash' : '';
+  if (g.folder || n.children.length) {
+    // срок и вердикт папки — по её целям: успевают все — «успеваешь»
+    const kids = n.children.map((c) => vd.get(c.goal.id)).filter((x): x is NonNullable<typeof x> => !!x);
+    const bad = kids.filter((k) => !k.ok);
+    const per = kids.reduce((a, k) => a + k.perMonth, 0);
+    const tag = g.deadline ? (bad.length ? h('span', { class: 'bad' }, 'не успеваешь') : h('span', { class: 'ok' }, 'успеваешь')) : null;
+    return h(
+      'div',
+      { class: `gcard folder${dim ? ' dim' : ''}${fl}`, 'data-goal': g.id },
+      h('a', { class: 'gh', href: sheetHref('goal', g.id) }, h('span', { class: 'gt' }, g.title, h('span', { class: 'gs' }, ' · папка')), tag),
+      h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)}${g.deadline ? ` · ${deadlineText(g)}` : ''}${g.splitEqually ? ' · поровну' : ''}`),
+      progressBar(n),
+      g.deadline && !bad.length && per > 0 ? h('div', { class: 'gs' }, `откладывай ≈ ${fmt(per as Money)} в месяц`) : null,
+      bad.length ? h('div', { class: 'gs' }, `нужно ещё ${fmt(bad.reduce((a, k) => a + k.extraPerMonth, 0) as Money)} в месяц`) : null,
+      n.children.length
+        ? h('div', { class: 'kids' }, n.children.map((c) => h('a', { href: sheetHref('goal', c.goal.id), 'data-goal': c.goal.id }, h('span', null, c.goal.title), h('span', { class: 'gs' }, `${fmt(c.progress)} из ${fmt(c.goal.targetMin)}`))))
+        : h('div', { class: 'gs' }, 'пусто — добавь цель и выбери эту папку'),
+    );
+  }
+  const vl = verdictLine(g, vd);
+  const wait = !g.deadline && !isCushion(g) && n.remainingMin > 0 ? 'начнёт копиться, когда хватит на цели со сроком' : null;
+  return h(
     'a',
-    { class: `goal-card${depth ? ' child' : ''}${dim ? ' dim' : ''}${flash && flash.ids.includes(g.id) && Date.now() < flash.until ? ' flash' : ''}`, href: sheetHref('goal', g.id), 'data-goal': g.id, style: depth > 1 ? `margin-left:${16 * depth}px;width:calc(100% - ${16 * depth}px)` : undefined },
-    h('div', { class: 'gh' }, h('span', { class: 'gt' }, g.title), stateTag(n)),
-    h('div', { class: `bar${n.achieved ? ' done' : ''}`, role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(width)), 'aria-label': `Прогресс «${g.title}»` }, h('span', { style: `width:${width}%` })),
-    h('div', { class: 'gm' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · ${percent(n)}`),
-    h('div', { class: 'gm' }, g.deadline || g.desiredDate ? `${deadlineText(g)} · ${horizonText(n.horizon)}` : 'без срока'),
-    bound.length ? h('div', { class: 'gm' }, `весь остаток: ${bound.map((f) => v.allAccounts.find((a) => a.accountId === f.accountId)?.title ?? f.accountId).join(', ')}`) : null,
+    { class: `gcard${dim ? ' dim' : ''}${fl}`, href: sheetHref('goal', g.id), 'data-goal': g.id },
+    h('div', { class: 'gh' }, h('span', { class: 'gt' }, g.title), g.status !== 'active' ? h('span', { class: 'gs' }, STATUS_LABELS[g.status]) : vl.tag),
+    progressBar(n),
+    h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)}${g.deadline ? ` · ${deadlineText(g)}` : ''}`),
+    vl.lines.map((l) => h('div', { class: 'gs' }, l)),
+    wait && g.status === 'active' && !vl.lines.length ? h('div', { class: 'gs' }, wait) : null,
   );
-  return [card, ...n.children.flatMap((c) => goalCard(c, v, depth + 1))];
+}
+
+function cushionCard(n: GoalNode | undefined): HTMLElement {
+  if (!n)
+    return h(
+      'a',
+      { class: 'gcard', href: sheetHref('cushion') },
+      h('div', { class: 'gh' }, h('span', { class: 'gt' }, 'Подушки нет'), h('span', { class: 'bad' }, 'создать')),
+      h('div', { class: 'gs' }, 'запас на 3 месяца на случай, если доход пропадёт'),
+    );
+  const g = n.goal;
+  const months = g.targetRule ? `${g.targetRule.months ?? getState().settings.reserveMonths} мес.` : 'своя сумма';
+  const ready = g.targetMin > 0 && n.progress >= g.targetMin;
+  return h(
+    'div',
+    { class: 'gcard', 'data-goal': g.id },
+    h('a', { class: 'gh', href: sheetHref('goal', g.id) }, h('span', { class: 'gt' }, `Подушка · ${months}`), ready ? h('span', { class: 'ok' }, 'готова') : h('span', { class: 'gs' }, `осталось ${fmt(n.remainingMin)}`)),
+    progressBar(n),
+    h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · всегда первая · `, h('a', { href: sheetHref('cushion') }, 'изменить ›')),
+  );
+}
+
+let reordering = false;
+
+async function move(ids: string[], id: string, dir: -1 | 1): Promise<void> {
+  const i = ids.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  const next = [...ids];
+  [next[i], next[j]] = [next[j]!, next[i]!];
+  await update((s) => ({ ...s, goals: reorderGoals(s.goals, next) }));
 }
 
 registerExplain('goals', 'Как посчитано: «Цели»', () => view().explanation);
@@ -216,33 +338,34 @@ registerExplain('goals', 'Как посчитано: «Цели»', () => view()
 export function renderGoals(): HTMLElement {
   const v = view();
   const st = getState();
-  const hasData = ov().hasData;
+  const o = ov();
+  const hasData = o.hasData;
   const root = h('div', { class: 'screen' });
 
   // назначено больше, чем есть на счёте: красный блок с готовыми вариантами
-  for (const o of v.overAssigned) {
-    const acc = v.accounts.find((a) => a.accountId === o.accountId);
+  for (const x of v.overAssigned) {
+    const acc = v.accounts.find((a) => a.accountId === x.accountId);
     root.append(
       h(
         'div',
         { class: 'badline stack' },
-        h('div', null, `«${acc?.title ?? o.accountId}»: ${o.text}.`, info('overAssigned')),
+        h('div', null, `«${acc?.title ?? x.accountId}»: ${x.text}.`, info('overAssigned')),
         h(
           'div',
           { class: 'btn-row' },
-          o.options.map((x) =>
+          x.options.map((y) =>
             h(
               'button',
               {
                 class: 'btn',
                 type: 'button',
                 onclick: async () => {
-                  const r = withdrawMoney({ id: newId('fund'), goalId: x.goalId, accountId: o.accountId, amount: x.amount, date: today(), decisionId: null, note: 'закреплено больше, чем есть' }, { goals: v.goals, fundings: st.fundings, balances: v.balances });
+                  const r = withdrawMoney({ id: newId('fund'), goalId: y.goalId, accountId: x.accountId, amount: y.amount, date: today(), decisionId: null, note: 'закреплено больше, чем есть' }, { goals: v.goals, fundings: st.fundings, balances: v.balances });
                   if (!r.ok) return toast(r.error, 'error');
-                  await act((s) => ({ ...s, fundings: [...s.fundings, r.value] }), `Снято ${fmt(x.amount)} с «${x.title}»`);
+                  await act((s) => ({ ...s, fundings: [...s.fundings, r.value] }), `Снято ${fmt(y.amount)} с «${y.title}»`);
                 },
               },
-              `Снять ${fmt(x.amount)} с «${x.title}»`,
+              `Снять ${fmt(y.amount)} с «${y.title}»`,
             ),
           ),
         ),
@@ -250,54 +373,79 @@ export function renderGoals(): HTMLElement {
     );
   }
 
-  // сводка одной строкой и «＋ Цель» справа
-  root.append(
-    h(
-      'div',
-      { class: 'goals-sum' },
-      hasData
-        ? h(
-            'div',
-            { class: 'gs-text' },
-            h('span', null, 'За целями ', h('strong', null, fmt(v.totalAssigned)), info('assigned')),
-            h('span', { class: v.freeMoney < 0 ? 'neg' : '' }, 'свободно ', h('strong', null, fmt(v.freeMoney)), info('free')),
-          )
-        : h('div', { class: 'gs-text' }, h('span', null, 'Сколько свободно, будет видно после ', h('a', { href: '#/import' }, 'загрузки бэкапа'))),
-      h('a', { class: 'btn primary', href: sheetHref('goal-new') }, '＋ Цель'),
-    ),
-  );
-
-  const offer = hasData ? cushionOffer() : null;
-  if (offer) root.append(offer);
-
-  if (v.tree.length) {
-    root.append(sub('Цели'), h('div', { class: 'goal-list' }, v.tree.flatMap((n) => goalCard(n, v))));
-  } else {
-    root.append(
+  if (hasData) {
+    const free = unassignedSavings(o);
+    append(root, [
       h(
         'div',
-        { class: 'card stack' },
-        h('strong', null, 'Целей пока нет'),
-        h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.'),
-        h('a', { class: 'btn wide', href: sheetHref('goal-new') }, 'Создать свою цель ›'),
-        // пример целей — только для демонстрации и проверок (?demo=1): это цели одного человека
+        { class: 'cells' },
+        h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'В копилках'), h('div', { class: 'v' }, fmt(o.spend.inSavings))),
+        h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Распределено', info('assigned')), h('div', { class: 'v' }, fmt(v.totalAssigned))),
+      ),
+      free > 0 && st.goals.some((g) => g.status === 'active' && !g.folder)
+        ? rows(row({ title: `${fmt(free)} в копилках не распределены`, sub: 'распределить по порядку одним нажатием', href: sheetHref('distribute') }))
+        : null,
+    ]);
+  } else root.append(h('p', { class: 'one-line' }, 'Балансы целей появятся после ', h('a', { href: '#/import' }, 'загрузки бэкапа'), '.'));
+
+  const vd = hasData ? verdicts() : new Map();
+  const cushion = v.tree.find((n) => isCushion(n.goal) && n.goal.status !== 'cancelled');
+  root.append(cushionCard(cushion));
+
+  const list = v.tree.filter((n) => n !== cushion && n.goal.status !== 'cancelled' && n.goal.status !== 'done');
+  const ids = list.map((n) => n.goal.id);
+  if (list.length) {
+    append(root, [
+      sub('Цели', list.length > 1 ? h('button', { class: 'btn link', type: 'button', onclick: () => ((reordering = !reordering), refresh()) }, reordering ? 'Готово' : 'Порядок') : null),
+      reordering ? h('p', { class: 'one-line' }, 'Выше — раньше получает деньги, когда целям без срока хватает не всем.') : null,
+      h(
+        'div',
+        { class: 'goal-stack' },
+        list.map((n) =>
+          reordering
+            ? h(
+                'div',
+                { class: 'order-row' },
+                goalCard(n, vd),
+                h(
+                  'div',
+                  { class: 'order-btns' },
+                  h('button', { class: 'btn', type: 'button', 'aria-label': `«${n.goal.title}» выше`, disabled: ids[0] === n.goal.id, onclick: () => void move(ids, n.goal.id, -1) }, '↑'),
+                  h('button', { class: 'btn', type: 'button', 'aria-label': `«${n.goal.title}» ниже`, disabled: ids[ids.length - 1] === n.goal.id, onclick: () => void move(ids, n.goal.id, 1) }, '↓'),
+                ),
+              )
+            : goalCard(n, vd),
+        ),
+      ),
+    ]);
+  } else if (!cushion || st.goals.length <= 1) {
+    root.append(h('div', { class: 'card stack' }, h('strong', null, 'На что копишь?'), h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.')));
+  }
+  root.append(
+    h('div', { class: 'stack' }, h('a', { class: 'btn primary wide', href: sheetHref('goal-new') }, '＋ Цель'), h('a', { class: 'btn wide', href: sheetHref('goal-new', 'folder') }, '＋ Папка')),
+  );
+
+  const closed = v.tree.filter((n) => n.goal.status === 'cancelled' || n.goal.status === 'done');
+  root.append(
+    h(
+      'details',
+      { class: 'fold', 'data-key': 'goals:details', open: st.settings.showDetails ? true : undefined },
+      h('summary', null, 'Подробнее'),
+      h(
+        'div',
+        { class: 'stack' },
+        hasData ? h('p', { class: 'muted' }, `Закреплено за целями ${fmt(v.totalAssigned)} · свободно на счетах ${fmt(v.freeMoney)}`) : null,
+        closed.length ? rows(closed.map((n) => row({ title: n.goal.title, sub: STATUS_LABELS[n.goal.status], href: sheetHref('goal', n.goal.id) }))) : null,
+        hasData ? explainLink('goals') : null,
         new URLSearchParams(location.search).has('demo')
           ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример целей')
           : null,
+        st.goals.length
+          ? confirmButton('Удалить все цели', 'Удалить', () => update((s) => ({ ...s, goals: [], fundings: [] })).then(() => toast('Цели удалены')), 'danger link', 'Все цели и закреплённые суммы пропадут вместе с историей. Деньги на счетах не изменятся.')
+          : null,
       ),
-    );
-  }
-
-  if (hasData) root.append(explainLink('goals'));
-  if (st.goals.length) {
-    root.append(
-      h(
-        'div',
-        { class: 'foot-note' },
-        confirmButton('Удалить все цели', 'Удалить', () => update((s) => ({ ...s, goals: [], fundings: [] })).then(() => toast('Цели удалены')), 'danger link', 'Все цели и закреплённые суммы пропадут вместе с историей. Деньги на счетах не изменятся.'),
-      ),
-    );
-  }
+    ),
+  );
 
   // новая цель: прокрутить к ней и подсветить
   if (flash && Date.now() < flash.until) {
@@ -329,6 +477,26 @@ defineSheet('goal', (id) => {
     await act((s) => ({ ...s, goals: del.value.goals, fundings: del.value.fundings }), `Цель «${g.title}» удалена`);
   };
 
+  if (g.folder || n.children.length) {
+    const setSplit = (on: boolean) =>
+      act((s) => ({ ...s, goals: s.goals.map((x) => (x.id === g.id ? (on ? { ...x, splitEqually: true as const } : (({ splitEqually: _s, ...rest }) => rest)(x)) : x)) }), on ? 'Цели без срока в папке делят деньги поровну' : 'Цели в папке — по порядку');
+    return {
+      title: `Папка «${g.title}»`,
+      body: h(
+        'div',
+        { class: 'stack' },
+        h('div', { class: 'card stack' }, h('strong', null, `${fmt(n.progress)} из ${fmt(g.targetMin)}`), h('div', { class: 'muted' }, `${deadlineText(g)} · целей: ${n.children.length}`)),
+        rows(
+          row({ title: 'Делить поровну', sub: 'деньги для целей без срока — поровну между целями папки, а не по порядку', value: toggle(!!g.splitEqually, (v) => void setSplit(v), 'Делить поровну'), chevron: false }),
+          ...n.children.map((c) => row({ title: c.goal.title, sub: `${fmt(c.progress)} из ${fmt(c.goal.targetMin)}`, href: sheetHref('goal', c.goal.id) })),
+          row({ title: 'Изменить название и срок', href: sheetHref('goal-edit', g.id) }),
+        ),
+        del.ok
+          ? h('button', { class: 'btn danger wide', type: 'button', onclick: remove }, 'Удалить папку')
+          : h('p', { class: 'muted' }, 'Удалить можно пустую папку: сначала перенеси цели из неё («Изменить» у цели → «В папке: нет»).'),
+      ),
+    };
+  }
   return {
     title: g.title,
     body: h(
@@ -339,10 +507,11 @@ defineSheet('goal', (id) => {
         { class: 'card stack' },
         h('div', { class: 'gh' }, h('strong', null, `${fmt(n.progress)} из ${fmt(g.targetMin)}`), stateTag(n)),
         h('div', { class: `bar${n.achieved ? ' done' : ''}` }, h('span', { style: `width:${Math.min(100, n.pctPermille / 10)}%` })),
-        h('div', { class: 'muted' }, `${percent(n)} · ${deadlineText(g)} · важность ${g.importance}`),
+        h('div', { class: 'muted' }, `${percent(n)} · ${deadlineText(g)}`),
         n.remainingMin > 0 ? h('div', { class: 'muted' }, `осталось ${fmt(n.remainingMin)}`) : null,
+        ...verdictLine(g, verdicts()).lines.map((l) => h('div', null, l)),
         n.direct !== n.progress ? h('div', { class: 'muted' }, `напрямую ${fmt(n.direct)}, остальное — в частях цели`) : null,
-        g.targetRule ? h('div', { class: 'muted' }, 'сумма считается по правилу подушки: месяцы обычных базовых трат', info('baseline')) : null,
+        g.targetRule ? h('div', { class: 'muted' }, 'сумма подушки считается сама — ', h('a', { href: sheetHref('cushion') }, 'изменить ›')) : null,
         g.why ? h('div', { class: 'muted' }, `Зачем: ${g.why}`) : null,
       ),
       rows(
@@ -450,14 +619,14 @@ defineSheet('goal-edit', (id) => {
   if (!original) return null;
   const shown = view().goals.find((x) => x.id === id) ?? original;
   const err = h('div');
-  const { form, read } = goalForm('goal-edit-form', shown, st.goals, { withTemplates: true, withReason: true });
+  const { form, read } = goalForm('goal-edit-form', shown, st.goals, { withReason: true });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { patch, errs } = read();
     if (errs.length) return err.replaceChildren(errorsBox(errs) ?? '');
     // сумма подушки по правилу не перезаписывается вычисленным значением
     if (original.targetRule && patch.targetMin === shown.targetMin) patch.targetMin = original.targetMin;
-    const r = updateGoal(original, { ...patch, unconfirmed: false }, readStr(form, 'reason'), today(), st.goals);
+    const r = updateGoal(original, { ...patch, unconfirmed: false }, readStr(form, 'reason') || 'изменено', today(), st.goals);
     if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
     closeSheet();
     await act((s) => ({ ...s, goals: s.goals.map((x) => (x.id === id ? r.value : x)) }), 'Цель изменена');

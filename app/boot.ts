@@ -3,6 +3,10 @@ import { addRoute, start } from './main';
 import { renderOverview } from './screens/overview';
 import { renderGoals } from './screens/goals';
 import { renderIncome } from './screens/income';
+import { renderArrived } from './screens/arrived';
+import { renderForecastSimple } from './screens/forecast-simple';
+import { renderStart } from './screens/start';
+import { renderBaskets } from './screens/baskets';
 import { renderForecast } from './screens/forecast';
 import { renderData, renderMore, renderPrefs } from './screens/more';
 import { renderHelp } from './screens/help';
@@ -14,8 +18,12 @@ import { renderAccounts, renderAdvanced, renderBackup, renderDebts, renderIncome
 
 addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
 addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
-addRoute({ path: 'income', title: 'Доход', nav: 'income', render: (r) => renderIncome(r) });
-addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecast(r) });
+addRoute({ path: 'income', title: 'Пришли деньги', nav: 'income', render: (r) => renderArrived(r) });
+addRoute({ path: 'income-more', title: 'Другие способы', nav: 'income', parent: 'income', render: (r) => renderIncome(r) });
+addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecastSimple(r) });
+addRoute({ path: 'forecast-more', title: 'График и сценарии', nav: 'forecast', parent: 'forecast', render: (r) => renderForecast(r) });
+addRoute({ path: 'start', title: 'Настроим за минуту', nav: 'overview', lock: true, render: (r, sec) => renderStart(r, sec) });
+addRoute({ path: 'baskets', title: 'Раскладка трат', nav: 'more', parent: 'data', render: (r) => renderBaskets(r) });
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'help', title: 'Как пользоваться', nav: 'more', parent: 'more', render: () => renderHelp() });

@@ -21,6 +21,14 @@ export function decideLoad(raw: unknown): LoadDecision {
   return r.ok ? { kind: 'ok', state: r.value } : { kind: 'unreadable', error: r.error, raw };
 }
 
+/** Ключ копии состояния до переноса на новую модель экранов (D96). */
+export const PRE_SIMPLE_KEY = 'state.before-simple';
+
+/** Сохранённое состояние ещё не перенесено на новую модель экранов — перед первой записью отложить копию (D96). */
+export function needsPreSimpleCopy(raw: unknown): boolean {
+  return typeof raw === 'string' && raw.length > 0 && !/"simpleMigrated":\s*true/.test(raw);
+}
+
 /**
  * Ключ, под которым откладывается нечитаемое состояние: по содержимому (FNV-1a + длина).
  * Те же данные при повторных открытиях — та же копия (место не растёт), другие данные — другая копия (прежние не перезаписываются).

@@ -281,3 +281,20 @@ export function attention(items: AttentionItem[], progress?: { done: number; tot
       : null,
   );
 }
+
+/** Переключатель «да/нет» (D96): кнопка role=switch. */
+export function toggle(on: boolean, onChange: (v: boolean) => void, label: string): HTMLElement {
+  return h('button', { class: 'tog', type: 'button', role: 'switch', 'aria-checked': on ? 'true' : 'false', 'aria-label': label, onclick: (e: Event) => (e.stopPropagation(), onChange(!on)) });
+}
+
+/** «ноя 2027» → «ноябрь 2027» для строк. */
+export function monthWord(key: string): string {
+  const M = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  return `${M[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+}
+
+/** «май 2027» → «мая 2027» (для «до …»). */
+export function monthGen(key: string): string {
+  const M = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  return `${M[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+}
