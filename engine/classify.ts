@@ -93,7 +93,10 @@ export interface ClassificationSettings {
   familyTags: string[];
 }
 
-/** Правила по умолчанию — ровно из инструкции §3.2 (DECISIONS D13). */
+/**
+ * Правила по умолчанию — из инструкции §3.2 (D13): частые русские названия категорий. На них держится
+ * автопоиск рассрочек и переводов в накопления у нового пользователя. Заменить общими шаблонами — в переделке (D95).
+ */
 export const DEFAULT_CLASSIFICATION: ClassificationSettings = {
   familyTags: [],
   rules: [
@@ -127,6 +130,8 @@ const HINTS: { kind: 'income' | 'expense'; re: RegExp; cls: OpClass }[] = [
   { kind: 'income', re: /стипенд/, cls: 'I_stipend' },
   { kind: 'income', re: /кэшб|кешб|cashback|бонус/, cls: 'I_cashback' },
   { kind: 'income', re: /подар/, cls: 'I_gift' },
+  { kind: 'expense', re: /размен|корректир|поправк/, cls: 'T_correction' },
+  { kind: 'income', re: /размен|корректир|поправк/, cls: 'T_correction' },
   { kind: 'expense', re: /продукт|супермаркет|аренд|квартплат|коммунал|связь|интернет|мобильн|проезд|транспорт|гигиен|бытов/, cls: 'E_base' },
   { kind: 'expense', re: /аптек|лекарств|врач|медиц|здоров|стоматол|клиник/, cls: 'E_health' },
   { kind: 'expense', re: /курс|учеб|образован|репетит|книг/, cls: 'E_edu' },

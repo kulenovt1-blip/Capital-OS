@@ -59,7 +59,7 @@ describe('входы симулятора из состояния', () => {
     // расходы по классам: медианы E_base и E_fun, рост = инфляция из настроек
     expect(input.expenses.map((e) => e.key)).toEqual(['E_base', 'E_fun']);
     expect(input.expenses.every((e) => e.growthBp === st.settings.inflationBp)).toBe(true);
-    // рассрочки в данных есть, а обязательство «мамина» не заведено — предупреждение (класс не размечен → UNCLASSIFIED не влияет)
+    // рассрочки в данных есть, а обязательство «родные» не заведено — предупреждение (класс не размечен → UNCLASSIFIED не влияет)
     expect(Array.isArray(warnings)).toBe(true);
   });
 

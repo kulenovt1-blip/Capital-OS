@@ -100,7 +100,7 @@ export function detectInstallments(state: AppState, today: IsoDate, classificati
       untagged.set(op.categoryId, list);
     }
   }
-  // категория одна на всю группу — добавляется к поиску, чтобы тег «мама» не цеплял обычные траты
+  // категория одна на всю группу — добавляется к поиску, чтобы семейный тег не цеплял обычные траты
   for (const g of groups.values()) {
     const cats = new Set(g.ops.map((c) => (c.op as TxOperation).categoryId));
     const [only] = [...cats];

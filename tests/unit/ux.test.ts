@@ -45,7 +45,7 @@ function complete(): AppState {
   // обе рассрочки из операций заведены (с D67 незаведённая рассрочка держит шаг открытым)
   st.obligations = [
     makeInstallment({ id: 'ob', title: 'Телефон', owner: 'self', remaining: tenge(60_570), remainingAsOf: TODAY, payment: tenge(30_285), firstDate: '2026-11-05', match: { tags: ['телефон'] } }),
-    makeInstallment({ id: 'ob-mom', title: 'Мама', owner: 'family', remaining: tenge(30_000), remainingAsOf: TODAY, payment: tenge(15_000), firstDate: '2026-11-15', match: { tags: ['мама'], categoryIds: ['cat-installment'] } }),
+    makeInstallment({ id: 'ob-family', title: 'Родные', owner: 'family', remaining: tenge(30_000), remainingAsOf: TODAY, payment: tenge(15_000), firstDate: '2026-11-15', match: { tags: ['родные'], categoryIds: ['cat-installment'] } }),
   ];
   st.goals = [goal('reserve', { role: 'safety', targetMin: tenge(300_000) })];
   st.lastBackupAt = '2026-10-20';

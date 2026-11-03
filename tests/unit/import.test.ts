@@ -25,7 +25,7 @@ describe('импорт .mmbackup (синтетический бэкап)', () =>
     expect(data.accounts.find((a) => a.id === 'acc-old')!.removed).toBe(true);
     expect(data.accounts.find((a) => a.id === 'acc-tech')!.ignoreInBalance).toBe(true);
     expect(data.accounts.find((a) => a.id === 'acc-halyk')!.archived).toBe(true);
-    expect(data.tags.map((t) => t.name).sort()).toEqual(['друг', 'мама', 'телефон']);
+    expect(data.tags.map((t) => t.name).sort()).toEqual(['друг', 'родные', 'телефон']);
   });
 
   it('системной категории без названия даёт имя из иконки', () => {

@@ -51,7 +51,7 @@ const accSettings = (): AccountSettings[] =>
 
 function input(data: ImportedData, extra: Partial<CapitalInput> = {}): CapitalInput {
   const own = makeInstallment({ id: 'ob-own', title: 'Телефон', owner: 'self', remaining: tenge(60_570), remainingAsOf: '2026-10-01', payment: tenge(30_285), firstDate: '2026-11-05' });
-  const fam = makeInstallment({ id: 'ob-fam', title: 'Холодильник маме', owner: 'family', remaining: tenge(15_000), remainingAsOf: '2026-10-01', payment: tenge(5_000), firstDate: '2026-11-10' });
+  const fam = makeInstallment({ id: 'ob-fam', title: 'Холодильник родителям', owner: 'family', remaining: tenge(15_000), remainingAsOf: '2026-10-01', payment: tenge(5_000), firstDate: '2026-11-10' });
   return {
     data,
     classified: classifyAll(data, cls).ops,

@@ -139,7 +139,7 @@ function buildSynthetic() {
     ['cat-old', 'Старое', 'Expense', 'ic_old'],
   ];
   const tags = [
-    ['tag-mom', 'мама'],
+    ['tag-mom', 'родные'],
     ['tag-phone', 'телефон'],
     ['tag-friend', 'друг'],
   ];
@@ -169,7 +169,7 @@ function buildSynthetic() {
     add({ type: 'Expense', amount: money(3000, 6000), date: `${m}-03`, account: 'acc-kaspi', category: 'cat-transport' });
     add({ type: 'Expense', amount: 399000, date: `${m}-07`, account: 'acc-kaspi', category: 'cat-phone' });
     add({ type: 'Expense', amount: 3028500, date: `${m}-05`, account: 'acc-kaspi', category: 'cat-installment', tags: ['tag-phone'], comment: 'Рассрочка телефон' });
-    add({ type: 'Expense', amount: 1500000, date: `${m}-15`, account: 'acc-kaspi', category: 'cat-installment', tags: ['tag-mom'], comment: 'Рассрочка мамы' });
+    add({ type: 'Expense', amount: 1500000, date: `${m}-15`, account: 'acc-kaspi', category: 'cat-installment', tags: ['tag-mom'], comment: 'Рассрочка за родных' });
     if (r() < 0.6) add({ type: 'Expense', amount: money(2000, 15000), date: `${m}-25`, account: 'acc-cash', category: 'cat-fun' });
     add({ type: 'Expense', amount: money(5000, 20000), date: `${m}-12`, account: 'acc-kaspi', category: 'cat-family', tags: ['tag-mom'] });
     add({ type: 'Income', amount: money(300, 1500), date: `${m}-28`, account: 'acc-kaspi', category: 'cat-bonus' });
