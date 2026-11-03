@@ -16,6 +16,7 @@ import { simulate, type SimResult } from './simulate';
 import type { CompareResult } from './allocate';
 import type { AppState } from './state';
 import type { Category, ImportedData } from './types';
+import { categoryName } from './import/mmbackup';
 import type { IncomeScheduleItem } from './settings';
 
 // ───────────────────────── «Пришли деньги» ─────────────────────────
@@ -41,12 +42,13 @@ export function arrivedIncomes(state: AppState, today: IsoDate, o: Overview = bu
   const from = lastDecision && lastDecision > addDays(today, -45) ? lastDecision : addDays(today, -45);
   const cats = new Map(state.imported.categories.map((c) => [c.id, c]));
   const out: ArrivedIncome[] = [];
+  const handled = new Set(state.settings.handledIncomes ?? []);
   for (const c of o.classification.ops) {
     const op = c.op;
-    if (op.kind !== 'income' || classGroup(c.cls) !== 'income' || MINOR_INCOME.has(c.cls)) continue;
+    if (op.kind !== 'income' || classGroup(c.cls) !== 'income' || MINOR_INCOME.has(c.cls) || handled.has(op.id)) continue;
     if (op.date <= from || op.date > today) continue;
     if (o.spend.kinds[op.accountId] !== 'spend') continue;
-    out.push({ opId: op.id, date: op.date, amount: op.amount, accountId: op.accountId, title: (op.categoryId && cats.get(op.categoryId)?.label) || 'доход' });
+    out.push({ opId: op.id, date: op.date, amount: op.amount, accountId: op.accountId, title: op.categoryId && cats.get(op.categoryId) ? categoryName(cats.get(op.categoryId)!, state.settings.categoryLabels) : 'доход' });
   }
   return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.opId < b.opId ? 1 : -1));
 }
@@ -108,7 +110,7 @@ export function splitIncome(state: AppState, today: IsoDate, amount: Money, inco
         else if (u && lg.deadline) lines.push({ goalId: g.id, title: g.title, amount: ZERO, why: `чтобы успеть к ${ddmm(lg.deadline)}`, required: u.required });
         continue;
       }
-      const why = lg.role === 'safety' && lg.parentId === undefined ? 'подушка — всегда первая' : lg.deadline ? `чтобы успеть к ${ddmm(lg.deadline)}` : g.parentId && byId.get(g.parentId)?.splitEqually ? `поровну в папке «${byId.get(g.parentId)!.title}»` : 'без срока, по порядку';
+      const why = lg.role === 'safety' && lg.parentId === undefined ? 'подушка' : lg.deadline ? `чтобы успеть к ${ddmm(lg.deadline)}` : g.parentId && byId.get(g.parentId)?.splitEqually ? `поровну в папке «${byId.get(g.parentId)!.title}»` : 'без срока, по порядку';
       const req = lg.deadline ? requiredMonthly(lg, progress.get(g.id) ?? ZERO, today, state.settings.strategy) : undefined;
       lines.push({ goalId: g.id, title: g.title, amount: a, why, ...(req !== undefined ? { required: req } : {}) });
     }
@@ -237,7 +239,7 @@ export function detectNewIncomes(state: AppState, today: IsoDate, o: Overview = 
   for (const [catId, e] of [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const recent = months.slice(0, 3).filter((m) => e.perMonth.has(m));
     if (recent.length < 2 || dismissed.has(catId)) continue;
-    const title = cats.get(catId)?.label || 'Доход';
+    const title = cats.get(catId) ? categoryName(cats.get(catId)!, state.settings.categoryLabels) : 'Доход';
     const amount = median(recent.map((m) => e.perMonth.get(m)!));
     if (amount <= 0) continue;
     const days = [...e.days].sort((a, b) => a - b);
@@ -385,8 +387,9 @@ export function autoLabelCategories(cls: ClassificationSettings, data: Pick<Impo
     if (u.reason !== 'no_rule' || !u.categoryId) continue;
     const cat = cats.get(u.categoryId);
     if (!cat) continue;
-    const c: OpClass = suggestClassForCategory(cat.label, u.opKind) ?? (u.opKind === 'expense' ? 'E_other' : 'I_other');
-    rules.push({ categoryId: cat.id, categoryTitle: cat.label, opKind: u.opKind, class: c, auto: true });
+    const name = categoryName(cat);
+    const c: OpClass = suggestClassForCategory(name, u.opKind) ?? (u.opKind === 'expense' ? 'E_other' : 'I_other');
+    rules.push({ categoryId: cat.id, categoryTitle: name, opKind: u.opKind, class: c, auto: true });
     added++;
   }
   return { settings: added ? { ...cls, rules } : cls, added };
@@ -412,7 +415,7 @@ export function unassignedSavings(o: Overview): Money {
 }
 
 /**
- * Распределить свободное в копилках по порядку (D96): подушка, затем цели списка, каждая до суммы.
+ * Распределить свободное в копилках по порядку списка (D96, D100): цели сверху вниз, каждая до суммы.
  * Возвращает метки по счетам-копилкам (сначала копилки с бо́льшим свободным остатком).
  */
 export function distributeSavings(o: Overview, today: IsoDate, idPrefix: string): { fundings: GoalFunding[]; byGoal: Record<string, Money> } {
@@ -425,7 +428,6 @@ export function distributeSavings(o: Overview, today: IsoDate, idPrefix: string)
   for (const f of o.fundings) progress.set(f.goalId, add(progress.get(f.goalId) ?? ZERO, f.amount));
   const eligible = new Map(eligibleGoals(o.goals).list.map((g) => [g.id, g]));
   const order = listOrder(o.goals).filter((g) => eligible.has(g.id));
-  order.sort((a, b) => Number(b.role === 'safety' && b.parentId === undefined) - Number(a.role === 'safety' && a.parentId === undefined));
   const fundings: GoalFunding[] = [];
   const byGoal: Record<string, Money> = {};
   for (const g of order) {

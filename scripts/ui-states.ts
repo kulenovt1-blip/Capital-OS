@@ -88,6 +88,7 @@ export const SCREENS: [string, string][] = [
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
   ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
+  ['explain-forecast', '#/forecast~explain/forecast'],
   ['plan-job', '#/forecast~plan/job'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
 ];
 export async function put(page, json: string): Promise<void> {

@@ -144,7 +144,7 @@ function goalsStep(): HTMLElement {
     { class: 'stack' },
     dots('goals'),
     h('div', { class: 'q' }, 'На что копишь?'),
-    h('p', { class: 'one-line' }, 'Подушка на 3 месяца трат создастся сама — она всегда первая. Остальные цели можно добавить сейчас или потом.'),
+    h('p', { class: 'one-line' }, 'Подушка на 3 месяца трат создастся сама и будет первой в списке — порядок можно поменять. Остальные цели можно добавить сейчас или потом.'),
     goals.length ? rows(goals.map((g) => row({ title: g.title, sub: g.deadline ? `к ${g.deadline.slice(8, 10)}.${g.deadline.slice(5, 7)}.${g.deadline.slice(0, 4)}` : 'без срока', value: fmt(g.targetMin) }))) : null,
     form,
     nav('goals', () => finish(), 'Готово'),

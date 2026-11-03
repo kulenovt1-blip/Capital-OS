@@ -39,6 +39,48 @@ export const MM_SCHEMA = {
  */
 const ICON_NAMES: Record<string, string> = {
   ic_fee: 'Комиссия',
+  // стандартные категории MoneyManager хранятся без названия — приложение показывает их по иконке (D100)
+  products: 'Продукты',
+  transport: 'Транспорт',
+  percent: 'Проценты',
+  present: 'Подарки',
+  family: 'Семья',
+  heart: 'Здоровье',
+  other: 'Другое',
+  theater: 'Досуг',
+  education: 'Образование',
+  cafe: 'Кафе',
+  home: 'Дом',
+  sport: 'Спорт',
+  car: 'Машина',
+  clothes: 'Одежда',
+  web: 'Интернет',
+  phone: 'Связь',
+  haircut: 'Красота',
+  book: 'Книги',
+  console: 'Игры',
+  pizza: 'Еда вне дома',
+  sweets: 'Сладкое',
+  drinks: 'Напитки',
+  toothpaste: 'Гигиена',
+  delivery: 'Покупки онлайн',
+  travels: 'Поездки',
+  world_map: 'Путешествия',
+  notebook: 'Техника',
+  electronics1: 'Электроника',
+  school: 'Учёба',
+  school2: 'Стипендия',
+  insurance: 'Страховка',
+  envelope_money: 'Зарплата',
+  bill_coins: 'Накопления',
+  piggy_bank: 'Копилка',
+  couple: 'Семья',
+  bonus: 'Бонусы',
+  sale: 'Покупки',
+  carsharing: 'Такси и каршеринг',
+  pets: 'Питомцы',
+  gift: 'Подарки',
+  salary: 'Зарплата',
 };
 export function categoryNameFromIcon(icon: string): string {
   return ICON_NAMES[icon] ?? 'Без названия';
@@ -46,6 +88,18 @@ export function categoryNameFromIcon(icon: string): string {
 /** Подпись категории для показа: старые сохранённые «icon:…» — тоже человеческим словом. */
 export function categoryDisplayName(label: string): string {
   return label.startsWith('icon:') ? categoryNameFromIcon(label.slice(5)) : label;
+}
+
+/**
+ * Как называть категорию (D100): своё название из приложения, иначе название из MoneyManager,
+ * иначе — по иконке (стандартные категории MoneyManager хранятся без названия).
+ */
+export function categoryName(c: Pick<Category, 'id' | 'title' | 'icon' | 'label'>, labels: Readonly<Record<string, string>> = {}): string {
+  const own = labels[c.id]?.trim();
+  if (own) return own;
+  if (c.title.trim()) return c.title.trim();
+  const byIcon = c.icon ? ICON_NAMES[c.icon] : undefined;
+  return byIcon ?? categoryDisplayName(c.label || 'Без названия');
 }
 
 /** Название счёта для показа: пустое → «(без названия, начало id)». */

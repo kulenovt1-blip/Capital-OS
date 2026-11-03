@@ -23,7 +23,8 @@ registerExplain(
 );
 
 /**
- * «Как посчитано» для главного числа (D96): одна цепочка сверху вниз — из чего сложилось «Можно тратить».
+ * «Как посчитано» для главного числа (D96, D100): только строки «название — сумма», без сплошного текста.
+ * Слагаемые раскрываются вложенными строками (каждый счёт, каждая цель, каждый платёж).
  */
 function freeChain(o: Overview): HTMLElement {
   const sp = o.spend;
@@ -33,24 +34,27 @@ function freeChain(o: Overview): HTMLElement {
   const byGoal = new Map<string, number>();
   for (const f of o.fundings) if (sp.kinds[f.accountId] === 'spend') byGoal.set(f.goalId, (byGoal.get(f.goalId) ?? 0) + f.amount);
   const goalsList = [...byGoal.entries()].filter(([, v]) => v > 0);
-  const line = (sign: string, title: string, value: number, detail: string | null) =>
-    row({ title: h('span', null, h('span', { class: 'chain-sign' }, sign), title), sub: detail ?? undefined, value: fmt(value as never) });
-  const others = [...o.capital.explanation.filter((x) => x.level !== 'warn' && !x.detail), ...o.explanation.filter((x) => !x.detail && x.code !== 'overview.free' && x.code !== 'overview.reserve')];
+  const head = (sign: string, title: string, value: number) => row({ title: h('strong', null, h('span', { class: 'chain-sign' }, sign), title), value: h('strong', null, fmt(value as never)) });
+  const part = (title: string, value: number, subText?: string) => row({ title, value: fmt(value as never), cls: 'sub-row', ...(subText ? { sub: subText } : {}) });
   return h(
     'div',
     { class: 'stack' },
     hero(`Можно тратить ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
-    sub('Из чего сложилось'),
     rows(
-      line('', 'Деньги на счетах для трат', sp.spendNow, spendAcc.map((p) => `${p.title} ${fmt(p.balance)}`).join(' · ') || null),
-      line('− ', 'Отложено, но ещё не переведено', sp.setAsideOnSpend, goalsList.map(([g, v]) => `${goalTitle.get(g) ?? 'цель'} ${fmt(v as never)}`).join(' · ') || 'ничего'),
-      line('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome, o.untilIncome.map((u) => `${u.title} ${fmt(u.amount)} · ${fmtDay(u.date)}`).join(' · ') || 'платежей нет'),
-      row({ title: h('strong', null, '= Можно тратить'), value: h('strong', null, fmt(sp.canSpend)) }),
+      head('', 'На счетах для трат', sp.spendNow),
+      spendAcc.map((p) => part(p.title, p.balance)),
+      head('− ', 'Отложено, но не переведено', sp.setAsideOnSpend),
+      goalsList.map(([g, v]) => part(goalTitle.get(g) ?? 'цель', v)),
+      head('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome),
+      o.untilIncome.map((u) => part(u.title, u.amount, fmtDay(u.date))),
+      head('= ', 'Можно тратить', sp.canSpend),
     ),
-    h('p', { class: 'muted' }, `Копилки (${fmt(sp.inSavings)}) сюда не входят — их не тратишь. «Обычно уходит» ${fmt(sp.usualPerDay)} в день — медиана повседневных и регулярных трат за полные месяцы ÷ 30,4.`),
-    others.length
-      ? h('details', { class: 'fold', 'data-key': 'explain:overview-other' }, h('summary', null, 'Другие числа'), h('ul', { class: 'explain-list' }, others.map((x) => h('li', null, x.text))))
-      : null,
+    sub('Для сравнения'),
+    rows(
+      row({ title: 'В день до дохода', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')}`, value: fmt(sp.perDay) }),
+      row({ title: 'Обычно уходит в день', sub: 'повседневное и регулярное, обычный месяц ÷ 30', value: fmt(sp.usualPerDay) }),
+      row({ title: 'В копилках', sub: 'не входят — их не тратишь', value: fmt(sp.inSavings) }),
+    ),
   );
 }
 
@@ -177,7 +181,6 @@ export function renderOverview(): HTMLElement {
         { class: 'cells' },
         h('a', { class: 'cell', href: sheetHref('explain', 'overview') }, h('div', { class: 'k' }, 'Капитал', info('net')), h('div', { class: 'v' }, fmt(c.net))),
         c.liabilities.total ? h('a', { class: 'cell', href: '#/debts' }, h('div', { class: 'k' }, 'Долги', info('liabilities')), h('div', { class: 'v' }, fmt(c.liabilities.total))) : null,
-        c.receivables ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Тебе должны', info('receivables')), h('div', { class: 'v' }, fmt(c.receivables))) : null,
       ),
       sub('Счета'),
       rows(

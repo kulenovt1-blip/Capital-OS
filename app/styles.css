@@ -551,3 +551,4 @@ details.acc > .row.sub-row { padding-left: 28px; background: var(--surface-sunke
 .val .good, span.good { color: var(--good); font-weight: 700; }
 .hint-card.stack { flex-direction: column; align-items: stretch; padding: 14px 16px; }
 a.chip { text-decoration: none; display: inline-flex; align-items: center; }
+.rows .row.sub-row { padding-left: 32px; } .rows .row.sub-row .title { font-weight: 400; color: var(--ink-2); }

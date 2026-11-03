@@ -3,7 +3,7 @@
  * разметка категорий, быстрый доход, сбережения вне MoneyManager, долги до начала данных, первая подушка.
  */
 import {
-  ALL_CLASSES, CLASS_LABELS, INCOME_KIND_LABELS, accountsNeedingReview, categoryDisplayName, classRegistry, incomeKindRegistry, isAllowedClass, setCategoryClass,
+  ALL_CLASSES, CLASS_LABELS, INCOME_KIND_LABELS, accountsNeedingReview, categoryName, classRegistry, incomeKindRegistry, isAllowedClass, setCategoryClass,
   starterGoals, suggestClassForCategory, validateIncomeItem, type AppState, type Category, type IncomeKind, type IncomeScheduleItem, type OpClass, type ClassDef,
 } from '../engine/index';
 import { field, h } from './dom';
@@ -110,7 +110,7 @@ export function categoryRows(st: AppState = getState()): CatRow[] {
 }
 
 export function catName(c: Category): string {
-  return getState().settings.categoryLabels[c.id] || categoryDisplayName(c.label);
+  return categoryName(c, getState().settings.categoryLabels);
 }
 
 const assign = (cat: Category, cls: OpClass, kind: 'income' | 'expense') => (s: AppState): AppState => ({ ...s, settings: { ...s.settings, classification: setCategoryClass(s.settings.classification, cat, cls, kind) } });
@@ -197,6 +197,7 @@ defineSheet('type', (arg) => {
     body: h(
       'div',
       null,
+      rows(row({ title: 'Переименовать', sub: 'и посмотреть последние операции', href: sheetHref('basket', catId) })),
       ...group('Свои типы', own.map((c) => item(c.id, c.label))),
       ...group(kind === 'income' ? 'Доходы' : 'Траты', builtin.filter((c) => c.startsWith(kind === 'income' ? 'I_' : 'E_')).map((c) => item(c, TYPE_HINTS[c] ?? ''))),
       ...group('Долги', builtin.filter((c) => c.startsWith('F_')).map((c) => item(c, TYPE_HINTS[c] ?? ''))),

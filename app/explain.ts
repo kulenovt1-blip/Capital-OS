@@ -2,7 +2,7 @@
  * «Как посчитано» в подэкране (D76): каждое число на экране воспроизводимо из объяснения движка.
  * Экран регистрирует источник объяснения, строка «Как посчитано ›» открывает его поверх экрана.
  */
-import type { Explanation } from '../engine/index';
+import { formatKZT, type Explanation } from '../engine/index';
 import { h } from './dom';
 import { defineSheet, sheetHref } from './main';
 
@@ -16,15 +16,31 @@ export function registerExplain(key: string, title: string, get: () => Explanati
   providers.set(key, { title, get, ...(render ? { render } : {}) });
 }
 
-/** Главные шаги — списком; второстепенные (нули, перечни, исключения) — под «Все шаги». */
-export function explainList(e: Explanation): HTMLElement {
-  const main = e.filter((s) => !s.detail);
-  const li = (s: Explanation[number]) => h('li', { class: s.level ?? 'info' }, s.text);
+/**
+ * Шаг объяснения — строкой «название — сумма» (D100): текст до двоеточия или «=» — название,
+ * остальное — мелкой подписью; сумма шага — справа. Без сплошного текста.
+ */
+function stepRow(s: Explanation[number]): HTMLElement {
+  const t = s.text;
+  const m = t.match(/^(.{2,60}?)(?::\s|\s=\s|\s—\s)(.+)$/s);
+  const title = m ? m[1]! : t;
+  const rest = m ? m[2]! : '';
   return h(
     'div',
-    { class: 'card' },
-    h('ul', { class: 'explain-list' }, (main.length ? main : e).map(li)),
-    main.length && main.length < e.length ? h('details', { class: 'explain-more', 'data-key': 'explain:all' }, h('summary', null, `Все шаги (${e.length})`), h('ul', { class: 'explain-list' }, e.map(li))) : null,
+    { class: `row${s.level === 'warn' || s.level === 'error' ? ' bad' : ''}` },
+    h('div', { class: 'main' }, h('div', { class: 'title' }, title), rest ? h('div', { class: 'rsub' }, rest.length > 160 ? `${rest.slice(0, 157)}…` : rest) : null),
+    s.amount !== undefined ? h('div', { class: 'val' }, formatKZT(s.amount)) : null,
+  );
+}
+
+/** Главные шаги — строками; второстепенные (нули, перечни, исключения) — под «Все шаги». */
+export function explainList(e: Explanation): HTMLElement {
+  const main = e.filter((s) => !s.detail);
+  return h(
+    'div',
+    { class: 'stack' },
+    h('div', { class: 'rows' }, (main.length ? main : e).map(stepRow)),
+    main.length && main.length < e.length ? h('details', { class: 'fold', 'data-key': 'explain:all' }, h('summary', null, `Все шаги (${e.length})`), h('div', { class: 'rows' }, e.map(stepRow))) : null,
   );
 }
 

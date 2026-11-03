@@ -4,6 +4,7 @@
  */
 import { add, ZERO, type Money } from './money';
 import type { Category, ImportedData, Operation } from './types';
+import { categoryName } from './import/mmbackup';
 
 export const INCOME_CLASSES = ['I_work', 'I_benefit', 'I_stipend', 'I_gift', 'I_interest', 'I_cashback', 'I_other'] as const;
 export const EXPENSE_CLASSES = ['E_base', 'E_fun', 'E_family', 'E_health', 'E_edu', 'E_installment_own', 'E_installment_family', 'E_other'] as const;
@@ -131,13 +132,15 @@ const HINTS: { kind: 'income' | 'expense'; re: RegExp; cls: OpClass }[] = [
   { kind: 'income', re: /зарплат|аванс|оклад|подработ|премия/, cls: 'I_work' },
   { kind: 'income', re: /стипенд/, cls: 'I_stipend' },
   { kind: 'income', re: /кэшб|кешб|cashback|бонус/, cls: 'I_cashback' },
+  { kind: 'income', re: /процент|вознагражд/, cls: 'I_interest' },
+  { kind: 'income', re: /пособи|пенси/, cls: 'I_benefit' },
   { kind: 'income', re: /подар/, cls: 'I_gift' },
   { kind: 'expense', re: /размен|корректир|поправк/, cls: 'T_correction' },
   { kind: 'income', re: /размен|корректир|поправк/, cls: 'T_correction' },
-  { kind: 'expense', re: /продукт|супермаркет|аренд|квартплат|коммунал|связь|интернет|мобильн|проезд|транспорт|гигиен|бытов/, cls: 'E_base' },
+  { kind: 'expense', re: /продукт|супермаркет|аренд|квартплат|коммунал|связь|интернет|мобильн|проезд|транспорт|гигиен|бытов|^дом$|для дома/, cls: 'E_base' },
   { kind: 'expense', re: /аптек|лекарств|врач|медиц|здоров|стоматол|клиник/, cls: 'E_health' },
   { kind: 'expense', re: /курс|учеб|образован|репетит|книг/, cls: 'E_edu' },
-  { kind: 'expense', re: /кафе|ресторан|кино|развлеч|игр|доставк/, cls: 'E_fun' },
+  { kind: 'expense', re: /кафе|ресторан|кино|развлеч|игр|доставк|досуг|еда вне дома|сладк/, cls: 'E_fun' },
   { kind: 'expense', re: /семь|родител|мам|пап/, cls: 'E_family' },
 ];
 
@@ -240,7 +243,7 @@ export function classifyAll(data: Pick<ImportedData, 'operations' | 'categories'
         const cat = c.op.categoryId ? ctx.categories.get(c.op.categoryId) : undefined;
         g = {
           categoryId: c.op.categoryId,
-          label: cat?.label ?? '(нет категории)',
+          label: cat ? categoryName(cat) : '(нет категории)',
           opKind: c.op.kind,
           count: 0,
           total: ZERO,

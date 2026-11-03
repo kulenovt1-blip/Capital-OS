@@ -64,6 +64,17 @@ describe('стратегия «По порядку» (S)', () => {
     expect(r.free).toBe(tenge(130_000));
   });
 
+  it('подушку можно подвинуть: ниже цели со сроком — сначала месячный взнос цели, потом подушка', () => {
+    const goals = [
+      wg({ id: 'cushion', role: 'safety', targetMin: tenge(100_000), order: 20 }),
+      wg({ id: 'late', targetMin: tenge(120_000), deadline: '2027-11-05', order: 10 }),
+    ];
+    expect(run(goals, 50_000).byGoal).toEqual({ late: tenge(10_000), cushion: tenge(40_000) });
+    // по умолчанию (выше всех) подушка получает первой
+    goals[0]!.order = 0;
+    expect(run(goals, 50_000).byGoal).toEqual({ cushion: tenge(50_000) });
+  });
+
   it('не хватает — первая по порядку цель без срока получает всё, следующая ждёт', () => {
     const goals = [wg({ id: 'x', targetMin: tenge(50_000), order: 20 }), wg({ id: 'y', targetMin: tenge(50_000), order: 10 })];
     expect(run(goals, 30_000).byGoal).toEqual({ y: tenge(30_000) });
@@ -192,6 +203,9 @@ describe('«Пришли деньги»', () => {
     expect(a[0]!.date >= a[a.length - 1]!.date).toBe(true);
     const later = { ...s, decisions: [{ id: 'd', date: '2026-10-21', type: 'allocation' as const, input: {}, chosenStrategy: null, alternatives: [], explanation: [], userNote: '' }] };
     expect(arrivedIncomes(later, TODAY).every((x) => x.date > '2026-10-21')).toBe(true);
+    // «Уже распределил» — поступление больше не предлагается
+    const handled = { ...s, settings: { ...s.settings, handledIncomes: [a[0]!.opId] } };
+    expect(arrivedIncomes(handled, TODAY).some((x) => x.opId === a[0]!.opId)).toBe(false);
   });
 
   it('отложить + на жизнь = можно тратить сейчас; строки по целям в порядке списка', () => {
@@ -231,6 +245,18 @@ describe('«Отложил» → перевод на копилку', () => {
     expect(setAsideReminders(legacy, buildOverview(legacy, TODAY)).map((x) => x.amount)).toEqual([tenge(20_000)]);
     const early = { ...s, fundings: [{ ...pending('p1', 'trip', 20_000), date: '2026-10-28' }] };
     expect(setAsideReminders(early, buildOverview(early, TODAY))).toEqual([]);
+  });
+});
+
+describe('названия категорий', () => {
+  it('стандартные категории MoneyManager без названия — по иконке; своё название важнее', async () => {
+    const { categoryName } = await import('../../engine/import/mmbackup');
+    const c = { id: 'c1', title: '', icon: 'products', label: 'Без названия' };
+    expect(categoryName(c)).toBe('Продукты');
+    expect(categoryName({ ...c, icon: 'percent' })).toBe('Проценты');
+    expect(categoryName({ ...c, icon: 'неизвестная' })).toBe('Без названия');
+    expect(categoryName({ ...c, title: 'Еда' })).toBe('Еда');
+    expect(categoryName(c, { c1: 'Магазин у дома' })).toBe('Магазин у дома');
   });
 });
 
