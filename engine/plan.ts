@@ -158,6 +158,16 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
   }
   const goalById = new Map(o.goals.map((g) => [g.id, g]));
   const obligationGoalFunds = sum(o.fundings.filter((f) => goalById.get(f.goalId)?.role === 'obligation').map((f) => f.amount));
+  // те же деньги по счетам — с датой, с которой их можно снять (D92): вклад до 01.06 не оплатит платёж 05.11
+  const positionById = new Map(o.capital.accounts.map((p) => [p.accountId, p]));
+  const obligationByAccount = new Map<string, Money>();
+  for (const f of o.fundings) if (goalById.get(f.goalId)?.role === 'obligation') obligationByAccount.set(f.accountId, add(obligationByAccount.get(f.accountId) ?? ZERO, f.amount));
+  const obligationGoalFundsByAvailability = [...obligationByAccount.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .flatMap(([accountId, amount]) => {
+      const p = positionById.get(accountId);
+      return p && !p.excluded && amount > 0 ? [{ amount, availableFrom: p.availableFrom }] : [];
+    });
   const perGoalLiquid = new Map<string, Money>();
   for (const f of o.fundings) if (liquidIds.has(f.accountId)) perGoalLiquid.set(f.goalId, add(perGoalLiquid.get(f.goalId) ?? ZERO, f.amount));
   const thisMonth = monthKey(today);
@@ -173,6 +183,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
       baseMedian: o.baseline.median,
       liquidFreeBefore: liquidFree,
       obligationGoalFunds,
+      obligationGoalFundsByAvailability,
       incomeInBalance: req.incomeInBalance,
       goalsWithLiquidFunds: [...perGoalLiquid.entries()].map(([goalId, amount]) => ({ goalId, title: goalById.get(goalId)?.title ?? goalId, amount, importance: goalById.get(goalId)?.importance ?? 0 })),
     },

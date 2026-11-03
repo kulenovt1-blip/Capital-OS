@@ -66,6 +66,11 @@ export interface Step0Input {
   liquidFreeBefore: Money;
   /** Деньги целей с ролью «обязательство» — уже зарезервированы под платежи. */
   obligationGoalFunds: Money;
+  /**
+   * Те же деньги по счетам с датой, с которой их можно снять (D92). Если задано — платёж покрывается только
+   * деньгами, доступными к его дате, а `obligationGoalFunds` не используется.
+   */
+  obligationGoalFundsByAvailability?: readonly { amount: Money; availableFrom: IsoDate }[];
   /** Поступление уже отражено в балансах (импорт после зачисления). */
   incomeInBalance: boolean;
   /** Цели с деньгами на ликвидных счетах — варианты при дефиците. */
@@ -87,6 +92,38 @@ export interface Step0Result {
 }
 
 /**
+ * Покрыть платежи деньгами целей-обязательств с учётом того, когда эти деньги можно снять (D92).
+ * Платежи — по дате; каждый покрывается только деньгами, доступными к его дате (availableFrom ≤ дата платежа).
+ * Деньги взаимозаменяемы, поэтому порядок списания внутри доступных не влияет на итог.
+ */
+export function coverByAvailableFunds(
+  payments: readonly { date: IsoDate; amount: Money }[],
+  funds: readonly { amount: Money; availableFrom: IsoDate }[],
+): { covered: Money; notYetAvailable: { date: IsoDate; amount: Money; availableFrom: IsoDate }[] } {
+  const pool = funds.filter((f) => f.amount > 0).map((f) => ({ ...f })).sort((a, b) => (a.availableFrom < b.availableFrom ? -1 : a.availableFrom > b.availableFrom ? 1 : 0));
+  let covered = ZERO;
+  const notYetAvailable: { date: IsoDate; amount: Money; availableFrom: IsoDate }[] = [];
+  for (const p of [...payments].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))) {
+    let need = p.amount;
+    for (const f of pool) {
+      if (need <= 0) break;
+      if (f.availableFrom > p.date || f.amount <= 0) continue;
+      const take = min(f.amount, need);
+      f.amount = sub(f.amount, take);
+      need = sub(need, take);
+      covered = add(covered, take);
+    }
+    if (need > 0) {
+      // что не покрылось — потому что деньги цели ещё нельзя снять? (а не потому что их нет)
+      const locked = pool.filter((f) => f.availableFrom > p.date && f.amount > 0);
+      const lockedSum = sum(locked.map((f) => f.amount));
+      if (lockedSum > 0) notYetAvailable.push({ date: p.date, amount: min(lockedSum, need), availableFrom: locked[0]!.availableFrom });
+    }
+  }
+  return { covered, notYetAvailable };
+}
+
+/**
  * Доступно = Поступление − R1 − R2 (§5.1) с покрытием (DECISIONS D41):
  * деньги целей-обязательств и свободные деньги на счетах сначала покрывают R1, остаток свободных — R2.
  */
@@ -99,7 +136,10 @@ export function step0(i: Step0Input): Step0Result {
   const R2 = mulDiv(i.baseMedian, 12 * H, 365);
 
   const existingFree = pos(i.incomeInBalance ? sub(i.liquidFreeBefore, i.income) : i.liquidFreeBefore);
-  const afterGoals = pos(sub(R1, i.obligationGoalFunds));
+  const byGoals = i.obligationGoalFundsByAvailability
+    ? coverByAvailableFunds(payments, i.obligationGoalFundsByAvailability)
+    : { covered: min(R1, pos(i.obligationGoalFunds)), notYetAvailable: [] as { date: IsoDate; amount: Money; availableFrom: IsoDate }[] };
+  const afterGoals = pos(sub(R1, byGoals.covered));
   const coverByFree = min(existingFree, afterGoals);
   const R1uncovered = sub(afterGoals, coverByFree);
   const freeLeft = sub(existingFree, coverByFree);
@@ -111,7 +151,10 @@ export function step0(i: Step0Input): Step0Result {
     step('step0.horizon', `Горизонт до следующего дохода: ${H} дн. (до ${day(i.nextIncome)})`, { date: i.nextIncome }),
     step('step0.r1', `R1 — платежи по долгам и рассрочкам до ${day(i.nextIncome)}: ${money(R1)}${payments.length ? ' (' + payments.map((p) => `«${p.title}» ${money(p.amount)} ${day(p.date)}`).join(', ') + ')' : ''}`, { amount: R1 }),
   );
-  if (i.obligationGoalFunds > 0) explanation.push(step('step0.r1_goals', `Из них покрыто деньгами целей-обязательств: ${money(min(R1, i.obligationGoalFunds))}`));
+  if (byGoals.covered > 0) explanation.push(step('step0.r1_goals', `Из них покрыто деньгами целей-обязательств: ${money(byGoals.covered)}`));
+  for (const n of byGoals.notYetAvailable) {
+    explanation.push(step('step0.r1_goals_locked', `Деньги цели-обязательства ${money(n.amount)} можно снять только с ${day(n.availableFrom)} — платёж ${day(n.date)} ими не покрыть`, { amount: n.amount, date: n.date, level: 'warn' }));
+  }
   if (coverByFree > 0) explanation.push(step('step0.r1_free', `Покрыто свободными деньгами на счетах: ${money(coverByFree)}`));
   explanation.push(
     step('step0.r2', `R2 — базовые расходы на ${H} дн.: медиана ${money(i.baseMedian)} × ${H} / (365/12) = ${money(R2)}${freeLeft > 0 ? `; свободные деньги покрывают ${money(min(R2, freeLeft))}` : ''}`, { amount: R2 }),
