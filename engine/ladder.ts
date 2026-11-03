@@ -347,8 +347,50 @@ export function ladder(i: LadderInput): LadderResult {
   const strategy = i.strategy;
   if (strategy.id === 'D' && !strategy.custom) throw new RangeError('Стратегия D требует пользовательских параметров');
 
-  // Уровень 1 — защита. В «По порядку» подушка не выше всех, а на своём месте списка (уровень 2, D100)
-  if (strategy.id !== 'S') reserves.forEach((r, idx) => {
+  // «По порядку» (D102): один проход сверху вниз по списку — кто выше, получает деньги раньше, подушка тоже.
+  // Цель со сроком (своим или папки) берёт столько, сколько нужно в этом месяце, чтобы успеть;
+  // подушка и цели без срока — до своей суммы; в папке «поровну» — поровну между целями без срока.
+  if (strategy.id === 'S') {
+    const eligible = new Map(list.map((g) => [g.id, g]));
+    const byId = new Map(i.goals.map((g) => [g.id, g]));
+    const seq = listOrder(i.goals).map((g) => eligible.get(g.id)).filter((g): g is Goal => !!g);
+    // цели-обязательства — первыми, как и в других вариантах
+    seq.sort((a, b) => Number(b.role === 'obligation') - Number(a.role === 'obligation'));
+    const done = new Set<string>();
+    const capS = (g: Goal) => pos(sub(g.targetMin, prog(g)));
+    for (const g of seq) {
+      if (done.has(g.id)) continue;
+      if (g.deadline && !isReserve(g)) {
+        done.add(g.id);
+        const month = requiredMonthly(g, i.progress.get(g.id) ?? ZERO, i.today, s);
+        const required = pos(sub(month, i.fundedThisMonth.get(g.id) ?? ZERO));
+        if (required <= 0) continue;
+        const amt = min(required, left);
+        give(g, amt, 2, `нужно в этом месяце ${money(required)}`);
+        explanation.push(step('ladder.minimum', `«${g.title}»: чтобы успеть к ${day(g.deadline)}, нужно ${money(required)} в месяц, выдано ${money(amt)}`, { amount: amt, refs: { goalId: g.id }, level: amt < required ? 'warn' : 'info' }));
+        if (amt < required) underfunded.push({ goalId: g.id, required, given: amt });
+        continue;
+      }
+      const parent = g.parentId !== undefined ? byId.get(g.parentId) : undefined;
+      if (parent?.splitEqually) {
+        const group = seq.filter((x) => x.parentId === parent.id && !x.deadline && !done.has(x.id));
+        group.forEach((x) => done.add(x.id));
+        if (left <= 0) continue;
+        const shares = distribute(left, group.map((x) => ({ id: x.id, w: 1, cap: capS(x) })));
+        for (const x of [...group].sort((a, b) => (a.id < b.id ? -1 : 1))) give(x, shares.get(x.id) ?? ZERO, 3, `поровну в папке «${parent.title}»`);
+        continue;
+      }
+      done.add(g.id);
+      const amt = min(capS(g), left);
+      give(g, amt, isReserve(g) ? 1 : 3, isReserve(g) ? 'подушка, по месту в списке' : 'без срока, по месту в списке');
+      if (amt > 0) explanation.push(step('ladder.order', `«${g.title}»: ${money(amt)} (до суммы цели не хватает ${money(capS(g))})`, { amount: amt, refs: { goalId: g.id } }));
+    }
+    if (left > 0) explanation.push(step('ladder.free', `Остаётся свободным: ${money(left)}`, { amount: left }));
+    return finish();
+  }
+
+  // Уровень 1 — защита
+  reserves.forEach((r, idx) => {
     let target: Money;
     if (strategy.id === 'A') target = r.targetComfort ?? mulDiv(r.targetMin, s.comfortReserveBp, 10000);
     else if (strategy.id === 'D' && idx === 0) target = strategy.custom!.reserveTarget;
@@ -368,11 +410,6 @@ export function ladder(i: LadderInput): LadderResult {
       if (g) reqs.push({ g, required: min(m.amount, pos(sub(g.targetComfort ?? g.targetMin, prog(g)))) });
     }
   } else {
-    // «По порядку»: подушка — вместе с целями со сроком, по месту в списке, до своей суммы (D100)
-    if (strategy.id === 'S') for (const r of reserves) {
-      const need = pos(sub(r.targetMin, prog(r)));
-      if (need > 0) reqs.push({ g: r, required: need });
-    }
     for (const g of others) {
       if (strategy.id === 'C' && zero.has(g.id)) continue;
       const month = requiredMonthly(g, i.progress.get(g.id) ?? ZERO, i.today, s);
@@ -385,10 +422,7 @@ export function ladder(i: LadderInput): LadderResult {
     (a.g.deadline ?? '9999') .localeCompare(b.g.deadline ?? '9999') ||
     b.g.importance - a.g.importance ||
     (a.g.id < b.g.id ? -1 : 1);
-  const byList = new Map(listOrder(i.goals).map((g, k) => [g.id, k]));
-  const orderS = (a: { g: Goal }, b: { g: Goal }) =>
-    Number(b.g.role === 'obligation') - Number(a.g.role === 'obligation') || (byList.get(a.g.id) ?? 0) - (byList.get(b.g.id) ?? 0);
-  for (const { g, required } of reqs.sort(strategy.id === 'S' ? orderS : order)) {
+  for (const { g, required } of reqs.sort(order)) {
     const amt = min(required, left);
     give(g, amt, 2, `минимум ${money(required)} в месяц`);
     explanation.push(step('ladder.minimum', `Уровень 2: «${g.title}» — минимум ${money(required)}${g.deadline ? ` (к ${day(g.deadline)})` : ''}, выдано ${money(amt)}`, { amount: amt, refs: { goalId: g.id }, level: amt < required ? 'warn' : 'info' }));
@@ -421,27 +455,6 @@ export function ladder(i: LadderInput): LadderResult {
       weighted(others, sub(R, r0 ? cushion : ZERO), 'по весам важность × срочность');
     } else if (strategy.id === 'B') {
       weighted(others, R, 'по весам важность × срочность');
-    } else if (strategy.id === 'S') {
-      // цели без срока — по порядку списка, каждая до суммы; в папке «поровну» — поровну (D96)
-      const byId = new Map(i.goals.map((g) => [g.id, g]));
-      const open = others.filter((g) => !g.deadline);
-      const rank = new Map(listOrder(i.goals).map((g, k) => [g.id, k]));
-      open.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
-      const done = new Set<string>();
-      for (const g of open) {
-        if (left <= 0) break;
-        if (done.has(g.id)) continue;
-        const parent = g.parentId !== undefined ? byId.get(g.parentId) : undefined;
-        if (parent?.splitEqually) {
-          const group = open.filter((x) => x.parentId === parent.id);
-          group.forEach((x) => done.add(x.id));
-          const shares = distribute(left, group.map((x) => ({ id: x.id, w: 1, cap: cap(x) })));
-          for (const x of [...group].sort((a, b) => (a.id < b.id ? -1 : 1))) give(x, shares.get(x.id) ?? ZERO, 3, `поровну в папке «${parent.title}»`);
-        } else {
-          done.add(g.id);
-          give(g, min(cap(g), left), 3, 'без срока, по порядку');
-        }
-      }
     } else if (strategy.id === 'C') {
       const focusIds = strategy.focusGoalIds?.length ? strategy.focusGoalIds : defaultFocus(others);
       const pool = others.filter((g) => focusIds.includes(g.id));
@@ -456,11 +469,15 @@ export function ladder(i: LadderInput): LadderResult {
   }
   if (left > 0) explanation.push(step('ladder.free', `Остаётся свободным: ${money(left)}${R > 0 && left === R ? ' — всем целям хватает' : ''}`, { amount: left }));
 
-  const byGoal: Record<GoalId, Money> = {};
-  for (const [k, v] of [...given.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) if (v > 0) byGoal[k] = v;
-  const achieved = list.filter((g) => (i.progress.get(g.id) ?? ZERO) < g.targetMin && prog(g) >= g.targetMin).map((g) => g.id).sort();
-  for (const id of achieved) explanation.push(step('ladder.achieved', `«${i.goals.find((g) => g.id === id)!.title}» достигает минимума этим распределением`, { refs: { goalId: id } }));
-  return { allocations, byGoal, free: left, underfunded, achieved, explanation };
+  return finish();
+
+  function finish(): LadderResult {
+    const byGoal: Record<GoalId, Money> = {};
+    for (const [k, v] of [...given.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) if (v > 0) byGoal[k] = v;
+    const achieved = list.filter((g) => (i.progress.get(g.id) ?? ZERO) < g.targetMin && prog(g) >= g.targetMin).map((g) => g.id).sort();
+    for (const id of achieved) explanation.push(step('ladder.achieved', `«${i.goals.find((g) => g.id === id)!.title}» достигает минимума этим распределением`, { refs: { goalId: id } }));
+    return { allocations, byGoal, free: left, underfunded, achieved, explanation };
+  }
 }
 
 /** Цель по умолчанию для стратегии C: самая важная, затем с ближайшим сроком, затем по id. */

@@ -14,14 +14,15 @@ import { attention, fmt, fmtShort, info, row, rows, seg, sub, type AttentionItem
 import { defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 
-const PERIODS = [['6', '6 мес'], ['12', '1 год'], ['24', '2 года'], ['36', '3 года']] as const;
+/** Только полгода и год (D100, D102): дальше «так же, как сейчас» почти не бывает — для этого «Планирую…». */
+const PERIODS = [['6', '6 мес'], ['12', '1 год']] as const;
 const PERIOD_WORDS: Record<string, string> = { '6': 'через 6 мес.', '12': 'через год', '24': 'через 2 года', '36': 'через 3 года' };
 let period: (typeof PERIODS)[number][0] = '12';
 
 
-/** Названия сценариев одинаково везде: «База / Хуже / Лучше» (свои сценарии — своим именем). */
+/** Названия сценариев одинаково везде (D102): «Хуже / Так же / Лучше» — три сравнения с тем, что сейчас. */
 export function scenarioWord(sc: Pick<Scenario, 'id' | 'name'>): string {
-  return ({ base: 'Как сейчас', adverse: 'Хуже', favorable: 'Лучше' } as Record<string, string>)[sc.id] ?? sc.name;
+  return ({ base: 'Так же', adverse: 'Хуже', favorable: 'Лучше' } as Record<string, string>)[sc.id] ?? sc.name;
 }
 
 interface Trio {
@@ -70,7 +71,7 @@ defineSheet('fc-scenarios', () => {
     body: h(
       'div',
       { class: 'stack' },
-      h('p', null, 'Это не предсказание, а проверка на прочность: что будет с деньгами, если часть дел пойдёт хуже или лучше, чем сейчас. Главное число — «как сейчас».'),
+      h('p', null, 'Это не предсказание, а проверка на прочность: что будет с деньгами, если часть дел пойдёт хуже или лучше, чем сейчас. Главное число — если всё пойдёт так же.'),
       ...st.settings.scenarios
         .filter((sc) => sc.id !== 'base')
         .map((sc) => {
@@ -82,7 +83,7 @@ defineSheet('fc-scenarios', () => {
             { class: 'card stack tight' },
             h('strong', null, sc.id === 'adverse' ? 'Если будет хуже' : sc.id === 'favorable' ? 'Если будет лучше' : scenarioWord(sc)),
             d.length ? h('ul', { class: 'help-list' }, d.map((x) => h('li', null, x))) : h('div', { class: 'muted' }, 'Ничего не меняет.'),
-            same ? h('div', { class: 'muted' }, 'У тебя результат такой же, как «как сейчас»: то, что меняет этот вариант, в твоих данных не встречается.') : null,
+            same ? h('div', { class: 'muted' }, 'У тебя этот вариант совпадает с «Так же»: то, что он меняет, в твоих данных не встречается.') : null,
           );
         }),
       h('a', { class: 'btn', href: '#/advanced/scenarios' }, 'Изменить эти допущения'),
@@ -206,7 +207,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': `Капитал ${PERIOD_WORDS[period]}` },
       h('div', { class: 'label' }, h('span', null, `Всего у тебя будет ${PERIOD_WORDS[period]}`, info('net'))),
       h('div', { class: `value${(cap(tr.base) ?? 0) < 0 ? ' neg' : ''}` }, cap(tr.base) === null ? '—' : fmtShort(cap(tr.base)!)),
-      h('div', { class: 'subline' }, 'если всё пойдёт как сейчас', alt ? ` · ${alt}` : ''),
+      h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас', alt ? ` · ${alt}` : ''),
       h('a', { class: 'link', href: sheetHref('fc-scenarios') }, 'Что значит «хуже» и «лучше» ›'),
     ),
   );
@@ -218,13 +219,13 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   root.append(h('div', { class: 'card' }, bandChart(months, vals(tr.base), vals(tr.worse), vals(tr.better), `Капитал на конец месяца, ${PERIODS.find(([p]) => p === period)![1]}`, width)));
 
   // таблица: 4 колонки и на телефоне
-  const horizons = [6, 12, 24, 36].filter((m) => m <= maxM);
+  const horizons = [6, 12].filter((m) => m <= maxM);
   root.append(
     h(
       'table',
       { class: 'tbl four' },
       h('caption', { class: 'visually-hidden' }, 'Капитал по сценариям'),
-      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Срок'), worseSame ? null : h('th', { scope: 'col' }, 'Хуже'), h('th', { scope: 'col' }, 'Как сейчас'), betterSame ? null : h('th', { scope: 'col' }, 'Лучше'))),
+      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Срок'), worseSame ? null : h('th', { scope: 'col' }, 'Хуже'), h('th', { scope: 'col' }, 'Так же'), betterSame ? null : h('th', { scope: 'col' }, 'Лучше'))),
       h(
         'tbody',
         null,
@@ -279,7 +280,6 @@ export function renderForecast(_rerender: () => void): HTMLElement {
     );
   }
 
-  root.append(rows(row({ title: 'Что если…', sub: 'новая работа, переезд, рассрочка — на экране «Прогноз», «Планирую…»', href: '#/forecast' })));
   root.append(explainLink('forecast'));
   return root;
 }

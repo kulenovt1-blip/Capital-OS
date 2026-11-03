@@ -75,6 +75,18 @@ describe('стратегия «По порядку» (S)', () => {
     expect(run(goals, 50_000).byGoal).toEqual({ cushion: tenge(50_000) });
   });
 
+  it('строго по списку: цель без срока выше подушки и выше цели со сроком получает первой', () => {
+    const goals = [
+      wg({ id: 'laptop', targetMin: tenge(30_000), order: 0 }),
+      wg({ id: 'cushion', role: 'safety', targetMin: tenge(100_000), order: 10 }),
+      wg({ id: 'late', targetMin: tenge(120_000), deadline: '2027-11-05', order: 20 }),
+    ];
+    // 50 000: ноутбук 30 000 до суммы, подушка — остаток 20 000, цели со сроком ничего не остаётся
+    const r = run(goals, 50_000);
+    expect(r.byGoal).toEqual({ cushion: tenge(20_000), laptop: tenge(30_000) });
+    expect(r.underfunded.map((u) => u.goalId)).toEqual(['late']);
+  });
+
   it('не хватает — первая по порядку цель без срока получает всё, следующая ждёт', () => {
     const goals = [wg({ id: 'x', targetMin: tenge(50_000), order: 20 }), wg({ id: 'y', targetMin: tenge(50_000), order: 10 })];
     expect(run(goals, 30_000).byGoal).toEqual({ y: tenge(30_000) });

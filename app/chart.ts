@@ -118,7 +118,7 @@ export function lineChart(months: MonthKey[], series: Series[], title: string, w
 
 /**
  * Прогноз капитала (D87): база — сплошная линия, «хуже — лучше» — светлая полоса, метка «сегодня».
- * Подписи на концах теми же словами, что в легенде; если линии совпали, подпись одна — «База».
+ * Подписи на концах теми же словами, что в легенде; если линии совпали, подпись одна — «Так же».
  */
 export function bandChart(months: MonthKey[], base: Money[], worse: Money[], better: Money[], title: string, width = 640): HTMLElement {
   const W = Math.max(280, Math.min(720, Math.round(width)));
@@ -172,7 +172,7 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
   // сценарий, совпавший с базой по всем месяцам, отдельно не подписывается и не показывается в подсказке (D93)
   const betterSame = better.every((v, i) => v === base[i]);
   const worseSame = worse.every((v, i) => v === base[i]);
-  const labels = [betterSame ? null : { y: end(better), t: 'Лучше' }, { y: yb, t: 'База' }, worseSame ? null : { y: end(worse), t: 'Хуже' }]
+  const labels = [betterSame ? null : { y: end(better), t: 'Лучше' }, { y: yb, t: 'Так же' }, worseSame ? null : { y: end(worse), t: 'Хуже' }]
     .filter((l): l is { y: number; t: string } => l !== null)
     .sort((a, b) => a.y - b.y);
   for (let i = 1; i < labels.length; i++) if (labels[i]!.y - labels[i - 1]!.y < 14) labels[i]!.y = labels[i - 1]!.y + 14;
@@ -199,7 +199,7 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
       ...[
         h('strong', null, formatMonthRu(months[i]!)),
         betterSame ? null : h('div', null, `Лучше: ${formatKZT(better[i] ?? (0 as Money))}`),
-        h('div', null, h('span', { class: 'sw s1' }), `База: ${formatKZT(base[i] ?? (0 as Money))}`),
+        h('div', null, h('span', { class: 'sw s1' }), `Так же: ${formatKZT(base[i] ?? (0 as Money))}`),
         worseSame ? null : h('div', null, `Хуже: ${formatKZT(worse[i] ?? (0 as Money))}`),
       ].filter((x): x is HTMLElement => x !== null),
     );
@@ -213,6 +213,6 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
     tip.hidden = true;
   });
   svg.append(hit);
-  const legend = h('div', { class: 'legend' }, h('span', null, h('span', { class: 'sw s1' }), 'База'), h('span', null, h('span', { class: 'sw band' }), 'от «Хуже» до «Лучше»'));
+  const legend = h('div', { class: 'legend' }, h('span', null, h('span', { class: 'sw s1' }), 'Так же, как сейчас'), h('span', null, h('span', { class: 'sw band' }), 'от «Хуже» до «Лучше»'));
   return h('figure', { class: 'viz-root' }, h('figcaption', { class: 'visually-hidden' }, title), legend, h('div', { class: 'chart-wrap' }, svg, tip));
 }
