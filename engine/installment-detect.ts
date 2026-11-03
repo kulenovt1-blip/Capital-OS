@@ -9,6 +9,7 @@
  * Отсев: операции, уже найденные заведёнными обязательствами, и отклонённые находки.
  * Для заведённых рассрочек — проверка расхождений с жизнью (другой платёж, платежей нет).
  */
+import { categoryName } from './import/mmbackup';
 import { tiyn, type Money } from './money';
 import { addMonths, daysBetween, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate } from './date';
 import { money, day } from './explain';
@@ -72,7 +73,7 @@ export function detectInstallments(state: AppState, today: IsoDate, classificati
   const report = classification ?? classifyAll(data, state.settings.classification);
   const behavior = new Map(classRegistry(state.settings.classes).map((c) => [c.id as string, c.behavior]));
   const tagNames = new Map(data.tags.map((t) => [t.id, t.name]));
-  const catLabel = new Map(data.categories.map((c) => [c.id, state.settings.categoryLabels[c.id] || c.label || c.title || c.id]));
+  const catLabel = new Map(data.categories.map((c) => [c.id, categoryName(c, state.settings.categoryLabels)]));
   const since = addMonths(today, -LOOKBACK_MONTHS);
   const dataStart = data.meta.firstDate ?? data.operations[0]?.date ?? today;
   const manual = state.manualMatches ?? {};

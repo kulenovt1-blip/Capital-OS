@@ -3,21 +3,57 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { capitalAt, listOrder, runWhatIf, type LifeEvent, type LifeEventKind, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { buildSimInput, capitalAt, listOrder, runWhatIf, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
 import { attention, fmt, fmtDay, fmtShort, monthGen, monthWord, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
-import { explainLink } from '../explain';
+import { explainLink, registerExplain } from '../explain';
 import { eventForm, eventRow, warningItems } from './forecast';
 
+/** Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…». */
 const HORIZONS: [number, string, string][] = [
   [6, 'полгода', 'полгода'],
   [12, 'год', 'год'],
-  [24, '2 года', '2 года'],
-  [60, '5 лет', '5 лет'],
 ];
+
+/** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
+registerExplain('forecast', 'Из чего прогноз', () => [], () => {
+  const st = getState();
+  const { input } = buildSimInput(st, today());
+  const line = (title: string, value: Money, subText?: string) => row({ title, value: fmt(value), ...(subText ? { sub: subText } : {}) });
+  const dmy = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
+  const byDebt = new Map<string, { title: string; total: number; n: number; last: string }>();
+  for (const p of input.payments) {
+    const e = byDebt.get(p.obligationId) ?? { title: p.title, total: 0, n: 0, last: p.date };
+    e.total += p.amount;
+    e.n++;
+    e.last = p.date;
+    byDebt.set(p.obligationId, e);
+  }
+  const income = input.incomes.reduce((a, x) => a + x.amount, 0);
+  const spend = input.expenses.reduce((a, x) => a + x.monthly, 0);
+  return h(
+    'div',
+    { class: 'stack' },
+    h('p', { class: 'muted' }, 'Каждый месяц: доходы − обычные траты − платежи по долгам. Остаток копится и раскладывается по целям — по порядку списка.'),
+    sub('Доходы в месяц'),
+    input.incomes.length ? rows(input.incomes.map((x) => line(x.title, x.amount, `${x.dayOfMonth}-го${x.end ? ` · до ${dmy(x.end)}` : ''}`)), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(income as Money)) })) : h('p', { class: 'muted' }, 'не заданы'),
+    sub('Траты в месяц'),
+    input.expenses.length
+      ? rows(input.expenses.map((x) => { const [t0, how] = x.title.split(' ('); const t = x.key === 'E_base' ? 'Повседневное' : t0!.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase()); return line(t, x.monthly, [how ? how.replace(/\)$/, '') : '', x.end ? `до ${dmy(x.end)}` : ''].filter(Boolean).join(' · ') || undefined); }), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(spend as Money)) }))
+      : h('p', { class: 'muted' }, 'не размечены'),
+    byDebt.size ? [sub('Платежи по долгам'), rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))] : null,
+    sub('Деньги сейчас'),
+    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : undefined))),
+    sub('Что ещё учтено'),
+    rows(
+      row({ title: 'Траты дорожают', value: `${(st.settings.inflationBp / 100).toString().replace('.', ',')}% в год` }),
+      row({ title: 'Плановые события', value: String(st.settings.plannedEvents.length), href: '#/forecast' }),
+    ),
+  );
+});
 
 const PRESETS: { id: string; label: string; kind: LifeEventKind; title: string }[] = [
   { id: 'job', label: 'Новая работа', kind: 'income_start', title: 'Новая работа' },
@@ -41,7 +77,7 @@ defineSheet('plan', (presetId) => {
     draftPreset = preset.id;
   }
   const st = getState();
-  const k = st.settings.forecastViewMonths ?? 12;
+  const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
   const word = HORIZONS.find(([m]) => m === k)?.[2] ?? `${k} мес.`;
   const form = eventForm('plan-form', (e) => {
     draft = [...draft, e];
@@ -111,7 +147,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     if (att) root.append(att);
     return root;
   }
-  const k = st.settings.forecastViewMonths ?? 12;
+  const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
   const sim = forecastNow();
   const cap = capitalAt(sim, k);
   const rw = runwayNow();
@@ -124,7 +160,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': 'Прогноз' },
       h('div', { class: 'label' }, `Через ${word} у тебя будет`),
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
-      h('div', { class: 'subline' }, 'если всё пойдёт как сейчас'),
+      h('div', { class: 'subline' }, 'если всё пойдёт как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
       h('div', { class: 'subline' }, rwText),
     ),
   );
@@ -165,7 +201,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   }
   const att = attention(items);
   if (att) root.append(att);
-  root.append(rows(row({ title: 'График и таблица по сценариям', sub: 'если будет хуже или лучше, сравнить варианты', href: '#/forecast-more' })), explainLink('forecast'));
+  root.append(rows(row({ title: 'График и таблица по сценариям', sub: 'на 2–3 года, если будет хуже или лучше', href: '#/forecast-more' })), explainLink('forecast', 'Из чего прогноз'));
   return root;
 }
 

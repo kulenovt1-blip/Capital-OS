@@ -171,6 +171,8 @@ export interface Settings {
   forecastViewMonths?: number;
   /** «Сразу показывать подробности» (D96). */
   showDetails?: boolean;
+  /** Поступления (id операций), про которые сказано «уже распределил» (D100). */
+  handledIncomes?: string[];
   /** Категории дохода, про которые сказано «это не доход» (D96). */
   dismissedIncomes?: string[];
   /** Перенос на новую модель экранов сделан (D96). */

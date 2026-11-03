@@ -347,8 +347,8 @@ export function ladder(i: LadderInput): LadderResult {
   const strategy = i.strategy;
   if (strategy.id === 'D' && !strategy.custom) throw new RangeError('Стратегия D требует пользовательских параметров');
 
-  // Уровень 1 — защита
-  reserves.forEach((r, idx) => {
+  // Уровень 1 — защита. В «По порядку» подушка не выше всех, а на своём месте списка (уровень 2, D100)
+  if (strategy.id !== 'S') reserves.forEach((r, idx) => {
     let target: Money;
     if (strategy.id === 'A') target = r.targetComfort ?? mulDiv(r.targetMin, s.comfortReserveBp, 10000);
     else if (strategy.id === 'D' && idx === 0) target = strategy.custom!.reserveTarget;
@@ -368,6 +368,11 @@ export function ladder(i: LadderInput): LadderResult {
       if (g) reqs.push({ g, required: min(m.amount, pos(sub(g.targetComfort ?? g.targetMin, prog(g)))) });
     }
   } else {
+    // «По порядку»: подушка — вместе с целями со сроком, по месту в списке, до своей суммы (D100)
+    if (strategy.id === 'S') for (const r of reserves) {
+      const need = pos(sub(r.targetMin, prog(r)));
+      if (need > 0) reqs.push({ g: r, required: need });
+    }
     for (const g of others) {
       if (strategy.id === 'C' && zero.has(g.id)) continue;
       const month = requiredMonthly(g, i.progress.get(g.id) ?? ZERO, i.today, s);

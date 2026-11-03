@@ -1,5 +1,5 @@
 /**
- * Экран «Цели» (D96): подушка всегда первая, цели и папки по порядку, у цели со сроком — «успеваешь / не успеваешь».
+ * Экран «Цели» (D96, D100): подушка первая по умолчанию, но двигается, цели и папки по порядку, у цели со сроком — «успеваешь / не успеваешь».
  * Форма — три поля; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
  */
 import {
@@ -209,7 +209,7 @@ defineSheet('cushion', () => {
     body: h(
       'div',
       { class: 'stack' },
-      h('p', { class: 'muted' }, 'Запас на случай, если доход пропадёт. Всегда копится первой.'),
+      h('p', { class: 'muted' }, 'Запас на случай, если доход пропадёт. По умолчанию копится первой — на «Целях» её можно подвинуть ниже.'),
       shown && shown.targetMin > 0 ? h('p', null, `Сейчас: ${fmt(shown.targetMin)}`) : null,
       form,
     ),
@@ -318,7 +318,7 @@ function cushionCard(n: GoalNode | undefined): HTMLElement {
     { class: 'gcard', 'data-goal': g.id },
     h('a', { class: 'gh', href: sheetHref('goal', g.id) }, h('span', { class: 'gt' }, `Подушка · ${months}`), ready ? h('span', { class: 'ok' }, 'готова') : h('span', { class: 'gs' }, `осталось ${fmt(n.remainingMin)}`)),
     progressBar(n),
-    h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · всегда первая · `, h('a', { href: sheetHref('cushion') }, 'изменить ›')),
+    h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · `, h('a', { href: sheetHref('cushion') }, 'сумма и срок ›')),
   );
 }
 
@@ -390,14 +390,16 @@ export function renderGoals(): HTMLElement {
 
   const vd = hasData ? verdicts() : new Map();
   const cushion = v.tree.find((n) => isCushion(n.goal) && n.goal.status !== 'cancelled');
-  root.append(cushionCard(cushion));
+  // подушка — в общем списке: по умолчанию первая, но её можно подвинуть (D100)
+  if (!cushion) root.append(cushionCard(undefined));
 
-  const list = v.tree.filter((n) => n !== cushion && n.goal.status !== 'cancelled' && n.goal.status !== 'done');
+  const list = v.tree.filter((n) => n.goal.status !== 'cancelled' && n.goal.status !== 'done');
+  const card = (n: GoalNode) => (n === cushion ? cushionCard(n) : goalCard(n, vd));
   const ids = list.map((n) => n.goal.id);
   if (list.length) {
     append(root, [
-      sub('Цели', list.length > 1 ? h('button', { class: 'btn link', type: 'button', onclick: () => ((reordering = !reordering), refresh()) }, reordering ? 'Готово' : 'Порядок') : null),
-      reordering ? h('p', { class: 'one-line' }, 'Выше — раньше получает деньги, когда целям без срока хватает не всем.') : null,
+      sub('Цели', list.length > 1 ? h('button', { class: `btn${reordering ? ' primary' : ''}`, type: 'button', onclick: () => ((reordering = !reordering), refresh()) }, reordering ? 'Готово' : '↑↓ Порядок') : null),
+      h('p', { class: 'one-line' }, reordering ? 'Двигай стрелками. Кто выше — получает деньги раньше, и подушка тоже.' : 'Кто выше — получает деньги раньше. Порядок можно менять.'),
       h(
         'div',
         { class: 'goal-stack' },
@@ -406,7 +408,7 @@ export function renderGoals(): HTMLElement {
             ? h(
                 'div',
                 { class: 'order-row' },
-                goalCard(n, vd),
+                card(n),
                 h(
                   'div',
                   { class: 'order-btns' },
@@ -414,7 +416,7 @@ export function renderGoals(): HTMLElement {
                   h('button', { class: 'btn', type: 'button', 'aria-label': `«${n.goal.title}» ниже`, disabled: ids[ids.length - 1] === n.goal.id, onclick: () => void move(ids, n.goal.id, 1) }, '↓'),
                 ),
               )
-            : goalCard(n, vd),
+            : card(n),
         ),
       ),
     ]);
@@ -436,7 +438,6 @@ export function renderGoals(): HTMLElement {
         { class: 'stack' },
         hasData ? h('p', { class: 'muted' }, `Закреплено за целями ${fmt(v.totalAssigned)} · свободно на счетах ${fmt(v.freeMoney)}`) : null,
         closed.length ? rows(closed.map((n) => row({ title: n.goal.title, sub: STATUS_LABELS[n.goal.status], href: sheetHref('goal', n.goal.id) }))) : null,
-        hasData ? explainLink('goals') : null,
         new URLSearchParams(location.search).has('demo')
           ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример целей')
           : null,

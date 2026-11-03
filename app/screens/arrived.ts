@@ -136,7 +136,7 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
   return h(
     'div',
     { class: 'advice' },
-    h('div', { class: 'big' }, sp.setAside > 0 ? `Отложи ${fmt(sp.setAside)}` : 'Откладывать не нужно'),
+    h('div', { class: 'big' }, sp.setAside > 0 ? `Можно отложить ${fmt(sp.setAside)}` : 'Откладывать не нужно'),
     items.length ? h('ul', null, items) : h('div', { class: 'gs' }, 'Целей пока нет — всё остаётся на жизнь. ', h('a', { href: '#/goals' }, 'Добавить цель ›')),
     h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
     sp.payments.length ? h('div', { class: 'gs' }, `Уже вычтено: ${sp.payments.map((p) => `${p.title} ${fmt(p.amount)} (${fmtDay(p.date)})`).join(', ')}`) : null,
@@ -145,6 +145,22 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
       : null,
     h('a', { class: 'btn wide', href: sheetHref('setaside-other') }, 'Отложить другую сумму'),
   );
+}
+
+/** Поступления, по которым человек сказал «посчитай» в этот раз (D100): без этого — сначала вопрос. */
+const asked = new Set<string>();
+
+function handledKey(a: Arrived, found: ArrivedIncome[]): string | null {
+  if (!a.date) return null;
+  return found.find((x) => x.date === a.date && x.amount === a.amount && x.accountId === a.accountId)?.opId ?? null;
+}
+
+/** «Уже распределил»: поступление больше не предлагается (можно отменить). */
+async function markHandled(opId: string, title: string): Promise<void> {
+  const before = getState();
+  pick = null;
+  await update((s) => ({ ...s, settings: { ...s.settings, handledIncomes: [...(s.settings.handledIncomes ?? []), opId] } }));
+  toast(`«${title}» больше не предлагаю распределить`, { undo: () => update(() => before).then(() => toast('Отменено')) });
 }
 
 export function renderArrived(rerender: () => void): HTMLElement {
@@ -160,23 +176,37 @@ export function renderArrived(rerender: () => void): HTMLElement {
   const a = current(found);
   if (!a) {
     root.append(
-      h('p', { class: 'muted' }, 'В бэкапе нет новых поступлений. Загрузи свежий бэкап или введи сумму — приложение скажет, сколько отложить и сколько останется на жизнь.'),
+      h('p', { class: 'muted' }, 'Новых поступлений в бэкапе нет. Когда придут деньги — загрузи свежий бэкап или введи сумму: приложение подскажет, сколько можно отложить и сколько останется на жизнь.'),
       h('a', { class: 'btn wide', href: '#/import' }, 'Загрузить свежий бэкап'),
       manualForm(rerender),
       rows(row({ title: 'Другие способы распределить', sub: 'сравнить варианты: больше в подушку, быстрее к одной цели', href: '#/income-more' })),
     );
     return root;
   }
-  root.append(
-    rows(
-      row({
-        title: `Пришло ${fmt(a.amount)}`,
-        sub: a.date ? `${a.title} · ${fmtDay(a.date)} · нашлось в бэкапе${found.length > 1 ? ` · ещё ${found.length - 1}` : ''}` : `${a.title} · ${a.inBalance ? 'уже в бэкапе' : 'ещё не в бэкапе'}`,
-        value: 'изменить',
-        href: sheetHref('arrived-pick'),
-      }),
-    ),
+  const opId = handledKey(a, found);
+  const head = rows(
+    row({
+      title: `Пришло ${fmt(a.amount)}`,
+      sub: a.date ? `${a.title} · ${fmtDay(a.date)} · нашлось в бэкапе${found.length > 1 ? ` · ещё ${found.length - 1}` : ''}` : `${a.title} · ${a.inBalance ? 'уже в бэкапе' : 'ещё не в бэкапе'}`,
+      value: 'другое',
+      href: sheetHref('arrived-pick'),
+    }),
   );
+  root.append(head);
+  // сначала спросить: может, эти деньги уже распределены (D100)
+  if (opId && !asked.has(opId)) {
+    root.append(
+      h(
+        'div',
+        { class: 'card stack' },
+        h('strong', null, 'Помочь распределить эти деньги?'),
+        h('p', { class: 'muted' }, 'Подскажу, сколько можно отложить на цели и сколько останется на жизнь. Если уже распределил сам — просто скажи.'),
+        h('button', { class: 'btn primary wide', type: 'button', onclick: () => (asked.add(opId), rerender()) }, 'Да, посчитай'),
+        h('button', { class: 'btn wide', type: 'button', onclick: () => void markHandled(opId, `${fmt(a.amount)} · ${a.title}`) }, 'Уже распределил'),
+      ),
+    );
+    return root;
+  }
   const sp = splitIncome(st, today(), a.amount, a.inBalance);
   if (sp.deficit > 0) {
     root.append(
@@ -190,9 +220,9 @@ export function renderArrived(rerender: () => void): HTMLElement {
     );
   } else {
     root.append(adviceCard(sp, a));
-    if (sp.setAside > 0) root.append(h('p', { class: 'one-line' }, `Приложение ничего не переводит: переведи ${fmt(sp.setAside)} на копилку в банке сам. До следующего бэкапа эта сумма уже не считается деньгами на жизнь.`));
+    if (sp.setAside > 0) root.append(h('p', { class: 'one-line' }, `Приложение ничего не переводит: если согласен — переведи ${fmt(sp.setAside)} на копилку в банке и нажми «Отложил». До следующего бэкапа эта сумма уже не считается деньгами на жизнь.`));
   }
+  if (opId) root.append(h('button', { class: 'btn link', type: 'button', onclick: () => void markHandled(opId, `${fmt(a.amount)} · ${a.title}`) }, 'Не надо — уже распределил'));
   root.append(rows(row({ title: 'Другие способы распределить', sub: 'быстрее к одной цели, больше в подушку', href: '#/income-more' })));
   return root;
 }
-

@@ -35,7 +35,7 @@ const FORBIDDEN: [RegExp, string][] = [
   [/\b20\d\d-\d\d\b(?!-)/, 'месяц в виде 2026-05'],
 ];
 
-const CONFIGURED = ['income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'distribute', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
+const CONFIGURED = ['explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'distribute', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'fc-events', 'fc-whatif', 'fc-whatif-result', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
   ['imported', ['start', 'start-savings', 'start-goals', 'overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],
