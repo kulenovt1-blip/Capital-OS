@@ -1,15 +1,15 @@
 /**
- * «Обзор» (D82, заменяет D71): одно главное число — сколько свободно до дохода; под ним разбивка,
- * капитал и долги мелко, одна карточка «Требует внимания», платежи строкой, счета списком.
+ * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
+ * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, type Overview } from '../../engine/index';
+import { addDays, detectNewIncomes, flattenTree, type Overview } from '../../engine/index';
 import { h } from '../dom';
-import { today } from '../store';
+import { act, getState, today } from '../store';
 import { badAccounts, ov, progress } from '../ctx';
 import { attentionItems } from '../attention';
-import { attention, fmt, fmtDay, hero, info, nWord, row, rows, sub, whenAvailable } from '../ui';
+import { attention, fmt, fmtDay, hero, info, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
-import { defineSheet, refresh, sheetHref } from '../main';
+import { defineSheet, go, refresh, sheetHref } from '../main';
 import { helpSeen, markHelpSeen } from './help';
 
 registerExplain(
@@ -23,35 +23,33 @@ registerExplain(
 );
 
 /**
- * «Как посчитано» для главного числа (D93): одна цепочка сверху вниз — из чего сложилось «Свободно»,
- * с расшифровкой каждого слагаемого. Остальные числа «Обзора» — ниже, свёрнуто.
+ * «Как посчитано» для главного числа (D96): одна цепочка сверху вниз — из чего сложилось «Можно тратить».
  */
 function freeChain(o: Overview): HTMLElement {
-  const c = o.capital;
-  const till = o.nextIncome.source === 'schedule' ? `до ${fmtDay(o.nextIncome.date)}` : `на ${fmtDay(o.nextIncome.date)} (30 дней)`;
-  const onHand = c.accounts.filter((p) => !p.excluded && p.availableFrom <= today() && p.balance !== 0);
+  const sp = o.spend;
+  const till = `до ${fmtDay(o.nextIncome.date)}`;
+  const spendAcc = o.capital.accounts.filter((p) => !p.excluded && sp.kinds[p.accountId] === 'spend' && p.availableFrom <= today() && p.balance !== 0);
   const goalTitle = new Map(o.goals.map((g) => [g.id, g.title]));
-  const liquid = new Set(onHand.map((p) => p.accountId));
   const byGoal = new Map<string, number>();
-  for (const f of o.fundings) if (liquid.has(f.accountId)) byGoal.set(f.goalId, (byGoal.get(f.goalId) ?? 0) + f.amount);
+  for (const f of o.fundings) if (sp.kinds[f.accountId] === 'spend') byGoal.set(f.goalId, (byGoal.get(f.goalId) ?? 0) + f.amount);
   const goalsList = [...byGoal.entries()].filter(([, v]) => v > 0);
   const line = (sign: string, title: string, value: number, detail: string | null) =>
     row({ title: h('span', null, h('span', { class: 'chain-sign' }, sign), title), sub: detail ?? undefined, value: fmt(value as never) });
-  const others = [...c.explanation.filter((s) => s.level !== 'warn' && !s.detail), ...o.explanation.filter((s) => !s.detail && s.code !== 'overview.free' && s.code !== 'overview.reserve')];
+  const others = [...o.capital.explanation.filter((x) => x.level !== 'warn' && !x.detail), ...o.explanation.filter((x) => !x.detail && x.code !== 'overview.free' && x.code !== 'overview.reserve')];
   return h(
     'div',
     { class: 'stack' },
-    hero(`Свободно ${till}`, fmt(o.freeMoney), 'столько можно тратить или отложить, ничего не задев', { neg: o.freeMoney < 0 }),
+    hero(`Можно тратить ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
     sub('Из чего сложилось'),
     rows(
-      line('', 'Деньги на счетах', c.liquidNow, onHand.map((p) => `${p.title} ${fmt(p.balance)}`).join(' · ') || null),
-      line('− ', 'Закреплено за целями', o.assigned, goalsList.map(([g, v]) => `${goalTitle.get(g) ?? 'цель'} ${fmt(v as never)}`).join(' · ') || null),
+      line('', 'Деньги на счетах для трат', sp.spendNow, spendAcc.map((p) => `${p.title} ${fmt(p.balance)}`).join(' · ') || null),
+      line('− ', 'Отложено, но ещё не переведено', sp.setAsideOnSpend, goalsList.map(([g, v]) => `${goalTitle.get(g) ?? 'цель'} ${fmt(v as never)}`).join(' · ') || 'ничего'),
       line('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome, o.untilIncome.map((u) => `${u.title} ${fmt(u.amount)} · ${fmtDay(u.date)}`).join(' · ') || 'платежей нет'),
-      row({ title: h('strong', null, '= Свободно'), value: h('strong', null, fmt(o.freeMoney)) }),
+      row({ title: h('strong', null, '= Можно тратить'), value: h('strong', null, fmt(sp.canSpend)) }),
     ),
-    h('p', { class: 'muted' }, 'Траты на жизнь до дохода сюда не вычитаются — их учитывает экран «Доход», когда делит пришедшие деньги.'),
+    h('p', { class: 'muted' }, `Копилки (${fmt(sp.inSavings)}) сюда не входят — их не тратишь. «Обычно уходит» ${fmt(sp.usualPerDay)} в день — медиана повседневных и регулярных трат за полные месяцы ÷ 30,4.`),
     others.length
-      ? h('details', { class: 'fold', 'data-key': 'explain:overview-other' }, h('summary', null, 'Другие числа «Обзора»'), h('ul', { class: 'explain-list' }, others.map((s) => h('li', null, s.text))))
+      ? h('details', { class: 'fold', 'data-key': 'explain:overview-other' }, h('summary', null, 'Другие числа'), h('ul', { class: 'explain-list' }, others.map((x) => h('li', null, x.text))))
       : null,
   );
 }
@@ -84,15 +82,48 @@ export type OverviewBuilder = () => Overview;
 export function setOverviewBuilder(_b: OverviewBuilder): void {}
 
 function heroBlock(o: Overview): HTMLElement {
-  const c = o.capital;
-  const est = c.accounts.find((p) => p.source === 'savings_flow' && !p.excluded && p.availableFrom <= today());
-  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно · горизонт 30 дней', info('free'));
-  const parts = [`на руках ${fmt(c.liquidNow)}`, `за целями ${fmt(o.assigned)}`, `под платежи ${fmt(o.reserveUntilIncome)}`];
+  const sp = o.spend;
+  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
+  const enough = sp.usualPerDay > 0 ? (sp.perDay >= sp.usualPerDay ? ' — хватает' : ' — меньше обычного') : '';
   const subline =
-    o.freeMoney < 0
-      ? h('span', null, `до дохода не хватает ${fmt((-o.freeMoney) as never)}`)
-      : h('span', null, parts.join(' · '), est ? h('span', null, ` · в т. ч. оценка ${fmt(est.balance)}`, info('savingsFlow')) : null);
-  return hero(label, fmt(o.freeMoney), subline, { neg: o.freeMoney < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+    sp.canSpend < 0
+      ? h('span', null, `до дохода не хватает ${fmt((-sp.canSpend) as never)}`)
+      : h('span', null, `≈ ${fmt(sp.perDay)} в день`, sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '');
+  return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+}
+
+/** Подушка — одной строкой: готова или сколько осталось (D96). */
+function cushionRow(o: Overview): HTMLElement | null {
+  const n = flattenTree(o.goalTree).find((x) => x.goal.role === 'safety' && x.goal.parentId === undefined && x.goal.status === 'active');
+  if (!n) return rows(row({ title: 'Подушки нет', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
+  const ready = n.goal.targetMin > 0 && n.progress >= n.goal.targetMin;
+  return rows(
+    row({
+      title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
+      sub: `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
+      value: ready ? h('span', { class: 'good' }, '✓') : undefined,
+      href: '#/goals',
+    }),
+  );
+}
+
+/** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
+function newIncomeLine(): HTMLElement | null {
+  const st = getState();
+  const c = detectNewIncomes(st, today(), ov())[0];
+  if (!c) return null;
+  const add = () =>
+    act(
+      (s) => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, { id: newId('inc'), title: c.title, dayOfMonth: c.dayOfMonth, amount: c.amount, kind: 'stable' }] } }),
+      `Доход «${c.title}» добавлен`,
+    );
+  const no = () => act((s) => ({ ...s, settings: { ...s.settings, dismissedIncomes: [...(s.settings.dismissedIncomes ?? []), c.categoryId] } }), 'Больше не спрошу');
+  return h(
+    'div',
+    { class: 'hint-card stack' },
+    h('div', null, h('strong', null, 'Похоже, у тебя новый доход: '), `«${c.title}» ≈ ${fmt(c.amount)}, около ${c.dayOfMonth}-го. Добавить в доходы?`),
+    h('div', { class: 'btn-row' }, h('button', { class: 'btn primary', type: 'button', onclick: add }, 'Добавить'), h('button', { class: 'btn', type: 'button', onclick: no }, 'Это не доход')),
+  );
 }
 
 function emptyState(): HTMLElement {
@@ -120,27 +151,61 @@ function firstTimeHint(): HTMLElement | null {
 export function renderOverview(): HTMLElement {
   const o = ov();
   if (!o.hasData) return emptyState();
+  if (!getState().settings.firstRunDone) {
+    queueMicrotask(() => go('#/start'));
+  }
   const c = o.capital;
+  const sp = o.spend;
   const bad = badAccounts();
   const p = progress();
   const items = attentionItems();
-  const end = addDays(today(), 30);
+  const till = addDays(today(), 30);
   const total30 = o.upcoming30.reduce((s, u) => s + u.amount, 0);
   const shown = c.accounts.filter((x) => !x.excluded);
   const excluded = c.accounts.filter((x) => x.excluded);
-  const cells = [
-    h('a', { class: 'cell', href: sheetHref('explain', 'overview') }, h('div', { class: 'k' }, 'Капитал', info('net')), h('div', { class: 'v' }, fmt(c.net))),
-    c.liabilities.total ? h('a', { class: 'cell', href: '#/debts' }, h('div', { class: 'k' }, 'Долги', info('liabilities')), h('div', { class: 'v' }, fmt(c.liabilities.total))) : null,
-    c.receivables ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Тебе должны', info('receivables')), h('div', { class: 'v' }, fmt(c.receivables))) : null,
-  ];
+  const lockedSum = sp.locked.reduce((a, x) => a + x.balance, 0);
+  const lockedLine = sp.locked.length ? `из них ${fmt(lockedSum as never)} снять можно с ${fmtDay(sp.locked.map((x) => x.availableFrom).sort()[0]!)}` : null;
+  const details = h(
+    'details',
+    { class: 'fold', 'data-key': 'overview:details', open: getState().settings.showDetails ? true : undefined },
+    h('summary', null, 'Подробнее: капитал, долги, все счета'),
+    h(
+      'div',
+      { class: 'stack' },
+      h(
+        'div',
+        { class: 'cells' },
+        h('a', { class: 'cell', href: sheetHref('explain', 'overview') }, h('div', { class: 'k' }, 'Капитал', info('net')), h('div', { class: 'v' }, fmt(c.net))),
+        c.liabilities.total ? h('a', { class: 'cell', href: '#/debts' }, h('div', { class: 'k' }, 'Долги', info('liabilities')), h('div', { class: 'v' }, fmt(c.liabilities.total))) : null,
+        c.receivables ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Тебе должны', info('receivables')), h('div', { class: 'v' }, fmt(c.receivables))) : null,
+      ),
+      sub('Счета'),
+      rows(
+        shown.map((x) =>
+          row({
+            title: h('span', null, x.title, x.source === 'savings_flow' ? h('span', null, ' ', h('span', { class: 'tag warn' }, 'оценка')) : null),
+            sub: [sp.kinds[x.accountId] === 'savings' ? 'копилка' : 'для трат', whenAvailable(x.liquidity)].filter(Boolean).join(' · '),
+            value: fmt(x.balance),
+            mark: bad.has(x.accountId),
+          }),
+        ),
+        excluded.length ? row({ title: `Не учитываются (${excluded.length})`, sub: 'в капитал не входят', href: sheetHref('excluded') }) : null,
+      ),
+    ),
+  );
   return h(
     'div',
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
-    h('div', { class: 'cells' }, cells),
-    items.length ? attention(items, p.done < p.total ? p : undefined) : null,
-    // список раскрывается на месте, без отдельной страницы (D93)
+    h(
+      'div',
+      { class: 'cells' },
+      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'На руках всего'), h('div', { class: 'v' }, fmt(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
+      h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmt(sp.inSavings))),
+    ),
+    newIncomeLine(),
+    cushionRow(o),
     o.upcoming30.length
       ? h(
           'details',
@@ -148,25 +213,14 @@ export function renderOverview(): HTMLElement {
           h(
             'summary',
             { class: 'row' },
-            h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, `${nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей')} до ${fmtDay(end)}`)),
+            h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, `${nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей')} до ${fmtDay(till)}`)),
             h('div', { class: 'val' }, fmt(total30 as never)),
             h('span', { class: 'chev', 'aria-hidden': 'true' }, '›'),
           ),
           o.upcoming30.map((u) => row({ title: `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, sub: fmtDay(u.date), value: fmt(u.amount), cls: 'sub-row' })),
         )
-      : rows(row({ title: `Платежей до ${fmtDay(end)} нет` })),
-    sub('Счета'),
-    rows(
-      shown.map((x) =>
-        row({
-          title: h('span', null, x.title, x.source === 'savings_flow' ? h('span', null, ' ', h('span', { class: 'tag warn' }, 'оценка')) : null),
-          // «когда можно снять» — только если не сразу (D93): у обычной карты эта подпись ничего не говорит
-          sub: whenAvailable(x.liquidity) || undefined,
-          value: fmt(x.balance),
-          mark: bad.has(x.accountId),
-        }),
-      ),
-      excluded.length ? row({ title: `Не учитываются (${excluded.length})`, sub: 'в капитал не входят', href: sheetHref('excluded') }) : null,
-    ),
+      : null,
+    items.length ? attention(items, p.done < p.total ? p : undefined) : null,
+    details,
   );
 }

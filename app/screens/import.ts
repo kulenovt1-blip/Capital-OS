@@ -2,11 +2,11 @@
  * «Импорт» (D84): одна главная кнопка; сверка одной строкой, если всё сошлось, и раскрытыми расхождениями, если нет;
  * «Принять импорт» — в нижней полосе; после принятия открывается мастер. Разметки здесь нет — только ссылка.
  */
-import { formatDateRu, importMmbackup, mergeAccountSettings, reconcileAccounts, type ImportedData, type ReconcileReport } from '../../engine/index';
+import { autoLabelCategories, formatDateRu, importMmbackup, mergeAccountSettings, reconcileAccounts, settleSetAsides, type AppState, type ImportedData, type ReconcileReport } from '../../engine/index';
 import { append, h, readFileBytes, toast } from '../dom';
 import { getState, today, update } from '../store';
 import { ov } from '../ctx';
-import { fmtExact, info, nWord, row, rows, stickyBar, sub } from '../ui';
+import { fmt, fmtExact, info, nWord, row, rows, stickyBar, sub } from '../ui';
 import { explainList } from '../explain';
 import { go } from '../main';
 
@@ -61,9 +61,20 @@ export function renderImport(rerender: () => void): HTMLElement {
     const accept = async () => {
       const data = p.data;
       pending = null;
-      await update((s) => ({ ...s, imported: data, importedAt: today(), settings: { ...s.settings, accounts: mergeAccountSettings(s.settings.accounts, data.accounts) } }));
-      toast(ok ? 'Импорт принят' : 'Импорт принят с расхождением — цифры помечены красным');
-      go('#/setup');
+      let moved = 0;
+      let labeled = 0;
+      await update((s) => {
+        // новые категории размечаются сами по названию; «Отложил» — найти переводы на копилки (D96)
+        const auto = autoLabelCategories(s.settings.classification, data);
+        labeled = auto.added;
+        const next: AppState = { ...s, imported: data, importedAt: today(), settings: { ...s.settings, classification: auto.settings, accounts: mergeAccountSettings(s.settings.accounts, data.accounts) } };
+        const settled = settleSetAsides(next, today());
+        moved = settled.moved;
+        return settled.state;
+      });
+      const extra = [labeled ? `новых категорий разложено: ${labeled}` : '', moved ? `переводы на копилку найдены: ${fmt(moved as never)}` : ''].filter(Boolean).join(' · ');
+      toast(`${ok ? 'Импорт принят' : 'Импорт принят с расхождением — цифры помечены красным'}${extra ? ` · ${extra}` : ''}`);
+      go(getState().settings.firstRunDone ? '#/overview' : '#/start');
     };
     append(root, [
       sub(`Файл «${p.fileName}»`),

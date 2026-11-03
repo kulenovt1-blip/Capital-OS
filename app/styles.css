@@ -511,3 +511,43 @@ details.acc > .row.sub-row { padding-left: 28px; background: var(--surface-sunke
 .help-list.card { padding: 16px 16px 16px 36px; }
 .help-steps { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .help-task > p { margin-top: 8px; }
+
+/* ===== D96: простые экраны ===== */
+.gcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px 16px 14px; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: inherit; }
+.gcard .gh { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; text-decoration: none; color: inherit; }
+.gcard .gt { font-weight: 700; font-size: calc(16px * var(--fz)); }
+.gcard .gs { font-size: calc(14px * var(--fz)); color: var(--muted); }
+.gcard .ok { color: var(--good); font-weight: 700; font-size: calc(14px * var(--fz)); white-space: nowrap; }
+.gcard .bad { color: var(--warn); font-weight: 700; font-size: calc(14px * var(--fz)); white-space: nowrap; }
+.gcard.folder { border-style: dashed; }
+.gcard .kids { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-left: 12px; border-left: 3px solid var(--line); }
+.gcard .kids a { display: flex; justify-content: space-between; gap: 8px; text-decoration: none; color: inherit; min-height: 44px; align-items: center; }
+.gcard.flash { outline: 3px solid var(--focus); }
+.gcard .progress { height: 8px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; }
+.gcard .progress span { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.gcard .progress.done span { background: var(--good); }
+.goal-stack { display: flex; flex-direction: column; gap: 10px; }
+.order-row { display: flex; align-items: center; gap: 8px; }
+.order-row .gcard { flex: 1; }
+.order-btns { display: flex; flex-direction: column; gap: 4px; }
+.order-btns .btn { min-height: 40px; min-width: 44px; padding: 0 8px; }
+.advice { background: var(--surface); border: 2px solid var(--primary); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.advice .big { font-size: calc(22px * var(--fz)); font-weight: 800; }
+.advice ul { margin: 0; padding-left: 18px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+.advice .gs { color: var(--muted); font-size: calc(14px * var(--fz)); }
+.q { font-size: calc(20px * var(--fz)); font-weight: 800; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--primary); width: 22px; border-radius: 4px; }
+.tog { width: 56px; height: 44px; background: transparent; position: relative; flex: none; border: 0; padding: 0; cursor: pointer; }
+.tog::before { content: ''; position: absolute; left: 4px; top: 8px; width: 48px; height: 28px; border-radius: 14px; background: var(--line-strong); transition: background 0.15s; }
+.tog[aria-checked='true']::before { background: var(--good); }
+.tog::after { content: ''; position: absolute; top: 12px; left: 8px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+.tog[aria-checked='true']::after { left: 28px; }
+.hero .label select.inline-sel { font: inherit; font-weight: 700; color: inherit; background: transparent; border: 0; border-bottom: 2px dashed currentColor; border-radius: 0; padding: 0 2px; min-height: 52px; height: 52px; width: auto; }
+.chips.wrap { flex-wrap: wrap; }
+.basket h3 { margin: 0; }
+.cell .cs { font-size: calc(13px * var(--fz)); color: var(--muted); margin-top: 2px; }
+.val .good, span.good { color: var(--good); font-weight: 700; }
+.hint-card.stack { flex-direction: column; align-items: stretch; padding: 14px 16px; }
+a.chip { text-decoration: none; display: inline-flex; align-items: center; }

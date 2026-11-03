@@ -22,6 +22,27 @@ export interface AccountSettings {
   reviewed?: boolean;
   /** Весь неназначенный остаток счёта — за этой целью (D59). */
   boundGoalId?: string;
+  /** «Для трат» (по умолчанию) или «копилка» — деньги копилок не входят в «Можно тратить» (D96). */
+  kind?: AccountKind;
+}
+
+export type AccountKind = 'spend' | 'savings';
+
+/** Название похоже на копилку: копилка, накопления, сбережения, депозит, вклад, резерв. */
+export const SAVINGS_TITLE_RE = /копил|накоп|сбереж|депоз|вклад|резерв|savings|deposit/i;
+
+/**
+ * Вид счёта (D96): заданный вручную; без него — копилка, если счёт привязан к цели, деньги не «сразу»,
+ * это ручной вклад или оценка сбережений вне MoneyManager; иначе — для трат.
+ */
+export function accountKindOf(p: { accountId: string; source: string; liquidity: Liquidity }, settings: readonly AccountSettings[], manual: readonly ManualAccount[] = []): AccountKind {
+  const s = settings.find((x) => x.accountId === p.accountId);
+  if (s?.kind) return s.kind;
+  if (s?.boundGoalId) return 'savings';
+  if (p.liquidity.kind !== 'instant') return 'savings';
+  if (p.source === 'savings_flow') return 'savings';
+  if (manual.find((m) => m.id === p.accountId)?.deposit) return 'savings';
+  return 'spend';
 }
 
 /** Долги, которые были до начала учёта в MoneyManager (D60). */
@@ -146,6 +167,16 @@ export interface Settings {
   dismissedInstallments: string[];
   /** Свои виды дохода (D75); поведение в сценариях — в самих сценариях по id вида. */
   incomeKinds: IncomeKindDef[];
+  /** Срок главного числа прогноза, месяцев (D96): 6 / 12 / 24 / 60. */
+  forecastViewMonths?: number;
+  /** «Сразу показывать подробности» (D96). */
+  showDetails?: boolean;
+  /** Категории дохода, про которые сказано «это не доход» (D96). */
+  dismissedIncomes?: string[];
+  /** Перенос на новую модель экранов сделан (D96). */
+  simpleMigrated?: boolean;
+  /** Первый запуск (3 шага) пройден или пропущен (D96). */
+  firstRunDone?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -160,7 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inflationBp: 1000,
   incomeSchedule: [],
   strategy: DEFAULT_STRATEGY_SETTINGS,
-  planStrategy: 'B',
+  planStrategy: 'S',
   simulationMonths: 36,
   scenarios: DEFAULT_SCENARIOS,
   plannedEvents: [],
@@ -169,6 +200,7 @@ export const DEFAULT_SETTINGS: Settings = {
   savingsFlows: { mode: 'estimate' },
   dismissedInstallments: [],
   incomeKinds: [],
+  forecastViewMonths: 12,
 };
 
 /** Счета с флагом MoneyManager «не учитывать в балансе», о которых пользователь ещё не ответил (D58). */

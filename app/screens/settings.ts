@@ -12,7 +12,7 @@ import {
 } from '../../engine/index';
 import { ask, download, field, h, toast } from '../dom';
 import { act, getState, replaceState, today, update } from '../store';
-import { errorsBox, fmt, fmtDate, info, moneyInput, newId, nWord, readChecked, readMoney, readStr, row, rows, seg, stickyBar, sub, typeLabel, whenAvailable } from '../ui';
+import { errorsBox, fmt, fmtDate, info, moneyInput, newId, nWord, readChecked, readMoney, readStr, row, rows, seg, stickyBar, sub, toggle, typeLabel, whenAvailable } from '../ui';
 import { closeSheet, defineSheet, sheetHref } from '../main';
 import { installBlock } from '../install';
 import { accountsReview, catName, incomeQuickForm } from '../blocks';
@@ -75,37 +75,40 @@ export function renderAccounts(section?: string): HTMLElement {
   if (section === 'savings') return (root.append(savingsBlock(st)), root);
   const o = ov();
   const bad = badAccounts();
-  const goals = new Map(st.goals.map((g) => [g.id, g.title]));
   const need = accountsNeedingReview(st.settings.accounts, st.imported.accounts);
   if (need.length) root.append(sub('Что это за счета?'), accountsReview());
+  const counted = o.capital.accounts.filter((p) => !p.excluded);
+  const group = (k: 'spend' | 'savings') => counted.filter((p) => o.spend.kinds[p.accountId] === k);
+  const total = (ps: typeof counted) => ps.reduce((a, p) => a + p.balance, 0);
+  const line = (p: (typeof counted)[number]) =>
+    row({
+      title: p.title,
+      sub: [p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
+      value: fmt(p.balance),
+      href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId),
+      mark: bad.has(p.accountId),
+    });
+  const spend = group('spend');
+  const savings = group('savings');
+  const excluded = o.capital.accounts.filter((p) => p.excluded);
   root.append(
-    sub('Счета', info('liquid')),
-    rows(
-      o.capital.accounts.map((p) => {
-        const s = accountSettings(st, p.accountId);
-        const status = need.some((a) => a.id === p.accountId)
-          ? 'ждёт ответа'
-          : p.excluded
-            ? 'не учитывается'
-            : s.boundGoalId && goals.has(s.boundGoalId)
-              ? `весь остаток за «${goals.get(s.boundGoalId)}»`
-              : whenAvailable(s.liquidity);
-        const subText = [status, p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ');
-        return row({
-          title: p.title,
-          sub: subText || undefined,
-          value: h('span', { class: p.excluded ? 'muted' : '' }, fmt(p.balance)),
-          href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId),
-          mark: bad.has(p.accountId),
-        });
-      }),
-    ),
+    h('p', { class: 'one-line' }, 'Счета «для трат» — деньги на жизнь. Копилки — то, что не трогаешь: они не входят в «Можно тратить». Нажми на счёт, чтобы переключить.'),
+    sub(`Для трат · ${fmt(total(spend) as never)}`),
+    spend.length ? rows(spend.map(line)) : h('p', { class: 'muted' }, 'Нет счетов для трат.'),
+    sub(`Копилки · ${fmt(total(savings) as never)}`),
+    savings.length ? rows(savings.map(line)) : h('p', { class: 'muted' }, 'Копилок нет. Открой счёт и включи «Копилка».'),
   );
+  if (excluded.length) root.append(sub('Не учитываются'), rows(excluded.map((p) => row({ title: p.title, sub: 'технический счёт', value: h('span', { class: 'muted' }, fmt(p.balance)), href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId) }))));
   const hasSavings = o.capital.accounts.some((p) => p.source === 'savings_flow') || st.settings.savingsFlows.mode !== 'estimate';
   root.append(
-    rows(
-      hasSavings ? row({ title: 'Сбережения вне MoneyManager', sub: { estimate: 'считаются по сумме переводов', manual: 'прибавляются к ручному счёту', ignore: 'уже в балансах счетов' }[st.settings.savingsFlows.mode], href: '#/accounts/savings' }) : null,
-      row({ title: 'Ручные счета', sub: 'депозит в другом банке, деньги у родителей', value: st.manualAccounts.length ? String(st.manualAccounts.length) : undefined, href: '#/rare/manual' }),
+    h(
+      'details',
+      { class: 'fold', 'data-key': 'accounts:more', open: st.settings.showDetails ? true : undefined },
+      h('summary', null, 'Подробнее'),
+      rows(
+        hasSavings ? row({ title: 'Сбережения вне MoneyManager', sub: { estimate: 'считаются по сумме переводов', manual: 'прибавляются к ручному счёту', ignore: 'уже в балансах счетов' }[st.settings.savingsFlows.mode], href: '#/accounts/savings' }) : null,
+        row({ title: 'Ручные счета', sub: 'депозит в другом банке, деньги у родителей', value: st.manualAccounts.length ? String(st.manualAccounts.length) : undefined, href: '#/rare/manual' }),
+      ),
     ),
   );
   return root;
@@ -113,16 +116,18 @@ export function renderAccounts(section?: string): HTMLElement {
 
 defineSheet('account', (id) => {
   const st = getState();
-  const p = ov().capital.accounts.find((x) => x.accountId === id);
+  const o = ov();
+  const p = o.capital.accounts.find((x) => x.accountId === id);
   if (!p) return null;
   const s = accountSettings(st, id);
-  const goals = st.goals.filter((g) => g.status !== 'cancelled' && g.status !== 'done');
+  const kind = o.spend.kinds[id] ?? (s.kind ?? 'spend');
+  const goals = st.goals.filter((g) => g.status !== 'cancelled' && g.status !== 'done' && !g.folder);
   const goalSel = h('select', { 'aria-label': 'Весь остаток за целью' }, h('option', { value: '' }, 'нет'), goals.map((g) => h('option', { value: g.id, selected: g.id === s.boundGoalId }, g.title)));
   goalSel.addEventListener('change', () => {
     const v = goalSel.value;
     void patchAccount(id, (a) => {
       const { boundGoalId: _old, ...rest } = a;
-      return v ? { ...rest, boundGoalId: v } : rest;
+      return v ? { ...rest, kind: 'savings', boundGoalId: v } : rest;
     }, v ? `Весь остаток «${p.title}» — за «${goals.find((g) => g.id === v)?.title}»` : `«${p.title}» отвязан от цели`);
   });
   return {
@@ -131,13 +136,24 @@ defineSheet('account', (id) => {
       'div',
       { class: 'stack' },
       h('div', { class: 'card' }, h('strong', null, fmt(p.balance)), p.source === 'savings_flow' ? h('div', { class: 'muted' }, 'оценка по сумме переводов', info('savingsFlow')) : null),
-      sub('Учитывать'),
-      seg([['yes', 'Учитывать'], ['no', 'Не учитывать']] as const, s.excluded ? 'no' : 'yes', (v) => void patchAccount(id, (a) => ({ ...a, excluded: v === 'no' }), v === 'no' ? `«${p.title}» не учитывается` : `«${p.title}» учитывается`), 'Учитывать счёт'),
-      gray('«Не учитывать» — только для технических счетов. Заначку не отключай: лучше закрепи её за целью.'),
-      sub('Когда можно снять', info('liquid')),
-      liquidityPicker(s.liquidity, (l) => void patchAccount(id, (a) => ({ ...a, liquidity: l }), `«${p.title}»: снять ${liqLabel(l)}`)),
-      sub('Весь остаток за целью', info('assigned')),
-      field('Цель', goalSel, 'остаток счёта будет за целью и при пополнении тоже'),
+      rows(
+        row({
+          title: 'Копилка',
+          sub: kind === 'savings' ? 'не входит в «Можно тратить»' : 'сейчас — для трат: входит в «Можно тратить»',
+          value: p.excluded ? undefined : toggle(kind === 'savings', (v) => void patchAccount(id, (a) => ({ ...a, kind: v ? 'savings' : 'spend' }), v ? `«${p.title}» — копилка` : `«${p.title}» — для трат`), 'Копилка'),
+          chevron: false,
+        }),
+      ),
+      kind === 'savings' && !p.excluded ? [sub('Снять можно', info('liquid')), liquidityPicker(s.liquidity, (l) => void patchAccount(id, (a) => ({ ...a, liquidity: l }), `«${p.title}»: снять ${liqLabel(l)}`))] : null,
+      rows(
+        row({
+          title: 'Не учитывать совсем',
+          sub: 'для технических счетов: ни в «На руках», ни в прогноз',
+          value: toggle(s.excluded, (v) => void patchAccount(id, (a) => ({ ...a, excluded: v }), v ? `«${p.title}» не учитывается` : `«${p.title}» учитывается`), 'Не учитывать совсем'),
+          chevron: false,
+        }),
+      ),
+      h('details', { class: 'fold', 'data-key': 'account:bound' }, h('summary', null, 'Подробнее: весь остаток за одной целью'), h('div', { class: 'stack' }, gray('Если копилка — под одну цель: весь её остаток будет за этой целью и сам вырастет при пополнении.'), field('Цель', goalSel))),
     ),
   };
 });

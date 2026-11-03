@@ -130,11 +130,11 @@ defineSheet('fc-goal', (id) => {
       ? h(
           'div',
           { class: 'warnline' },
-          `Это общая цель для: ${kids.map((k) => `«${k.title}»`).join(', ')}. Деньги получают только они, а сама «${g.title}» растёт лишь из их сумм — поэтому она не набирается сверх них. Если хочешь, чтобы она копилась сама, убери у этих целей «Часть другой цели».`,
+          `Это папка: ${kids.map((k) => `«${k.title}»`).join(', ')}. Деньги получают цели внутри, баланс папки — их сумма.`,
         )
       : null,
     h('p', null, `Сейчас на ней ${fmt(start as Money)}. ${avg > 0 ? `В среднем ей достаётся ${fmt(avg as Money)} в месяц.` : 'Из прироста ей пока ничего не достаётся.'}`),
-    !kids.length && avg === 0 && !reached ? h('p', { class: 'muted' }, 'Свободные деньги каждого месяца сначала идут на подушку и на цели со сроком; этой цели не остаётся. Подними её важность или поставь срок.') : null,
+    !kids.length && avg === 0 && !reached ? h('p', { class: 'muted' }, 'Свободные деньги каждого месяца сначала идут на подушку и на цели со сроком, потом — целям без срока по порядку списка; этой цели не остаётся. Подними её выше в списке «Целей» или поставь срок.') : null,
     sub('Первые месяцы'),
     rows(
       base.months.slice(0, Math.min(6, base.months.length)).map((m) => row({ title: formatMonthRu(m.month), sub: `накоплено ${fmt((m.goalProgress[g.id] ?? 0) as Money)}`, value: (m.allocated[g.id] ?? 0) > 0 ? `+${fmt((m.allocated[g.id] ?? 0) as Money)}` : '—' })) as HTMLElement[],
@@ -160,7 +160,7 @@ registerExplain('forecast', 'Как посчитано: «Прогноз»', () 
   return out;
 });
 
-function warningItems(): { items: AttentionItem[]; missing: { title: string; href: string; label: string }[] } {
+export function warningItems(): { items: AttentionItem[]; missing: { title: string; href: string; label: string }[] } {
   const { warnings } = buildSimInput(getState(), today());
   const missing: { title: string; href: string; label: string }[] = [];
   const items: AttentionItem[] = [];
@@ -311,7 +311,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
 // ───────────────────────── события и решения (подэкраны) ─────────────────────────
 
 /** Форма одного события; поля, которые не нужны выбранному виду, скрыты. */
-function eventForm(id: string, onEvent: (e: LifeEvent) => void): HTMLFormElement {
+export function eventForm(id: string, onEvent: (e: LifeEvent) => void, preset?: { kind: LifeEventKind; title: string; until?: boolean }): HTMLFormElement {
   const st = getState();
   const incomes = st.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title }));
   const debts = st.obligations.map((o) => ({ id: o.id, title: o.title }));
@@ -348,6 +348,10 @@ function eventForm(id: string, onEvent: (e: LifeEvent) => void): HTMLFormElement
     field('Действует до (необязательно)', h('input', { name: 'until', type: 'date' })),
     err,
   );
+  if (preset) {
+    kindSel.value = preset.kind;
+    (form.querySelector('input[name=title]') as HTMLInputElement).value = preset.title;
+  }
   sync();
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -378,7 +382,7 @@ function eventForm(id: string, onEvent: (e: LifeEvent) => void): HTMLFormElement
   return form;
 }
 
-function eventRow(e: LifeEvent, onDelete?: () => void): HTMLElement {
+export function eventRow(e: LifeEvent, onDelete?: () => void): HTMLElement {
   return row({
     title: e.title,
     sub: `${formatDateRu(e.date)} · ${KIND_LABELS[e.kind]}${e.kind === 'income_stop' ? '' : ` · ${fmt(e.amount, e.kind !== 'income_start')}`}${e.until ? ` · до ${formatDateRu(e.until)}` : ''}`,

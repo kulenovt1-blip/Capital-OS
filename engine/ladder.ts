@@ -5,12 +5,13 @@
 import { add, ceilTo, min, mulDiv, pos, sub, sum, tenge, tiyn, ZERO, type Money } from './money';
 import { daysBetween, monthsBetween, type IsoDate } from './date';
 import { day, money, step, type Explanation } from './explain';
-import type { Goal, GoalId } from './goals';
+import { goalOrderCmp, type Goal, type GoalId } from './goals';
 import type { UpcomingPayment } from './obligations';
 
-export type StrategyId = 'A' | 'B' | 'C' | 'D';
+export type StrategyId = 'A' | 'B' | 'C' | 'D' | 'S';
 
-export const STRATEGY_LABELS: Record<StrategyId, string> = { A: 'Безопасность', B: 'Баланс', C: 'Ускорение', D: 'Своя' };
+/** S — «Простая» (D96): правила экрана «Пришли деньги» и стратегия плана для прогноза. */
+export const STRATEGY_LABELS: Record<StrategyId, string> = { A: 'Безопасность', B: 'Баланс', C: 'Ускорение', D: 'Своя', S: 'По порядку' };
 
 export interface StrategySettings {
   /** A: комфортный резерв = минимум × (б.п./10000), если у цели не задана комфортная сумма. */
@@ -221,6 +222,8 @@ export function eligibleGoals(goals: readonly Goal[]): { list: Goal[]; skippedUn
       p = p.parentId !== undefined ? byId.get(p.parentId) : undefined;
     }
     if (!parentOk) continue;
+    // пустая папка — не цель, пропускается молча (D96)
+    if (g.folder) continue;
     if (g.targetMin <= 0) {
       skippedUnconfirmed.push(g);
       continue;
@@ -297,6 +300,30 @@ export function distribute(total: Money, items: readonly { id: string; w: number
   return out;
 }
 
+/**
+ * Цели в порядке списка (D96): корневые по порядку, цели папки — сразу за папкой, по своему порядку.
+ */
+export function listOrder(goals: readonly Goal[]): Goal[] {
+  const ids = new Set(goals.map((g) => g.id));
+  const kids = new Map<string | undefined, Goal[]>();
+  for (const g of goals) {
+    const p = g.parentId !== undefined && ids.has(g.parentId) ? g.parentId : undefined;
+    kids.set(p, [...(kids.get(p) ?? []), g]);
+  }
+  const out: Goal[] = [];
+  const seen = new Set<string>();
+  const walk = (p: string | undefined) => {
+    for (const g of [...(kids.get(p) ?? [])].sort(goalOrderCmp)) {
+      if (seen.has(g.id)) continue;
+      seen.add(g.id);
+      out.push(g);
+      walk(g.id);
+    }
+  };
+  walk(undefined);
+  return out;
+}
+
 export function ladder(i: LadderInput): LadderResult {
   const s = i.settings;
   const explanation: Explanation = [];
@@ -353,7 +380,10 @@ export function ladder(i: LadderInput): LadderResult {
     (a.g.deadline ?? '9999') .localeCompare(b.g.deadline ?? '9999') ||
     b.g.importance - a.g.importance ||
     (a.g.id < b.g.id ? -1 : 1);
-  for (const { g, required } of reqs.sort(order)) {
+  const byList = new Map(listOrder(i.goals).map((g, k) => [g.id, k]));
+  const orderS = (a: { g: Goal }, b: { g: Goal }) =>
+    Number(b.g.role === 'obligation') - Number(a.g.role === 'obligation') || (byList.get(a.g.id) ?? 0) - (byList.get(b.g.id) ?? 0);
+  for (const { g, required } of reqs.sort(strategy.id === 'S' ? orderS : order)) {
     const amt = min(required, left);
     give(g, amt, 2, `минимум ${money(required)} в месяц`);
     explanation.push(step('ladder.minimum', `Уровень 2: «${g.title}» — минимум ${money(required)}${g.deadline ? ` (к ${day(g.deadline)})` : ''}, выдано ${money(amt)}`, { amount: amt, refs: { goalId: g.id }, level: amt < required ? 'warn' : 'info' }));
@@ -386,6 +416,27 @@ export function ladder(i: LadderInput): LadderResult {
       weighted(others, sub(R, r0 ? cushion : ZERO), 'по весам важность × срочность');
     } else if (strategy.id === 'B') {
       weighted(others, R, 'по весам важность × срочность');
+    } else if (strategy.id === 'S') {
+      // цели без срока — по порядку списка, каждая до суммы; в папке «поровну» — поровну (D96)
+      const byId = new Map(i.goals.map((g) => [g.id, g]));
+      const open = others.filter((g) => !g.deadline);
+      const rank = new Map(listOrder(i.goals).map((g, k) => [g.id, k]));
+      open.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+      const done = new Set<string>();
+      for (const g of open) {
+        if (left <= 0) break;
+        if (done.has(g.id)) continue;
+        const parent = g.parentId !== undefined ? byId.get(g.parentId) : undefined;
+        if (parent?.splitEqually) {
+          const group = open.filter((x) => x.parentId === parent.id);
+          group.forEach((x) => done.add(x.id));
+          const shares = distribute(left, group.map((x) => ({ id: x.id, w: 1, cap: cap(x) })));
+          for (const x of [...group].sort((a, b) => (a.id < b.id ? -1 : 1))) give(x, shares.get(x.id) ?? ZERO, 3, `поровну в папке «${parent.title}»`);
+        } else {
+          done.add(g.id);
+          give(g, min(cap(g), left), 3, 'без срока, по порядку');
+        }
+      }
     } else if (strategy.id === 'C') {
       const focusIds = strategy.focusGoalIds?.length ? strategy.focusGoalIds : defaultFocus(others);
       const pool = others.filter((g) => focusIds.includes(g.id));

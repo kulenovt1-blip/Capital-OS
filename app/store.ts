@@ -8,7 +8,7 @@
 import { emptyState, serializeState, type AppState, type IsoDate } from '../engine/index';
 import { storage } from './storage';
 import { toast } from './dom';
-import { canWrite, decideLoad, errorText, quarantineKey, type StorageHealth } from './persist';
+import { canWrite, decideLoad, errorText, needsPreSimpleCopy, PRE_SIMPLE_KEY, quarantineKey, type StorageHealth } from './persist';
 
 const KEY = 'state';
 let state: AppState = emptyState();
@@ -42,7 +42,17 @@ export async function loadState(): Promise<void> {
     return;
   }
   const d = decideLoad(raw);
-  if (d.kind === 'ok') state = d.state;
+  if (d.kind === 'ok') {
+    state = d.state;
+    // перенос на новую модель экранов (D96): исходник — под отдельный ключ, один раз, до первой записи поверх
+    if (needsPreSimpleCopy(raw)) {
+      try {
+        if (!(await storage.get<string>(PRE_SIMPLE_KEY))) await storage.set(PRE_SIMPLE_KEY, raw as string);
+      } catch (e) {
+        console.error('Не удалось отложить копию до переноса', e);
+      }
+    }
+  }
   if (d.kind !== 'unreadable') return;
   // исходник откладываем под отдельный ключ: даже если человек потом начнёт заново, копия останется в браузере
   let savedAs: string | null = quarantineKey(d.raw);

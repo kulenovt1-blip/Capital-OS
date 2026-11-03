@@ -52,6 +52,11 @@ export interface TargetRule {
   kind: 'months_of_base';
   /** По умолчанию — settings.reserveMonths. */
   months?: number;
+  /**
+   * Из чего складывается месяц (D96): 'essential' — повседневное + платежи по долгам, 'all' — плюс регулярное.
+   * Не задано — как раньше: только повседневное (базовые расходы).
+   */
+  basis?: 'essential' | 'all';
 }
 
 export interface Goal {
@@ -78,6 +83,12 @@ export interface Goal {
   history: ChangeLogEntry[];
   /** Сумма или срок ещё не подтверждены пользователем (TODO: подтвердить). */
   unconfirmed?: boolean;
+  /** Место в списке (D96): меньше — выше. Не задано — после заданных, по важности. */
+  order?: number;
+  /** Папка (D96): своей суммы нет, баланс — сумма целей внутри. */
+  folder?: true;
+  /** Папка: деньги для целей без срока делятся поровну между целями внутри (D96). */
+  splitEqually?: true;
   currency: 'KZT';
 }
 
@@ -90,6 +101,8 @@ export interface GoalFunding {
   date: IsoDate;
   decisionId: string | null;
   note?: string;
+  /** «Отложил» (D96): метка на счёте для трат, перевод на копилку ещё не найден в бэкапе. */
+  pending?: true;
 }
 
 export type GoalInput = Partial<Omit<Goal, 'id' | 'title' | 'role' | 'targetMin' | 'importance' | 'history' | 'currency'>> & {
@@ -116,7 +129,7 @@ export function horizonOf(g: Goal, today: IsoDate, thresholds: readonly [number,
 export function validateGoal(g: Goal, goals: readonly Goal[]): string[] {
   const errs: string[] = [];
   if (!g.title.trim()) errs.push('Нужно название');
-  if (!Number.isSafeInteger(g.targetMin) || (g.targetMin <= 0 && !g.unconfirmed && !g.targetRule)) errs.push('Минимальная сумма цели должна быть больше нуля');
+  if (!Number.isSafeInteger(g.targetMin) || (g.targetMin <= 0 && !g.unconfirmed && !g.targetRule && !g.folder)) errs.push('Минимальная сумма цели должна быть больше нуля');
   if (g.targetComfort !== undefined && g.targetComfort < g.targetMin) errs.push('Комфортная сумма не может быть меньше минимальной');
   if (!Number.isInteger(g.importance) || g.importance < 1 || g.importance > 5) errs.push('Важность — от 1 до 5');
   if (g.desiredDate && g.deadline && g.desiredDate > g.deadline) errs.push('Желаемая дата позже дедлайна');
@@ -240,6 +253,13 @@ export interface GoalNode {
 
 const byImportanceThenId = (a: Goal, b: Goal) => b.importance - a.importance || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/** Порядок списка целей (D96): заданный порядок, затем важность, затем id. */
+export function goalOrderCmp(a: Goal, b: Goal): number {
+  const oa = a.order ?? Number.MAX_SAFE_INTEGER;
+  const ob = b.order ?? Number.MAX_SAFE_INTEGER;
+  return oa - ob || byImportanceThenId(a, b);
+}
+
 export function directFunded(fundings: readonly GoalFunding[]): Map<GoalId, Money> {
   const m = new Map<GoalId, Money>();
   for (const f of fundings) m.set(f.goalId, add(m.get(f.goalId) ?? ZERO, f.amount));
@@ -256,13 +276,15 @@ export function goalTree(goals: readonly Goal[], fundings: readonly GoalFunding[
   }
   const build = (g: Goal, depth: number): GoalNode => {
     if (depth > goals.length) throw new Error('Цикл в дереве целей');
-    const children = (kids.get(g.id) ?? []).sort(byImportanceThenId).map((c) => build(c, depth + 1));
+    const children = (kids.get(g.id) ?? []).sort(goalOrderCmp).map((c) => build(c, depth + 1));
     const d = direct.get(g.id) ?? ZERO;
     const progress = add(d, sum(children.map((c) => c.progress)));
+    // папка: своей суммы нет — сумма целей внутри (D96)
+    if (g.folder && children.length) g = { ...g, targetMin: sum(children.map((c) => c.goal.targetMin)) };
     const pctPermille = g.targetMin > 0 ? Math.floor((progress * 1000) / g.targetMin) : 0;
     return { goal: g, horizon: horizonOf(g, today, thresholds), direct: d, progress, pctPermille, remainingMin: pos(sub(g.targetMin, progress)), achieved: g.targetMin > 0 && progress >= g.targetMin, children };
   };
-  return (kids.get(undefined) ?? []).sort(byImportanceThenId).map((g) => build(g, 0));
+  return (kids.get(undefined) ?? []).sort(goalOrderCmp).map((g) => build(g, 0));
 }
 
 export function flattenTree(nodes: readonly GoalNode[]): GoalNode[] {
@@ -462,11 +484,34 @@ export function freeMoney(positions: readonly AccountPosition[], fundings: reado
 // ───────────────────────── резерв и пример ─────────────────────────
 
 /** Подставить суммы по правилам (резерв = месяцы × медиана E_base). Исходные цели не меняются. */
-export function resolveGoalTargets(goals: readonly Goal[], baseMedian: Money, reserveMonthsDefault: number): { goals: Goal[]; explanation: Explanation } {
+export interface CushionBases {
+  /** Повседневное + платежи по долгам в месяц. */
+  essential: Money;
+  /** Плюс регулярное. */
+  all: Money;
+}
+
+export const CUSHION_BASIS_LABELS: Record<'essential' | 'all', string> = {
+  essential: 'обязательное + жизнь',
+  all: 'все обычные траты',
+};
+
+export function resolveGoalTargets(goals: readonly Goal[], baseMedian: Money, reserveMonthsDefault: number, bases?: CushionBases): { goals: Goal[]; explanation: Explanation } {
   const explanation: Explanation = [];
   const out = goals.map((g) => {
     if (!g.targetRule || g.targetRule.kind !== 'months_of_base') return g;
     const months = g.targetRule.months ?? reserveMonthsDefault;
+    const basis = g.targetRule.basis;
+    if (basis && bases) {
+      const m = bases[basis];
+      if (m <= 0) {
+        explanation.push(step('goal.target.no_base', `«${g.title}»: траты в месяц пока неизвестны — оставлена заданная сумма ${money(g.targetMin)}`, { level: 'warn', refs: { goalId: g.id } }));
+        return g;
+      }
+      const t = mulDiv(m, months, 1);
+      explanation.push(step('goal.target.rule', `«${g.title}»: ${months} мес. × ${money(m)} (${CUSHION_BASIS_LABELS[basis]}) = ${money(t)}`, { amount: t, refs: { goalId: g.id } }));
+      return { ...g, targetMin: t };
+    }
     if (baseMedian <= 0) {
       explanation.push(step('goal.target.no_base', `«${g.title}»: медиана базовых расходов неизвестна (0) — оставлена заданная сумма ${money(g.targetMin)}. Разметь категории как E_base`, { level: 'warn', refs: { goalId: g.id } }));
       return g;
@@ -483,7 +528,7 @@ export function resolveGoalTargets(goals: readonly Goal[], baseMedian: Money, re
  * Остальные цели человек создаёт сам: у каждого они свои.
  */
 export function starterGoals(date: IsoDate): Goal[] {
-  const r = createGoal({ id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, targetRule: { kind: 'months_of_base' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Резерв = N месяцев базовых расходов (N — в «Ещё → Для продвинутых → Параметры»)' }, [], date);
+  const r = createGoal({ id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Резерв = N месяцев базовых расходов (N — в «Ещё → Для продвинутых → Параметры»)' }, [], date);
   if (!r.ok) throw new Error(r.error);
   return [r.value];
 }
@@ -494,12 +539,12 @@ export function starterGoals(date: IsoDate): Goal[] {
  */
 export function exampleGoals(date: IsoDate): Goal[] {
   const spec: GoalInput[] = [
-    { id: 'goal-savings', title: 'Накопления', role: 'capital', targetMin: tenge(300_000), importance: 5, why: 'Запас на будущее', doneCriteria: 'Накоплено 300 000 ₸' },
-    { id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, targetRule: { kind: 'months_of_base' }, unconfirmed: true, why: 'Подушка на случай потери дохода', doneCriteria: 'Резерв = 3 месяца базовых расходов' },
-    { id: 'goal-trip', title: 'Отпуск', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', flexibility: 'fixed', unconfirmed: true, why: 'Поездка летом', doneCriteria: 'Поездка оплачена' },
-    { id: 'goal-trip-tickets', parentId: 'goal-trip', title: 'Билеты', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', unconfirmed: true },
-    { id: 'goal-trip-stay', parentId: 'goal-trip', title: 'Жильё в поездке', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', unconfirmed: true },
-    { id: 'goal-repair', title: 'Ремонт', role: 'quality', targetMin: ZERO, importance: 3, status: 'paused', unconfirmed: true },
+    { id: 'goal-savings', title: 'Накопления', role: 'capital', targetMin: tenge(300_000), importance: 5, order: 30, why: 'Запас на будущее', doneCriteria: 'Накоплено 300 000 ₸' },
+    { id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, unconfirmed: true, why: 'Подушка на случай потери дохода', doneCriteria: 'Резерв = 3 месяца базовых расходов' },
+    { id: 'goal-trip', title: 'Отпуск', role: 'life_change', targetMin: ZERO, importance: 4, order: 10, folder: true, deadline: '2027-07-01', flexibility: 'fixed', unconfirmed: true, why: 'Поездка летом', doneCriteria: 'Поездка оплачена' },
+    { id: 'goal-trip-tickets', parentId: 'goal-trip', title: 'Билеты', role: 'life_change', targetMin: ZERO, importance: 4, order: 10, deadline: '2027-07-01', unconfirmed: true },
+    { id: 'goal-trip-stay', parentId: 'goal-trip', title: 'Жильё в поездке', role: 'life_change', targetMin: ZERO, importance: 4, order: 20, deadline: '2027-07-01', unconfirmed: true },
+    { id: 'goal-repair', title: 'Ремонт', role: 'quality', targetMin: ZERO, importance: 3, order: 40, status: 'paused', unconfirmed: true },
   ];
   const out: Goal[] = [];
   for (const s of spec) {

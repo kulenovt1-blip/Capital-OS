@@ -85,6 +85,8 @@ export interface CategoryRule {
   opKind?: 'income' | 'expense';
   class: OpClass;
   refine?: Refinement[];
+  /** Поставлено автоматически по названию категории при импорте (D96) — человек может поправить. */
+  auto?: true;
 }
 
 export interface ClassificationSettings {

@@ -8,7 +8,9 @@ import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport } from './classify';
 import { baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
 import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
-import { accountsNeedingReview } from './settings';
+import { accountKindOf, accountsNeedingReview, type AccountKind } from './settings';
+import { daysBetween } from './date';
+import { add, mulDiv } from './money';
 import { obligationStatus, upcomingPayments, type ObligationStatus, type UpcomingPayment } from './obligations';
 import type { Settings } from './settings';
 import { classRegistry, type ClassDef } from './classes';
@@ -78,6 +80,37 @@ export function noticeAction(code: string): NoticeAction {
   return { route: 'setup', label: 'Открыть настройку' };
 }
 
+/** Классы расходов с поведением «регулярный», не закончившиеся (D96: «регулярное»). */
+export function regularClassIds(reg: readonly ClassDef[], today: IsoDate): OpClass[] {
+  return reg.filter((c) => c.group === 'expense' && c.behavior === 'regular' && (!c.endDate || c.endDate >= today)).map((c) => c.id);
+}
+
+/** Главные числа нового «Обзора» (D96). */
+export interface SpendView {
+  /** Вид каждого учитываемого счёта. */
+  kinds: Record<string, AccountKind>;
+  /** Σ счетов «для трат», доступных сегодня. */
+  spendNow: Money;
+  /** Отложено, но ещё на счетах для трат (назначения целям на них). */
+  setAsideOnSpend: Money;
+  /** Можно тратить до следующего дохода = spendNow − setAsideOnSpend − платежи до дохода. */
+  canSpend: Money;
+  /** Дней до следующего дохода (не меньше 1). */
+  days: number;
+  perDay: Money;
+  /** Обычные траты в месяц: повседневное + регулярное. */
+  usualMonthly: Money;
+  usualPerDay: Money;
+  /** Все учитываемые счета, включая вклады с датой. */
+  onHand: Money;
+  inSavings: Money;
+  /** Деньги, которые сейчас снять нельзя: счёт и дата. */
+  locked: { accountId: string; title: string; balance: Money; availableFrom: IsoDate }[];
+  /** Платежи по долгам и рассрочкам в месяц (среднее за 3 месяца вперёд). */
+  obligationsMonthly: Money;
+  regularMedian: Money;
+}
+
 export interface Overview {
   today: IsoDate;
   hasData: boolean;
@@ -106,6 +139,7 @@ export interface Overview {
   freeMoney: Money;
   /** Незаведённые рассрочки из операций и расхождения заведённых (D67). */
   installments: InstallmentScan;
+  spend: SpendView;
   notices: Notice[];
   explanation: Explanation;
 }
@@ -166,8 +200,14 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   );
 
   // цели: суммы по правилам, дерево, превышения назначений
-  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(classRegistry(state.settings.classes), today), state.settings.baselineMonths);
-  const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths);
+  const reg = classRegistry(state.settings.classes);
+  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths);
+  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты');
+  const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
+  const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
+    essential: add(baseline.median, obligationsMonthly),
+    all: add(add(baseline.median, regular.median), obligationsMonthly),
+  });
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
   const overAssigned = overAssignment(fundings, balances, resolved.goals);
@@ -219,7 +259,34 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   explanation.push(...(extras.explanation ?? []));
 
   for (const n of notices) if (!n.action) n.action = noticeAction(n.code);
+
+  // новый «Обзор» (D96): можно тратить, на руках, копилки
+  const kinds: Record<string, AccountKind> = {};
+  let spendNow = ZERO;
+  let onHand = ZERO;
+  let inSavings = ZERO;
+  const locked: SpendView['locked'] = [];
+  for (const p of capital.accounts) {
+    if (p.excluded) continue;
+    const k = accountKindOf(p, state.settings.accounts, state.manualAccounts);
+    kinds[p.accountId] = k;
+    onHand = add(onHand, p.balance);
+    if (k === 'savings') inSavings = add(inSavings, p.balance);
+    if (p.availableFrom > today && p.balance > 0) locked.push({ accountId: p.accountId, title: p.title, balance: p.balance, availableFrom: p.availableFrom });
+    else if (k === 'spend') spendNow = add(spendNow, p.balance);
+  }
+  const setAsideOnSpend = sum(fundings.filter((f) => kinds[f.accountId] === 'spend').map((f) => f.amount));
+  const canSpend = sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome);
+  const days = Math.max(1, daysBetween(today, nextIncome.date));
+  const usualMonthly = add(baseline.median, regular.median);
+  const spend: SpendView = {
+    kinds, spendNow, setAsideOnSpend, canSpend, days,
+    perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
+    usualMonthly, usualPerDay: mulDiv(usualMonthly, 12, 365),
+    onHand, inSavings, locked, obligationsMonthly, regularMedian: regular.median,
+  };
   return {
+    spend,
     today, hasData, reconcile, classification, capital, obligations, upcoming30, nextIncome, reserveUntilIncome, untilIncome, assigned, freeMoney,
     baseline, goals: resolved.goals, goalTree: tree, overAssigned, balances, fundings, installments,
     notices, explanation,

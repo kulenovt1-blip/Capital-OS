@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  emptyState, importMmbackup, mergeAccountSettings, setCategoryClass, exampleGoals, detectInstallments,
+  autoLabelCategories, emptyState, importMmbackup, mergeAccountSettings, setCategoryClass, exampleGoals, detectInstallments,
   suggestionToObligation, remainingFromTerm, tenge, type AppState,
 } from '../engine/index';
 
@@ -19,7 +19,8 @@ const fixture = (name: string) => new Uint8Array(readFileSync(join(ROOT, 'tests/
 function imported(file: string): AppState {
   const data = importMmbackup(fixture(file));
   const s = emptyState();
-  return { ...s, imported: data, importedAt: TODAY, settings: { ...s.settings, accounts: mergeAccountSettings([], data.accounts) } };
+  // как настоящий импорт (D96): категории без правила размечаются сами по названию
+  return { ...s, imported: data, importedAt: TODAY, settings: { ...s.settings, classification: autoLabelCategories(s.settings.classification, data).settings, accounts: mergeAccountSettings([], data.accounts) } };
 }
 
 /** Всё настроено: разметка, ответ о счёте, доходы, рассрочки, цели с деньгами — для «полных» экранов. */
@@ -52,6 +53,17 @@ function configured(): AppState {
     { id: 'f2', goalId: 'goal-reserve', accountId: 'acc-kaspi', amount: tenge(150_000), date: TODAY, decisionId: null },
   ];
   st.lastBackupAt = TODAY;
+  // новая модель (D96): Halyk — копилка, первая настройка пройдена, одно «Отложил» без перевода
+  st.settings.accounts = st.settings.accounts.map((a) => (a.accountId === 'acc-halyk' ? { ...a, kind: 'savings' } : a));
+  st.settings.firstRunDone = true;
+  st.goals.push({ ...st.goals.find((g) => g.id === 'goal-savings')!, id: 'goal-laptop', title: 'Ноутбук', targetMin: tenge(350_000), deadline: '2027-03-01', order: 20, history: [] });
+  st.fundings.push({ id: 'f3', goalId: 'goal-trip-tickets', accountId: 'acc-kaspi', amount: tenge(20_000), date: '2026-10-21', decisionId: 'd0', pending: true });
+  return st;
+}
+
+function broken(): AppState {
+  const st = imported('broken-balance.mmbackup');
+  st.settings.firstRunDone = true;
   return st;
 }
 
@@ -59,12 +71,12 @@ export const STATES: Record<string, () => AppState> = {
   empty: () => emptyState(),
   imported: () => imported('synthetic.mmbackup'),
   configured,
-  broken: () => imported('broken-balance.mmbackup'),
+  broken,
 };
 
 /** Экран → адрес; «income-result» дополнительно вводит сумму и сравнивает варианты. */
 export const SCREENS: [string, string][] = [
-  ['overview', '#/overview'], ['setup', '#/setup'], ['goals', '#/goals'], ['income', '#/income'], ['income-result', '#/income'],
+  ['overview', '#/overview'], ['setup', '#/setup'], ['goals', '#/goals'], ['income', '#/income'], ['income-result', '#/income-more'],
   ['forecast', '#/forecast'], ['import', '#/import'], ['classes', '#/classes'], ['settings', '#/settings'], ['calc', '#/settings/calc'],
   ['more', '#/more'], ['markup', '#/markup'], ['accounts', '#/accounts'], ['incomes', '#/incomes'], ['debts', '#/debts'],
   ['setup-classes', '#/setup/classes'], ['setup-income', '#/setup/income'], ['setup-obligations', '#/setup/obligations'], ['setup-goals', '#/setup/goals'],
@@ -74,6 +86,9 @@ export const SCREENS: [string, string][] = [
   ['fc-events', '#/forecast~fc-events'], ['fc-whatif', '#/forecast~fc-whatif'], ['fc-whatif-result', '#/forecast~fc-whatif'],
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
+  ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
+  ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
+  ['plan-job', '#/forecast~plan/job'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
 ];
 export async function put(page, json: string): Promise<void> {
   await page.evaluate(

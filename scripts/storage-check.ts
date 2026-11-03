@@ -6,6 +6,7 @@
  *  B. Сохранённые данные от более новой версии → экран восстановления, исходник не тронут и отложен копией;
  *     «Начать заново» работает только по явному выбору, копия остаётся.
  *  C. На экране восстановления можно восстановить бэкап из файла.
+ *  D. Старое состояние (до D96) при первом открытии откладывается копией state.before-simple и не перезаписывается ею повторно.
  * Код выхода 1, если хоть одна проверка не прошла.
  */
 // @ts-nocheck — служебный скрипт для Bun
@@ -47,7 +48,7 @@ const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   await page.goto(URL);
   await put(page, serializeState(STATES.imported(), TODAY));
-  await page.goto(`${URL}#/markup`);
+  await page.goto(`${URL}#/prefs`);
   await page.reload();
   await page.waitForTimeout(500);
   await page.evaluate(() => {
@@ -55,10 +56,10 @@ const browser = await chromium.launch();
       throw new DOMException('эмуляция', 'QuotaExceededError');
     };
   });
-  await page.getByRole('button', { name: /Принять все подсказки/ }).click();
+  await page.getByRole('switch', { name: 'Сразу показывать подробности' }).click();
   await page.waitForTimeout(400);
   const t = (await toastText(page)) ?? '';
-  check('A: нет сообщения об успехе', !/Размечено по подсказкам/.test(t), t);
+  check('A: нет сообщения об успехе', !/Подробности открыты сразу/.test(t), t);
   check('A: сообщение о том, что не сохранено', /Не сохранено/.test(t));
   check('A: красная плашка над экраном', await page.locator('.storage-banner').isVisible());
   check('A: в плашке кнопка «Скачать копию»', await page.getByRole('button', { name: 'Скачать копию' }).isVisible());
@@ -112,6 +113,31 @@ let rawBefore = '';
   check('C: бэкап восстановлен — приложение открылось', await page.locator('nav.bn').isVisible());
   const saved = JSON.parse(await idbGet(page, 'state'));
   check('C: в хранилище восстановленные цели', saved.state.goals.length === STATES.configured().goals.length, `целей ${saved.state.goals.length}`);
+  await page.context().close();
+}
+
+// ── D ──
+{
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await page.goto(URL);
+  const obj = JSON.parse(serializeState(STATES.configured(), TODAY));
+  delete obj.state.settings.simpleMigrated;
+  const legacy = JSON.stringify(obj);
+  await put(page, legacy);
+  await page.goto(`${URL}#/goals`);
+  await page.reload();
+  await page.waitForTimeout(500);
+  check('D: приложение открылось', await page.locator('nav.bn').isVisible());
+  check('D: копия до переноса отложена', (await idbGet(page, 'state.before-simple')) === legacy);
+  await page.getByRole('link', { name: '＋ Папка' }).click();
+  await page.locator('#goal-new-form input[name=title]').fill('Проверка');
+  await page.getByRole('button', { name: 'Создать папку' }).click();
+  await page.waitForTimeout(500);
+  const saved = JSON.parse(await idbGet(page, 'state'));
+  check('D: после записи состояние перенесено', saved.state.settings.simpleMigrated === true);
+  await page.reload();
+  await page.waitForTimeout(400);
+  check('D: копия не перезаписана перенесённым состоянием', (await idbGet(page, 'state.before-simple')) === legacy);
   await page.context().close();
 }
 

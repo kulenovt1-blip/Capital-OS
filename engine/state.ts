@@ -25,7 +25,7 @@ export interface Decision {
   explanation: string[];
   userNote: string;
 }
-import { DEFAULT_SETTINGS, normalizeIncomeKind, type Adjustment, type ManualAccount, type Settings } from './settings';
+import { DEFAULT_SETTINGS, SAVINGS_TITLE_RE, normalizeIncomeKind, type Adjustment, type ManualAccount, type Settings } from './settings';
 
 export const STATE_VERSION = 1;
 export const APP_ID = 'capital-os';
@@ -53,7 +53,8 @@ export function emptyState(): AppState {
   return {
     imported: null,
     importedAt: null,
-    settings: structuredClone(DEFAULT_SETTINGS),
+    // новому человеку переносить нечего (D96)
+    settings: { ...structuredClone(DEFAULT_SETTINGS), simpleMigrated: true },
     manualAccounts: [],
     adjustments: [],
     obligations: [],
@@ -107,6 +108,7 @@ export function parseState(json: string): ParseResult {
   }
   const s = isObj(raw.state) ? raw.state : {};
   const base = emptyState();
+  const legacy = !(isObj(s.settings) && s.settings.simpleMigrated === true);
   const state: AppState = {
     imported: (s.imported as ImportedData | null | undefined) ?? null,
     importedAt: typeof s.importedAt === 'string' ? s.importedAt : null,
@@ -120,6 +122,7 @@ export function parseState(json: string): ParseResult {
     decisions: Array.isArray(s.decisions) ? (s.decisions as Decision[]) : [],
     lastBackupAt: typeof s.lastBackupAt === 'string' ? s.lastBackupAt : null,
   };
+  if (legacy) state.settings.simpleMigrated = false;
   migrateState(state);
   const errs = validateState(state);
   if (errs.length) return fail(`Бэкап повреждён: ${errs.slice(0, 5).join('; ')}${errs.length > 5 ? ` и ещё ${errs.length - 5}` : ''}`);
@@ -132,12 +135,45 @@ export function parseState(json: string): ParseResult {
  * коэффициента нерегулярного дохода получает значение по умолчанию 0 (D66).
  */
 export function migrateState(s: AppState): void {
+  if (!s.settings.simpleMigrated) migrateToSimple(s);
   s.settings.incomeKinds = Array.isArray(s.settings.incomeKinds) ? s.settings.incomeKinds : [];
   const custom = s.settings.incomeKinds.map((k) => k.id);
   s.settings.incomeSchedule = s.settings.incomeSchedule.map((x) => ({ ...x, kind: normalizeIncomeKind(x.kind, custom) }));
   s.settings.scenarios = s.settings.scenarios.map((sc) =>
     sc.id === 'adverse' && sc.patch.irregularIncomeFactorBp === undefined ? { ...sc, patch: { ...sc.patch, irregularIncomeFactorBp: 0 } } : sc,
   );
+}
+
+/**
+ * Перенос на новую модель экранов (D96), один раз. Ничего не удаляется, кроме «комфортной суммы» целей:
+ *  - вид счёта: копилка, если привязан к цели, не «сразу», ручной вклад или название про копилку/вклад; иначе для трат;
+ *  - корневая цель-резерв с правилом → подушка «обязательное + жизнь»;
+ *  - цель с подцелями → папка; порядок — прежний (важность, затем id);
+ *  - стратегия плана → «По порядку» (S).
+ * Копию исходного состояния до переноса откладывает приложение (app/persist.ts).
+ */
+export function migrateToSimple(s: AppState): void {
+  const titles = new Map((s.imported?.accounts ?? []).map((a) => [a.id, a.title]));
+  for (const m of s.manualAccounts) titles.set(m.id, m.title);
+  s.settings.accounts = s.settings.accounts.map((a) => {
+    if (a.kind) return a;
+    const manual = s.manualAccounts.find((m) => m.id === a.accountId);
+    const savings = !!a.boundGoalId || a.liquidity.kind !== 'instant' || !!manual?.deposit || SAVINGS_TITLE_RE.test(titles.get(a.accountId) ?? '');
+    return { ...a, kind: savings ? 'savings' : 'spend' };
+  });
+  const parents = new Set(s.goals.filter((g) => g.parentId !== undefined).map((g) => g.parentId!));
+  const ordered = [...s.goals].sort((a, b) => b.importance - a.importance || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const rank = new Map(ordered.map((g, i) => [g.id, i]));
+  s.goals = s.goals.map((g) => {
+    const next: Goal = { ...g };
+    if (next.order === undefined) next.order = (rank.get(g.id) ?? 0) * 10;
+    if (parents.has(g.id) && !next.folder) next.folder = true;
+    if (next.role === 'safety' && next.parentId === undefined && next.targetRule && !next.targetRule.basis) next.targetRule = { ...next.targetRule, basis: 'essential' };
+    if (next.targetComfort !== undefined) delete next.targetComfort;
+    return next;
+  });
+  if (s.settings.planStrategy !== 'S') s.settings.planStrategy = 'S';
+  s.settings.simpleMigrated = true;
 }
 
 /** Проверка денег и дат во всех сущностях. Пустой список — всё в порядке. */
