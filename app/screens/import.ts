@@ -96,6 +96,9 @@ export function renderImport(rerender: () => void): HTMLElement {
     sub(h('span', null, 'Текущие данные', info('reconcile'))),
     h('p', { class: 'one-line' }, `Импорт ${st.importedAt ? formatDateRu(st.importedAt) : '—'} · ${period(data)} · ${nWord(data.operations.length, 'операция', 'операции', 'операций')}`),
     reconcileBlock(rep),
+    data.warnings.length
+      ? h('details', { class: 'fold', 'data-key': 'import:warnings' }, h('summary', null, `Замечания импорта (${data.warnings.length})`), h('ul', { class: 'explain-list' }, data.warnings.map((w) => h('li', null, w.text))))
+      : null,
     lastError ? h('div', { class: 'error-box', role: 'alert' }, `Не удалось прочитать файл: ${lastError}`) : null,
     rows(
       unclassified ? row({ title: `Разметить ${nWord(unclassified, 'категорию', 'категории', 'категорий')}`, href: '#/markup' }) : row({ title: 'Разметка', sub: 'всё размечено ✓', href: '#/markup' }),

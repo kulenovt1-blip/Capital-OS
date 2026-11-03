@@ -9,7 +9,7 @@
  *  3. Свободные деньги = Σ по ликвидным счетам (баланс − назначено) − резерв под обязательства.
  *  4. Резерв — тоже цель (role = safety).
  */
-import { add, max, min, mulDiv, pos, sub, sum, tiyn, ZERO, type Money } from './money';
+import { add, max, min, mulDiv, pos, sub, sum, tenge, tiyn, ZERO, type Money } from './money';
 import { monthsBetween, type IsoDate } from './date';
 import { money, step, type Explained, type Explanation, type Outcome } from './explain';
 import type { AccountPosition } from './ledger';
@@ -489,17 +489,17 @@ export function starterGoals(date: IsoDate): Goal[] {
 }
 
 /**
- * Стартовая конфигурация из инструкции §4.3 — только по кнопке (D28).
- * Суммы, которых нет в инструкции, равны 0 и помечены «подтвердить».
+ * Пример набора целей — только для демонстрации и проверок (?demo=1, D28).
+ * Нейтральный: никаких целей конкретного человека (D93). Суммы, кроме накоплений, равны 0 и помечены «подтвердить».
  */
 export function exampleGoals(date: IsoDate): Goal[] {
   const spec: GoalInput[] = [
-    { id: 'goal-base', title: 'Финансовая база 1 000 000 ₸', role: 'capital', targetMin: tiyn(100_000_000), importance: 5, why: 'Текущая главная цель', doneCriteria: 'Назначено 1 000 000 ₸' },
+    { id: 'goal-savings', title: 'Накопления', role: 'capital', targetMin: tenge(300_000), importance: 5, why: 'Запас на будущее', doneCriteria: 'Накоплено 300 000 ₸' },
     { id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, targetRule: { kind: 'months_of_base' }, unconfirmed: true, why: 'Подушка на случай потери дохода', doneCriteria: 'Резерв = 3 месяца базовых расходов' },
-    { id: 'goal-move', title: 'Переезд в другой город', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-09-01', flexibility: 'fixed', unconfirmed: true, why: 'Плановый переезд', doneCriteria: 'Переезд состоялся, первые месяцы покрыты' },
-    { id: 'goal-move-start', parentId: 'goal-move', title: 'Стартовый бюджет переезда', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-09-01', unconfirmed: true },
-    { id: 'goal-move-buffer', parentId: 'goal-move', title: 'Буфер адаптации', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-09-01', unconfirmed: true },
-    { id: 'goal-teeth', title: 'Лечение', role: 'quality', targetMin: ZERO, importance: 3, status: 'paused', unconfirmed: true },
+    { id: 'goal-trip', title: 'Отпуск', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', flexibility: 'fixed', unconfirmed: true, why: 'Поездка летом', doneCriteria: 'Поездка оплачена' },
+    { id: 'goal-trip-tickets', parentId: 'goal-trip', title: 'Билеты', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', unconfirmed: true },
+    { id: 'goal-trip-stay', parentId: 'goal-trip', title: 'Жильё в поездке', role: 'life_change', targetMin: ZERO, importance: 4, deadline: '2027-07-01', unconfirmed: true },
+    { id: 'goal-repair', title: 'Ремонт', role: 'quality', targetMin: ZERO, importance: 3, status: 'paused', unconfirmed: true },
   ];
   const out: Goal[] = [];
   for (const s of spec) {

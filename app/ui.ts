@@ -92,6 +92,13 @@ export function stat(label: Child, value: Child, sub?: Child, cls = ''): HTMLEle
   return h('div', { class: `stat ${cls}` }, h('div', { class: 'stat-label' }, label), h('div', { class: 'stat-value' }, value), sub ? h('div', { class: 'stat-sub' }, sub) : null);
 }
 
+/** Подпись «когда можно снять» для списков — только если не сразу (D93). Для обычной карты — пусто. */
+export function whenAvailable(l: Liquidity): string {
+  if (l.kind === 'instant') return '';
+  if (l.kind === 'days') return `снять можно через ${l.days} дн. после заявки`;
+  return `снять можно с ${fmtDate(l.date)}`;
+}
+
 export function liquidityText(l: Liquidity): string {
   if (l.kind === 'instant') return 'сразу';
   if (l.kind === 'days') return `за ${l.days} дн.`;
@@ -118,7 +125,28 @@ export function classSelect(kind: 'income' | 'expense', value: OpClass | '', onC
 }
 
 export function moneyInput(name: string, value?: Money, placeholder = '0'): HTMLInputElement {
-  return h('input', { name, inputmode: 'decimal', placeholder, value: value === undefined ? '' : formatKZT(value, { bare: true }), autocomplete: 'off' });
+  const el = h('input', { name, inputmode: 'decimal', placeholder, value: value === undefined ? '' : formatKZT(value, { bare: true }), autocomplete: 'off' }) as HTMLInputElement;
+  // разряды по мере ввода: «1 000 000» — не нужно считать нули (D93). Курсор остаётся после той же цифры.
+  el.addEventListener('input', () => {
+    const caret = el.selectionStart ?? el.value.length;
+    const digitsBefore = el.value.slice(0, caret).replace(/[^\d,.]/g, '').length;
+    const next = groupDigits(el.value);
+    if (next === el.value) return;
+    el.value = next;
+    let pos = 0;
+    for (let seen = 0; pos < next.length && seen < digitsBefore; pos++) if (/[\d,.]/.test(next[pos]!)) seen++;
+    el.setSelectionRange(pos, pos);
+  });
+  return el;
+}
+
+/** «1000000,5» → «1 000 000,5»: пробелы между разрядами целой части, остальное как ввёл человек. */
+export function groupDigits(raw: string): string {
+  const cleaned = raw.replace(/[^\d,.-]/g, '');
+  const m = /^(-?)(\d*)([,.]\d*)?$/.exec(cleaned);
+  if (!m) return raw;
+  const int = m[2]!.replace(/^0+(?=\d)/, '');
+  return `${m[1]}${int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${m[3] ?? ''}`;
 }
 
 export function readMoney(form: HTMLFormElement, name: string): Money | null {

@@ -208,12 +208,12 @@ describe('резерв как цель (§4.2 п.4, D27) и пример из §
     expect(r.goals[0]!.targetMin).toBe(tenge(50_000));
     expect(r.explanation[0]!.level).toBe('warn');
   });
-  it('пример из инструкции: дерево целей, суммы помечены «подтвердить», валидно', () => {
+  it('пример целей: дерево целей, суммы помечены «подтвердить», валидно', () => {
     const ex = exampleGoals(TODAY);
-    expect(ex.map((g) => g.title)).toEqual(['Финансовая база 1 000 000 ₸', 'Резерв', 'Переезд в другой город', 'Стартовый бюджет переезда', 'Буфер адаптации', 'Лечение']);
-    expect(ex.find((g) => g.title === 'Финансовая база 1 000 000 ₸')!.targetMin).toBe(tenge(1_000_000));
+    expect(ex.map((g) => g.title)).toEqual(['Накопления', 'Резерв', 'Отпуск', 'Билеты', 'Жильё в поездке', 'Ремонт']);
+    expect(ex.find((g) => g.title === 'Накопления')!.targetMin).toBe(tenge(300_000));
     expect(ex.filter((g) => g.unconfirmed).length).toBeGreaterThanOrEqual(4);
-    expect(ex.find((g) => g.title === 'Лечение')!.status).toBe('paused');
+    expect(ex.find((g) => g.title === 'Ремонт')!.status).toBe('paused');
     for (const g of ex) expect(validateGoal(g, ex)).toEqual([]);
   });
 });

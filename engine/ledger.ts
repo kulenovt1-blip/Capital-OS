@@ -2,7 +2,7 @@
  * Балансы, сверка с account_balance, капитал и ликвидность.
  */
 import { add, median, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
-import { addDays, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
+import { addDays, formatMonthRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import type { ImportedData, Operation } from './types';
 import { classGroup, ALL_CLASSES, type ClassifiedOp, type OpClass } from './classify';
@@ -349,9 +349,9 @@ export interface Baseline {
  * Медиана суммы класса по полным месяцам перед текущим (DECISIONS D31):
  * месяцы до начала данных не участвуют, пустой месяц внутри данных — ноль.
  */
-export function baselineMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cls: OpClass | readonly OpClass[], n: number): Baseline {
+export function baselineMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cls: OpClass | readonly OpClass[], n: number, name = 'Базовые траты'): Baseline {
   const list: readonly OpClass[] = typeof cls === 'string' ? [cls] : cls;
-  const name = list.join(' + ') || '—';
+  // в тексте — человеческое название, а не коды типов и не «2026-05» (D93)
   let first: IsoDate | null = null;
   for (const c of ops) if (first === null || c.op.date < first) first = c.op.date;
   const months = first === null ? [] : fullMonthsBefore(today, n).filter((m) => m >= monthKey(first!));
@@ -359,10 +359,10 @@ export function baselineMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cl
   const values = months.map((m) => sum(list.map((c) => flows[m]!.byClass[c] ?? ZERO)));
   const med = median(values);
   const explanation: Explanation = [
-    step('baseline.median', `${name}: медиана за ${months.length} полн. мес. = ${money(med)} (${months.map((m, i) => `${m}: ${money(values[i]!)}`).join('; ') || 'нет данных'})`, { amount: med }),
+    step('baseline.median', `${name} в обычный месяц: ${money(med)} — медиана за ${months.length} полн. мес. (${months.map((m, i) => `${formatMonthRu(m)}: ${money(values[i]!)}`).join('; ') || 'нет данных'})`, { amount: med }),
   ];
   if (months.length < n) {
-    explanation.push(step('baseline.short', `Данных меньше ${n} полных месяцев (${months.length}) — оценка ${name} менее надёжна`, { level: 'warn' }));
+    explanation.push(step('baseline.short', `Данных меньше ${n} полных месяцев (${months.length}) — оценка «${name.toLowerCase()}» менее надёжна`, { level: 'warn' }));
   }
   return { cls: list[0] ?? 'E_base', classes: [...list], months, values, median: med, explanation };
 }

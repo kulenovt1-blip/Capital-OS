@@ -6,10 +6,14 @@ import type { Explanation } from '../engine/index';
 import { h } from './dom';
 import { defineSheet, sheetHref } from './main';
 
-const providers = new Map<string, { title: string; get: () => Explanation }>();
+const providers = new Map<string, { title: string; get: () => Explanation; render?: () => HTMLElement }>();
 
-export function registerExplain(key: string, title: string, get: () => Explanation): void {
-  providers.set(key, { title, get });
+/**
+ * Источник «Как посчитано». `render` — свой вид (цепочка «из чего сложилось число», D93);
+ * без него — список шагов движка.
+ */
+export function registerExplain(key: string, title: string, get: () => Explanation, render?: () => HTMLElement): void {
+  providers.set(key, { title, get, ...(render ? { render } : {}) });
 }
 
 /** Главные шаги — списком; второстепенные (нули, перечни, исключения) — под «Все шаги». */
@@ -32,5 +36,5 @@ export function explainLink(key: string, label = 'Как посчитано'): H
 defineSheet('explain', (arg) => {
   const p = providers.get(arg);
   if (!p) return null;
-  return { title: p.title, body: explainList(p.get()) };
+  return { title: p.title, body: p.render ? p.render() : explainList(p.get()) };
 });
