@@ -6,14 +6,14 @@ import { addDays, nextDayOfMonth, maxDate, type IsoDate } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport } from './classify';
-import { baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
+import { averageMonthly, baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
 import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
 import { accountKindGuess, accountsNeedingReview, type AccountKind } from './settings';
 import { daysBetween } from './date';
 import { add, mulDiv } from './money';
 import { obligationStatus, upcomingPayments, type ObligationStatus, type UpcomingPayment } from './obligations';
 import type { Settings } from './settings';
-import { classRegistry, type ClassDef } from './classes';
+import { UNCHECKED_CLASS_ID, classRegistry, type ClassDef } from './classes';
 import type { OpClass } from './classify';
 
 /** Классы, из которых складываются базовые расходы (резерв, запас до дохода): поведение «базовый», не закончившиеся. */
@@ -100,8 +100,10 @@ export interface SpendView {
   /** Дней до следующего дохода (не меньше 1). */
   days: number;
   perDay: Money;
-  /** Обычные траты в месяц: повседневное + регулярное. */
+  /** Обычные траты в месяц: повседневное + регулярное + не проверенное (по среднему, D104). */
   usualMonthly: Money;
+  /** Из них — траты категорий, которые приложение не узнало: среднее в месяц (D104). */
+  uncheckedMonthly: Money;
   usualPerDay: Money;
   /** Все учитываемые счета, включая вклады с датой. */
   onHand: Money;
@@ -208,7 +210,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
   const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
     essential: add(baseline.median, obligationsMonthly),
-    all: add(add(baseline.median, regular.median), obligationsMonthly),
+    all: add(add(add(baseline.median, regular.median), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
   });
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
@@ -283,11 +285,13 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const setAsideOnSpend = sum(fundings.filter((f) => kinds[f.accountId] === 'spend').map((f) => f.amount));
   const canSpend = sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome);
   const days = Math.max(1, daysBetween(today, nextIncome.date));
-  const usualMonthly = add(baseline.median, regular.median);
+  // не узнанные категории: в «обычно уходит» — по среднему за месяц, а не медианой как регулярные (D104)
+  const unchecked = averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly;
+  const usualMonthly = add(add(baseline.median, regular.median), unchecked);
   const spend: SpendView = {
     kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
-    usualMonthly, usualPerDay: mulDiv(usualMonthly, 12, 365),
+    usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
     onHand, inSavings, locked, obligationsMonthly, regularMedian: regular.median,
   };
   return {

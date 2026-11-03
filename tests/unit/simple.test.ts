@@ -8,12 +8,13 @@ import { buildOverview } from '../../engine/overview';
 import { emptyState, parseState, serializeState, migrateToSimple, type AppState } from '../../engine/state';
 import { importMmbackup } from '../../engine/import/mmbackup';
 import { classifyAll, setCategoryClass } from '../../engine/classify';
+import { averageMonthly } from '../../engine/ledger';
 import { createGoal, resolveGoalTargets, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { mergeAccountSettings, accountKindOf, accountKindGuess } from '../../engine/settings';
 import { tenge, type Money } from '../../engine/money';
 import {
-  arrivedIncomes, autoLabelCategories, basketClass, cushionStatus, detectNewIncomes, lockedByDate, goalVerdicts, reorderGoals, runway,
+  arrivedIncomes, autoLabelCategories, basketClass, confirmGuessedCategories, oneoffOf, unconfirmedCategories, cushionStatus, detectNewIncomes, lockedByDate, goalVerdicts, reorderGoals, runway,
   setAsideReminders, settleSetAsides, splitIncome,
 } from '../../engine/simple';
 import { fixtureBytes } from '../support/fixtures';
@@ -316,7 +317,13 @@ describe('новые доходы и разметка', () => {
     expect(detectNewIncomes(s3, TODAY)).toEqual([]);
   });
 
-  it('категории без правила размечаются сами (по названию, иначе «прочее»), с пометкой auto', () => {
+  it('подарки не предлагаются как новый регулярный доход (D104)', () => {
+    const s = state();
+    const cls = setCategoryClass(s.settings.classification, s.imported!.categories.find((c) => c.id === 'cat-stipend')!, 'I_gift', 'income');
+    expect(detectNewIncomes({ ...s, settings: { ...s.settings, classification: cls } }, TODAY)).toEqual([]);
+  });
+
+  it('категории без правила размечаются сами: по названию — с пометкой «проверь», не узнанные — «Не проверено»', () => {
     const s = emptyState();
     const data = importMmbackup(fixtureBytes('synthetic.mmbackup'));
     const r = autoLabelCategories(s.settings.classification, data);
@@ -324,7 +331,8 @@ describe('новые доходы и разметка', () => {
     expect(classifyAll(data, r.settings).complete).toBe(true);
     const rule = (id: string) => r.settings.rules.find((x) => x.categoryId === id);
     expect(rule('cat-food')).toMatchObject({ class: 'E_base', auto: true });
-    expect(rule('cat-fee')).toMatchObject({ class: 'E_other', auto: true });
+    expect(rule('cat-fee')).toMatchObject({ class: 'U_E_check', auto: true });
+    expect(r.classes.custom.map((c) => [c.id, c.behavior])).toEqual([['U_E_check', 'irregular']]);
     expect(rule('cat-salary')).toMatchObject({ class: 'I_work', auto: true });
     // правила по умолчанию (D13) не перезаписываются
     expect(rule('cat-installment')).toBeUndefined();
@@ -334,7 +342,7 @@ describe('новые доходы и разметка', () => {
   it('корзина «Разовое» — свой класс, создаётся один раз', () => {
     const s = emptyState();
     const a = basketClass('oneoff', s.settings.classes);
-    expect(a.classes.custom.map((c) => [c.label, c.behavior])).toEqual([['Разовое', 'irregular']]);
+    expect(a.classes.custom.map((c) => [c.label, c.behavior])).toEqual([['Редкие траты', 'irregular']]);
     expect(basketClass('oneoff', a.classes).classes.custom.length).toBe(1);
     expect(basketClass('everyday', s.settings.classes).cls).toBe('E_base');
   });
@@ -360,5 +368,69 @@ describe('вердикты целей и запас прочности', () => {
     expect(r).not.toBeNull();
     expect(r!.months).toBeGreaterThanOrEqual(0);
     expect(r!.until > TODAY).toBe(true);
+  });
+});
+
+
+describe('D104: «Нужно проверить»', () => {
+  const op = (id: string, date: string, amount: number) => ({ op: { id, date, amount: tenge(amount) } as never, cls: 'U_E_check' as never, reason: '', ruleIndex: null });
+
+  it('averageMonthly: среднее по полным месяцам с начала данных, не больше n', () => {
+    const ops = [op('a', '2026-07-03', 30_000), op('b', '2026-09-10', 60_000), op('c', '2026-10-05', 999_000)];
+    const r = averageMonthly(ops, TODAY, 'U_E_check' as never, 12);
+    // полные месяцы до октября: июль, август, сентябрь → (30 000 + 0 + 60 000) / 3
+    expect(r.months).toBe(3);
+    expect(r.monthly).toBe(tenge(30_000));
+    expect(averageMonthly([], TODAY, 'U_E_check' as never, 12)).toEqual({ monthly: 0, months: 0 });
+    expect(averageMonthly(ops, TODAY, 'U_E_check' as never, 2).months).toBe(2);
+  });
+
+  it('unconfirmed / confirmGuessed: угаданные по названию снимаются, не узнанные остаются', () => {
+    const cls = {
+      rules: [
+        { categoryId: 'c1', categoryTitle: 'Продукты', opKind: 'expense' as const, class: 'E_base' as never, auto: true },
+        { categoryId: 'c2', categoryTitle: '???', opKind: 'expense' as const, class: 'U_E_check' as never, auto: true },
+        { categoryId: 'c3', categoryTitle: 'Кафе', opKind: 'expense' as const, class: 'E_fun' as never },
+      ],
+    } as never;
+    expect(unconfirmedCategories(cls)).toEqual({ guessed: ['c1'], unknown: ['c2'] });
+    const after = confirmGuessedCategories(cls);
+    expect(unconfirmedCategories(after)).toEqual({ guessed: [], unknown: ['c2'] });
+    expect((after as { rules: { auto?: boolean }[] }).rules[0]).not.toHaveProperty('auto');
+  });
+
+  it('basketClass: «разовое» — повторится / до даты / больше не будет', () => {
+    const empty = { custom: [], overrides: {} };
+    const rep = basketClass('oneoff', empty);
+    expect(rep.classes.custom.find((c) => c.id === rep.cls)).toMatchObject({ behavior: 'irregular', label: 'Редкие траты' });
+    const never = basketClass('oneoff', empty, { kind: 'never' });
+    expect(never.classes.custom.find((c) => c.id === never.cls)?.behavior).toBe('excluded');
+    const until = basketClass('oneoff', empty, { kind: 'until', date: '2027-03-01' });
+    expect(until.cls).toBe('U_E_do_2027_03_01');
+    expect(until.classes.custom.find((c) => c.id === until.cls)).toMatchObject({ behavior: 'temporary', endDate: '2027-03-01' });
+    expect(oneoffOf(until.classes.custom[0])).toBe('until');
+    const chk = basketClass('check', empty);
+    expect(chk.cls).toBe('U_E_check');
+    // повторный вызов не дублирует тип
+    expect(basketClass('check', chk.classes).classes.custom).toHaveLength(1);
+  });
+
+  it('миграция: «само в прочее» → «Не проверено»; ручные правила не трогаются', () => {
+    const s = emptyState();
+    s.settings.simpleMigrated = true;
+    s.settings.classification = {
+      ...s.settings.classification,
+      rules: [
+        { categoryId: 'c1', categoryTitle: 'x', opKind: 'expense', class: 'E_other' as never, auto: true },
+        { categoryId: 'c2', categoryTitle: 'y', opKind: 'expense', class: 'E_other' as never },
+      ],
+    };
+    const back = parseState(serializeState(s));
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const rules = back.value.settings.classification.rules;
+    expect(rules[0]!.class).toBe('U_E_check');
+    expect(rules[1]!.class).toBe('E_other');
+    expect(back.value.settings.classes.custom.map((c) => c.id)).toContain('U_E_check');
   });
 });

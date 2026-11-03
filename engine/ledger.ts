@@ -1,7 +1,7 @@
 /**
  * Балансы, сверка с account_balance, капитал и ликвидность.
  */
-import { add, median, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
+import { add, median, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
 import { addDays, formatMonthRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import type { ImportedData, Operation } from './types';
@@ -334,6 +334,20 @@ export function monthlyFlows(ops: readonly ClassifiedOp[], months: readonly Mont
     else if (g === 'expense') f.expense = add(f.expense, a);
   }
   return out;
+}
+
+/**
+ * Среднее в месяц за полные месяцы перед текущим (не больше n), только с начала данных (D104).
+ * Для того, что повторяется не каждый месяц: разовая трата 15 000 за год — это 1 250 в месяц, а не 15 000.
+ */
+export function averageMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cls: OpClass, n: number): { monthly: Money; months: number } {
+  let first: IsoDate | null = null;
+  for (const c of ops) if (first === null || c.op.date < first) first = c.op.date;
+  const months = first === null ? [] : fullMonthsBefore(today, n).filter((m) => m >= monthKey(first!));
+  if (!months.length) return { monthly: ZERO, months: 0 };
+  const flows = monthlyFlows(ops, months);
+  const total = sum(months.map((m) => flows[m]!.byClass[cls] ?? ZERO));
+  return { monthly: mulDiv(total, 1, months.length), months: months.length };
 }
 
 export interface Baseline {

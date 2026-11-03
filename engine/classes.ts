@@ -63,6 +63,9 @@ export interface ClassSettings {
 
 export const DEFAULT_CLASS_SETTINGS: ClassSettings = { custom: [], overrides: {} };
 
+/** Категории, которые приложение не узнало (D104): свой тип «Не проверено», в прогнозе — по среднему, не как регулярные. */
+export const UNCHECKED_CLASS_ID = 'U_E_check' as OpClass;
+
 const DEFAULT_BEHAVIOR: Record<string, Behavior> = {
   E_base: 'base',
   E_installment_own: 'installment',

@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { baseForecast, buildOverview, goalVerdicts, runway, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
+import { baseForecast, buildOverview, unconfirmedCategories, goalVerdicts, runway, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -72,13 +72,15 @@ export interface Trust {
   level: 'none' | 'ok' | 'warn' | 'bad';
   label: string;
   reasons: TrustReason[];
+  /** Что основано на оценке, а не на данных банка, — не делает точку жёлтой, но видно в подробностях (D104). */
+  notes: TrustReason[];
 }
 
 /** Одно состояние доверия к цифрам на всё приложение (D80). */
 export function trust(): Trust {
   const o = ov();
   const st = getState();
-  if (!o.hasData) return { level: 'none', label: 'Нет данных', reasons: [{ text: 'Загрузи бэкап MoneyManager', href: '#/import' }] };
+  if (!o.hasData) return { level: 'none', label: 'Нет данных', reasons: [{ text: 'Загрузи бэкап MoneyManager', href: '#/import' }], notes: [] };
   const bad = (o.reconcile?.accounts ?? []).filter((a) => a.status !== 'ok');
   const reasons: TrustReason[] = [];
   for (const a of bad) {
@@ -87,13 +89,27 @@ export function trust(): Trust {
   const open = steps().filter((s) => !s.optional && !s.done && !s.locked && s.id !== 'import');
   for (const s of open) reasons.push({ text: `${s.title}: ${s.status}`, href: `#/setup/${s.id}` });
   const estimate = o.capital.accounts.some((p) => p.source === 'savings_flow' && !p.excluded) && !st.settings.savingsFlows.confirmed;
-  if (estimate && !open.some((s) => s.id === 'savings')) reasons.push({ text: 'В «На руках» есть оценка сбережений вне MoneyManager', href: '#/setup/savings' });
+  if (estimate && !open.some((s) => s.id === 'savings')) reasons.push({ text: 'В «Всего на счетах» есть оценка сбережений вне MoneyManager', href: '#/setup/savings' });
+  // предположения приложения — тоже повод проверить, даже если сверка сошлась (D104)
+  const cats = unconfirmedCategories(st.settings.classification);
+  if (cats.unknown.length) reasons.push({ text: `${nWord(cats.unknown.length, 'категория', 'категории', 'категорий')} трат приложение не узнало — в прогнозе по среднему`, href: '#/baskets' });
+  if (cats.guessed.length) reasons.push({ text: `${nWord(cats.guessed.length, 'категория', 'категории', 'категорий')} разложено по названию — проверь`, href: '#/baskets' });
+  for (const id of o.spend.guessedSavings) reasons.push({ text: `«${o.capital.accounts.find((p) => p.accountId === id)?.title ?? id}» — копилка по названию, проверь`, href: sheetHrefFor('accounts', 'account', id) });
+  const notes: TrustReason[] = [];
+  const est = o.capital.accounts.find((p) => p.source === 'savings_flow' && !p.excluded && p.balance !== 0);
+  if (est && st.settings.savingsFlows.confirmed) notes.push({ text: `«${est.title}» — ${fmtExact(est.balance)}: это оценка по переводам, а не баланс банка`, href: '#/accounts/savings' });
+  if (o.baseline.months.length < 3) notes.push({ text: `Истории трат ${nWord(o.baseline.months.length, 'полный месяц', 'полных месяца', 'полных месяцев')} — «обычно уходит» и прогноз приблизительные`, href: '#/baskets' });
   if (bad.length) {
     const a = bad[0]!;
-    return { level: 'bad', label: `Сверка: ${a.title} ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons };
+    return { level: 'bad', label: `Сверка: ${a.title} ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
   }
-  if (reasons.length) return { level: 'warn', label: `Приблизительно · ${nWord(reasons.length, 'вопрос', 'вопроса', 'вопросов')}`, reasons };
-  return { level: 'ok', label: `Данные от ${fmtDay(st.importedAt ?? today())} ✓`, reasons: [] };
+  if (reasons.length) return { level: 'warn', label: `Проверь · ${nWord(reasons.length, 'вопрос', 'вопроса', 'вопросов')}`, reasons, notes };
+  return { level: 'ok', label: `Данные от ${fmtDay(st.importedAt ?? today())} ✓`, reasons: [], notes };
+}
+
+/** Адрес подэкрана на другом экране (ctx не зависит от main.ts). */
+function sheetHrefFor(screen: string, sheet: string, arg: string): string {
+  return `#/${screen}~${sheet}/${arg}`;
 }
 
 export { plural };

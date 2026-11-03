@@ -20,7 +20,8 @@ function imported(file: string): AppState {
   const data = importMmbackup(fixture(file));
   const s = emptyState();
   // как настоящий импорт (D96): категории без правила размечаются сами по названию
-  return { ...s, imported: data, importedAt: TODAY, settings: { ...s.settings, classification: autoLabelCategories(s.settings.classification, data).settings, accounts: mergeAccountSettings([], data.accounts) } };
+  const auto = autoLabelCategories(s.settings.classification, data, s.settings.classes);
+  return { ...s, imported: data, importedAt: TODAY, settings: { ...s.settings, classification: auto.settings, classes: auto.classes, accounts: mergeAccountSettings([], data.accounts) } };
 }
 
 /** Всё настроено: разметка, ответ о счёте, доходы, рассрочки, цели с деньгами — для «полных» экранов. */

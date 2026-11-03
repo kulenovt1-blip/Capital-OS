@@ -9,6 +9,7 @@ import type { ImportedData } from './types';
 import type { Obligation } from './obligations';
 import type { Goal, GoalFunding } from './goals';
 import type { StrategyId } from './ladder';
+import { UNCHECKED_CLASS_ID } from './classes';
 
 /**
  * Запись решения (§8). Неизменяема: исправление — новой записью.
@@ -136,6 +137,14 @@ export function parseState(json: string): ParseResult {
  */
 export function migrateState(s: AppState): void {
   if (!s.settings.simpleMigrated) migrateToSimple(s);
+  // D104: категории, которые раньше сами легли в «прочее» (регулярное), — теперь «Не проверено»
+  const unknownAuto = s.settings.classification.rules.some((r) => r.auto && r.class === 'E_other');
+  if (unknownAuto) {
+    s.settings.classification = { ...s.settings.classification, rules: s.settings.classification.rules.map((r) => (r.auto && r.class === 'E_other' ? { ...r, class: UNCHECKED_CLASS_ID } : r)) };
+    if (!s.settings.classes.custom.some((c) => c.id === UNCHECKED_CLASS_ID)) {
+      s.settings.classes = { ...s.settings.classes, custom: [...s.settings.classes.custom, { id: UNCHECKED_CLASS_ID, label: 'Не проверено', group: 'expense', behavior: 'irregular', builtin: false }] };
+    }
+  }
   s.settings.incomeKinds = Array.isArray(s.settings.incomeKinds) ? s.settings.incomeKinds : [];
   const custom = s.settings.incomeKinds.map((k) => k.id);
   s.settings.incomeSchedule = s.settings.incomeSchedule.map((x) => ({ ...x, kind: normalizeIncomeKind(x.kind, custom) }));

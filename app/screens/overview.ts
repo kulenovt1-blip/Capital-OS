@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, cushionStatus, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress } from '../ctx';
@@ -53,6 +53,7 @@ function freeChain(o: Overview): HTMLElement {
     rows(
       row({ title: 'В день до дохода', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')}`, value: fmt(sp.perDay) }),
       row({ title: 'Обычно уходит в день', sub: 'повседневное и регулярное, обычный месяц ÷ 30', value: fmt(sp.usualPerDay) }),
+      sp.uncheckedMonthly > 0 ? row({ title: 'Из них не проверено', sub: 'категории, которые приложение не узнало, — по среднему за месяц', value: fmt(mulDivDay(sp.uncheckedMonthly)), href: '#/baskets' }) : null,
       row({ title: 'В копилках', sub: 'не входят — их не тратишь', value: fmt(sp.inSavings) }),
     ),
   );
@@ -85,6 +86,9 @@ export type OverviewBuilder = () => Overview;
 /** Совместимость: раньше этап 2 подменял построитель обзора. */
 export function setOverviewBuilder(_b: OverviewBuilder): void {}
 
+/** Месячная сумма → в день (как «обычно уходит»: × 12 ÷ 365). */
+const mulDivDay = (m: Money): Money => mulDiv(m, 12, 365);
+
 function heroBlock(o: Overview): HTMLElement {
   const sp = o.spend;
   const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
@@ -92,7 +96,14 @@ function heroBlock(o: Overview): HTMLElement {
   const subline =
     sp.canSpend < 0
       ? h('span', null, `до дохода не хватает ${fmt((-sp.canSpend) as never)}`)
-      : h('span', null, `≈ ${fmt(sp.perDay)} в день`, sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '');
+      : h(
+          'span',
+          null,
+          `≈ ${fmt(sp.perDay)} в день`,
+          sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '',
+          // часть «обычно уходит» — по категориям, которые приложение не узнало (D104)
+          sp.uncheckedMonthly > 0 ? h('span', null, ' · ', h('a', { href: '#/baskets', style: 'color:inherit' }, `не проверено ${fmt(mulDivDay(sp.uncheckedMonthly))} в день ›`)) : null,
+        );
   return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
@@ -124,12 +135,25 @@ function newIncomeLine(): HTMLElement | null {
       (s) => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, { id: newId('inc'), title: c.title, dayOfMonth: c.dayOfMonth, amount: c.amount, kind: 'stable' }] } }),
       `Доход «${c.title}» добавлен`,
     );
+  // нерегулярный: в прогнозе — по среднему, в «Хуже» — 0 (D66)
+  const addIrregular = () =>
+    act(
+      (s) => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, { id: newId('inc'), title: c.title, dayOfMonth: c.dayOfMonth, amount: c.amount, kind: 'irregular' }] } }),
+      `«${c.title}» добавлен как нерегулярный доход`,
+    );
   const no = () => act((s) => ({ ...s, settings: { ...s.settings, dismissedIncomes: [...(s.settings.dismissedIncomes ?? []), c.categoryId] } }), 'Больше не спрошу');
   return h(
     'div',
     { class: 'hint-card stack' },
-    h('div', null, h('strong', null, 'Похоже, у тебя новый доход: '), `«${c.title}» ≈ ${fmt(c.amount)}, около ${c.dayOfMonth}-го. Добавить в доходы?`),
-    h('div', { class: 'btn-row' }, h('button', { class: 'btn primary', type: 'button', onclick: add }, 'Добавить'), h('button', { class: 'btn', type: 'button', onclick: no }, 'Это не доход')),
+    h('div', null, h('strong', null, 'Похоже на регулярный доход: '), `«${c.title}» ≈ ${fmt(c.amount)}, около ${c.dayOfMonth}-го — было в ${c.months} из 3 последних месяцев. Это так?`),
+    h(
+      'div',
+      { class: 'btn-row' },
+      h('button', { class: 'btn primary', type: 'button', onclick: add }, 'Да, каждый месяц'),
+      h('button', { class: 'btn', type: 'button', onclick: addIrregular }, 'Бывает по-разному'),
+      h('button', { class: 'btn', type: 'button', onclick: no }, 'Это не доход'),
+    ),
+    h('p', { class: 'muted' }, 'Сумму и число можно поправить потом в «Ещё → Доходы».'),
   );
 }
 

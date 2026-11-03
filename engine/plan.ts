@@ -6,8 +6,8 @@ import { add, mulDiv, sum, ZERO, type Money } from './money';
 import { addMonths, formatDateRu, fullMonthsBefore, monthKey, type IsoDate } from './date';
 import { money, step, type Explanation, type Outcome } from './explain';
 import type { ClassifiedOp, OpClass } from './classify';
-import { baselineMonthly, monthlyFlows } from './ledger';
-import { BEHAVIOR_LABELS, classRegistry } from './classes';
+import { averageMonthly, baselineMonthly, monthlyFlows } from './ledger';
+import { BEHAVIOR_LABELS, UNCHECKED_CLASS_ID, classRegistry } from './classes';
 import { upcomingPayments } from './obligations';
 import { normalizeIncomeKind } from './settings';
 import { incomeKindRegistry } from './income-kinds';
@@ -38,7 +38,13 @@ export function forecastExpenses(state: AppState, today: IsoDate, ops: readonly 
     }
     let monthly: Money;
     let how: string;
-    if (c.behavior === 'irregular') {
+    if (c.id === UNCHECKED_CLASS_ID) {
+      // не узнанные категории (D104): по фактическому среднему за месяц — не как регулярная трата и не ноль
+      const a = averageMonthly(ops, today, c.id, 12);
+      monthly = a.monthly;
+      how = `не проверено — в среднем за ${a.months} мес.`;
+      if (monthly > 0) warnings.push(step('plan.unchecked', `«${c.label}»: ${money(monthly)} в месяц по среднему — приложение не узнало эти категории. Разложи их в «Раскладке трат», и прогноз станет точнее`, { level: 'warn', amount: monthly }));
+    } else if (c.behavior === 'irregular') {
       const sumN = sum(history.map((m) => flows12[m]!.byClass[c.id] ?? ZERO));
       if (history.length >= 12) {
         monthly = mulDiv(sumN, 1, 12);
