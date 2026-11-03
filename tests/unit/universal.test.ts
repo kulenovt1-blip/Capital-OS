@@ -108,10 +108,10 @@ describe('долги на начало учёта: «не знаю»', () => {
 });
 
 describe('автозаполнение рассрочек по операциям', () => {
-  // синтетика: «телефон» 30 285 ₸ 5-го и «мама» 15 000 ₸ 15-го, март–октябрь 2026 (по 8 платежей), категория «Рассрочка»
+  // синтетика: «телефон» 30 285 ₸ 5-го и «родные» 15 000 ₸ 15-го, март–октябрь 2026 (по 8 платежей), категория «Рассрочка»
   it('находит обе рассрочки: платёж, день, число платежей, следующий платёж, поиск по тегу и категории', () => {
     const scan = detectInstallments(imported(), TODAY);
-    expect(scan.suggestions.map((s) => s.key)).toEqual(['tag:телефон', 'tag:мама']);
+    expect(scan.suggestions.map((s) => s.key)).toEqual(['tag:телефон', 'tag:родные']);
     const phone = scan.suggestions[0]!;
     expect(phone).toMatchObject({
       title: 'Рассрочка «телефон»',
@@ -133,8 +133,8 @@ describe('автозаполнение рассрочек по операция�
 
   it('семейный тег делает рассрочку семейной', () => {
     const st = imported();
-    st.settings.classification = { ...st.settings.classification, familyTags: ['мама'] };
-    const mom = detectInstallments(st, TODAY).suggestions.find((s) => s.key === 'tag:мама')!;
+    st.settings.classification = { ...st.settings.classification, familyTags: ['родные'] };
+    const mom = detectInstallments(st, TODAY).suggestions.find((s) => s.key === 'tag:родные')!;
     expect(mom.owner).toBe('family');
   });
 
@@ -165,12 +165,12 @@ describe('автозаполнение рассрочек по операция�
       ['2027-02-05', tenge(30_285)],
     ]);
     st.obligations = [ob];
-    expect(detectInstallments(st, TODAY).suggestions.map((s) => s.key)).toEqual(['tag:мама']);
+    expect(detectInstallments(st, TODAY).suggestions.map((s) => s.key)).toEqual(['tag:родные']);
   });
 
   it('отклонённая находка больше не предлагается', () => {
     const st = imported();
-    st.settings.dismissedInstallments = ['tag:мама'];
+    st.settings.dismissedInstallments = ['tag:родные'];
     expect(detectInstallments(st, TODAY).suggestions.map((s) => s.key)).toEqual(['tag:телефон']);
   });
 
@@ -240,7 +240,7 @@ describe('автозаполнение рассрочек по операция�
     expect(n.text).toMatch(/2/);
     expect(n.action).toMatchObject({ route: 'settings', section: 'obligations' });
     expect(setupSteps(st, TODAY).find((s) => s.id === 'obligations')!.done).toBe(false);
-    st.settings.dismissedInstallments = ['tag:мама', 'tag:телефон'];
+    st.settings.dismissedInstallments = ['tag:родные', 'tag:телефон'];
     expect(setupSteps(st, TODAY).find((s) => s.id === 'obligations')!.done).toBe(true);
   });
 });

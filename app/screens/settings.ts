@@ -890,7 +890,7 @@ function rulesBlock(st: AppState): HTMLElement {
   const reg = classRegistry(st.settings.classes);
   const cats = new Map((st.imported?.categories ?? []).map((c) => [c.id, catName(c)]));
   const ruleName = (r: CategoryRule) => (r.categoryId ? cats.get(r.categoryId) ?? 'категория удалена' : r.categoryTitle ?? '—');
-  const fam = h('input', { name: 'family', value: st.settings.classification.familyTags.join(', '), placeholder: 'мама, папа', autocomplete: 'off' });
+  const fam = h('input', { name: 'family', value: st.settings.classification.familyTags.join(', '), placeholder: 'например: родители', autocomplete: 'off' });
   const famForm = h('form', { class: 'stack' }, field('Теги, которые делают рассрочку семейной', fam, 'через запятую'), h('button', { class: 'btn wide', type: 'submit' }, 'Сохранить теги'));
   famForm.addEventListener('submit', (e) => {
     e.preventDefault();

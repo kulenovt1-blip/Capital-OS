@@ -125,7 +125,7 @@ export interface FormatOptions {
   bare?: boolean;
 }
 
-/** «30 285 ₸», «30 285,50 ₸», «−1 234 ₸». Тиыны показываются, только если не нулевые. */
+/** «12 345 ₸», «12 345,50 ₸», «−1 234 ₸». Тиыны показываются, только если не нулевые. */
 export function formatKZT(a: Money, opts: FormatOptions = {}): string {
   const negative = a < 0;
   const absV = Math.abs(a);
@@ -138,7 +138,7 @@ export function formatKZT(a: Money, opts: FormatOptions = {}): string {
 }
 
 /**
- * Разбор ввода пользователя в тенге: «30 285», «30285,5», «-15», «1000.25».
+ * Разбор ввода пользователя в тенге: «12 345», «12345,5», «-15», «1000.25».
  * Возвращает null, если строка не похожа на сумму.
  */
 export function parseKZT(input: string): Money | null {

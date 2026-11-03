@@ -19,12 +19,12 @@ const cats = [
   cat('c-exch', 'Размен'),
 ];
 const tags = [
-  { id: 'tg-mom', name: 'Мама' },
+  { id: 'tg-mom', name: 'Родные' },
   { id: 'tg-phone', name: 'телефон' },
 ];
 
 describe('классификация: правила по умолчанию (§3.2)', () => {
-  const settings: ClassificationSettings = { ...DEFAULT_CLASSIFICATION, familyTags: ['мама'] };
+  const settings: ClassificationSettings = { ...DEFAULT_CLASSIFICATION, familyTags: ['родные'] };
   const data = dataset({
     accounts: [acc('a'), acc('b')],
     categories: cats,
@@ -150,9 +150,9 @@ describe('классификация: уточнения и конфликты',
 });
 
 describe('классификация синтетического бэкапа', () => {
-  it('правила по умолчанию + семейный тег «мама»', () => {
+  it('правила по умолчанию + семейный тег «родные»', () => {
     const data = importMmbackup(fixtureBytes('synthetic.mmbackup'));
-    const rep = classifyAll(data, { ...DEFAULT_CLASSIFICATION, familyTags: ['мама'] });
+    const rep = classifyAll(data, { ...DEFAULT_CLASSIFICATION, familyTags: ['родные'] });
     expect(rep.byClass.E_installment_own.count).toBe(8);
     expect(rep.byClass.E_installment_family.count).toBe(8);
     expect(rep.byClass.T_transfer.count).toBe(11);
@@ -171,11 +171,11 @@ describe('валидация правил классификации из JSON (
   it('корректные правила проходят, неизвестный класс и пустое правило — ошибки с номером правила', async () => {
     const { validateClassification } = await import('../../engine/classify');
     expect(validateClassification(DEFAULT_CLASSIFICATION)).toEqual({ ok: true, value: DEFAULT_CLASSIFICATION, errors: [] });
-    const bad = validateClassification({ familyTags: ['мама'], rules: [{ categoryTitle: 'X', class: 'E_wrong' }, { class: 'E_base' }] });
+    const bad = validateClassification({ familyTags: ['родные'], rules: [{ categoryTitle: 'X', class: 'E_wrong' }, { class: 'E_base' }] });
     expect(bad.ok).toBe(false);
     expect(bad.errors.join('\n')).toMatch(/Правило 1.*E_wrong/);
     expect(bad.errors.join('\n')).toMatch(/Правило 2.*категори/);
     expect(validateClassification('мусор').ok).toBe(false);
-    expect(validateClassification({ rules: [], familyTags: 'мама' }).ok).toBe(false);
+    expect(validateClassification({ rules: [], familyTags: 'родные' }).ok).toBe(false);
   });
 });
