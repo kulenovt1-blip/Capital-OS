@@ -39,11 +39,11 @@ function freeChain(o: Overview): HTMLElement {
   return h(
     'div',
     { class: 'stack' },
-    hero(`Можно тратить ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
+    hero(`Можно тратить ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день на всё · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
     rows(
       head('', 'На счетах для трат', sp.spendNow),
       spendAcc.map((p) => part(p.title, p.balance)),
-      head('− ', 'Отложено, но не переведено', sp.setAsideOnSpend),
+      head('− ', 'Отложено на цели — перевода ещё нет в бэкапе', sp.setAsideOnSpend),
       goalsList.map(([g, v]) => part(goalTitle.get(g) ?? 'цель', v)),
       head('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome),
       o.untilIncome.map((u) => part(u.title, u.amount, fmtDay(u.date))),
@@ -51,7 +51,7 @@ function freeChain(o: Overview): HTMLElement {
     ),
     sub('Для сравнения'),
     rows(
-      row({ title: 'В день до дохода', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')}`, value: fmt(sp.perDay) }),
+      row({ title: 'В день до дохода', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')} — на все траты, не только на еду`, value: fmt(sp.perDay) }),
       row({ title: 'Обычно уходит в день', sub: 'повседневное и регулярное, обычный месяц ÷ 30', value: fmt(sp.usualPerDay) }),
       sp.uncheckedMonthly > 0 ? row({ title: 'Из них не проверено', sub: 'категории, которые приложение не узнало, — по среднему за месяц', value: fmt(mulDivDay(sp.uncheckedMonthly)), href: '#/baskets' }) : null,
       row({ title: 'В копилках', sub: 'не входят — их не тратишь', value: fmt(sp.inSavings) }),
@@ -99,12 +99,22 @@ function heroBlock(o: Overview): HTMLElement {
       : h(
           'span',
           null,
-          `≈ ${fmt(sp.perDay)} в день`,
+          // «в день» — на все траты сразу, не только на еду (D105)
+          `≈ ${fmt(sp.perDay)} в день на всё`,
           sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '',
           // часть «обычно уходит» — по категориям, которые приложение не узнало (D104)
           sp.uncheckedMonthly > 0 ? h('span', null, ' · ', h('a', { href: '#/baskets', style: 'color:inherit' }, `не проверено ${fmt(mulDivDay(sp.uncheckedMonthly))} в день ›`)) : null,
         );
   return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+}
+
+/** Истории меньше 3 полных месяцев — числа приблизительные (этап 4 аудита, D105). */
+function historyNote(o: Overview): HTMLElement | null {
+  const n = o.baseline.months.length;
+  // меньше месяцев, чем просил человек в настройках, — значит, данных мало (а не настройка «считать по 2 мес.»)
+  if (n >= 3 || n >= getState().settings.baselineMonths) return null;
+  const have = n === 0 ? 'Полных месяцев в данных ещё нет' : `В данных ${nWord(n, 'полный месяц', 'полных месяца', 'полных месяцев')}`;
+  return h('div', { class: 'warnline' }, `${have} — «обычно уходит», подушка и прогноз пока приблизительные. С 3 месяцами истории станут точнее.`);
 }
 
 /** Подушка — одной строкой: готова или сколько осталось (D96). */
@@ -161,7 +171,7 @@ function emptyState(): HTMLElement {
   return h(
     'div',
     { class: 'screen' },
-    hero('Свободно', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
+    hero('Можно тратить', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
     h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'),
     h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве.'),
     h('a', { class: 'btn wide', href: '#/help' }, 'Что умеет приложение'),
@@ -233,6 +243,7 @@ export function renderOverview(): HTMLElement {
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
+    historyNote(o),
     h(
       'div',
       { class: 'cells' },

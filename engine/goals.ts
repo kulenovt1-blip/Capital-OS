@@ -221,8 +221,8 @@ export function changeStatus(g: Goal, status: GoalStatus, reason: string, date: 
     if (f > 0) {
       return {
         ok: false,
-        error: `На цели «${g.title}» (с подцелями) закреплено ${money(f)}. Сначала сними деньги с цели или перенеси их на другую — сама система этого не делает`,
-        explanation: [step('goal.status.funded', `Нельзя ${status === 'done' ? 'завершить' : 'отменить'}: закреплено ${money(f)}`, { level: 'warn', amount: f })],
+        error: `На цели «${g.title}» (с подцелями) отложено ${money(f)}. Сначала сними деньги с цели или перенеси их на другую — само приложение этого не делает`,
+        explanation: [step('goal.status.funded', `Нельзя ${status === 'done' ? 'завершить' : 'отменить'}: на неё отложено ${money(f)}`, { level: 'warn', amount: f })],
       };
     }
   }
@@ -337,11 +337,11 @@ function freeOnAccount(ctx: FundingCtx, accountId: string): Money {
 export function assignMoney(r: FundingRequest, ctx: FundingCtx): Outcome<GoalFunding> {
   const g = ctx.goals.find((x) => x.id === r.goalId);
   if (!g) return fail('Цель не найдена');
-  if (g.status === 'cancelled' || g.status === 'done') return fail(`Цель «${g.title}» ${STATUS_LABELS[g.status]} — закреплять за ней деньги нельзя`);
+  if (g.status === 'cancelled' || g.status === 'done') return fail(`Цель «${g.title}» ${STATUS_LABELS[g.status]} — откладывать на неё деньги нельзя`);
   if (!(r.accountId in ctx.balances)) return fail('Счёт не найден или не учитывается');
   if (!Number.isSafeInteger(r.amount) || r.amount <= 0) return fail('Сумма должна быть больше нуля');
   const free = freeOnAccount(ctx, r.accountId);
-  if (r.amount > free) return fail(`Нельзя закрепить ${money(r.amount)}: свободно на счёте ${money(pos(free))} (баланс ${money(ctx.balances[r.accountId]!)} минус уже закреплённое)`);
+  if (r.amount > free) return fail(`Нельзя отложить ${money(r.amount)}: свободно на счёте ${money(pos(free))} (баланс ${money(ctx.balances[r.accountId]!)} минус уже отложенное на цели)`);
   const f: GoalFunding = { id: r.id, goalId: r.goalId, accountId: r.accountId, amount: r.amount, date: r.date, decisionId: r.decisionId, ...(r.note ? { note: r.note } : {}) };
   return { ok: true, value: f, explanation: [step('funding.assigned', `Назначено ${money(r.amount)} на «${g.title}»`, { amount: r.amount, refs: { goalId: g.id, accountId: r.accountId } })] };
 }
@@ -352,7 +352,7 @@ export function withdrawMoney(r: FundingRequest, ctx: FundingCtx): Outcome<GoalF
   if (!g) return fail('Цель не найдена');
   if (!Number.isSafeInteger(r.amount) || r.amount <= 0) return fail('Сумма должна быть больше нуля');
   const funded = sum(ctx.fundings.filter((f) => f.goalId === r.goalId && f.accountId === r.accountId).map((f) => f.amount));
-  if (r.amount > funded) return fail(`За «${g.title}» на этом счёте закреплено ${money(funded)} — снять ${money(r.amount)} нельзя`);
+  if (r.amount > funded) return fail(`На «${g.title}» с этого счёта отложено ${money(funded)} — снять ${money(r.amount)} нельзя`);
   const f: GoalFunding = { id: r.id, goalId: r.goalId, accountId: r.accountId, amount: tiyn(-r.amount), date: r.date, decisionId: r.decisionId, ...(r.note ? { note: r.note } : {}) };
   return { ok: true, value: f, explanation: [step('funding.withdrawn', `Снято ${money(r.amount)} с «${g.title}»`, { amount: r.amount, refs: { goalId: g.id, accountId: r.accountId } })] };
 }
@@ -450,7 +450,7 @@ export function overAssignment(fundings: readonly GoalFunding[], balances: Reado
       assigned,
       shortfall,
       options,
-      text: `Закреплено больше, чем есть: на счёте ${money(balance)}, за целями ${money(assigned)}, не хватает ${money(shortfall)}. Выбери, с какой цели снять`,
+      text: `Отложено больше, чем есть: на счёте ${money(balance)}, отложено на цели ${money(assigned)}, не хватает ${money(shortfall)}. Выбери, с какой цели снять`,
     });
   }
   return out;
@@ -570,7 +570,7 @@ export function deleteGoal(
   const kids = ctx.goals.filter((x) => x.parentId === goalId);
   if (kids.length) return { ok: false, error: `У цели есть подцели (${kids.map((k) => `«${k.title}»`).join(', ')}) — сначала удали или перенеси их`, explanation: [] };
   const funded = fundedSubtree(goalId, ctx.goals, ctx.fundings);
-  if (funded !== 0) return { ok: false, error: `За целью закреплено ${money(funded)} — сначала сними деньги («Снять или перенести»)`, explanation: [] };
+  if (funded !== 0) return { ok: false, error: `На цель отложено ${money(funded)} — сначала сними деньги («Снять или перенести»)`, explanation: [] };
   const bound = ctx.accounts.filter((a) => a.boundGoalId === goalId);
   if (bound.length) return { ok: false, error: 'К цели привязан счёт — сначала отвяжи его', explanation: [] };
   const goals = ctx.goals
