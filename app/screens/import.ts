@@ -67,9 +67,9 @@ export function renderImport(rerender: () => void): HTMLElement {
       const hadData = !!getState().imported;
       await update((s) => {
         // новые категории размечаются сами по названию; «Отложил» — найти переводы на копилки (D96)
-        const auto = autoLabelCategories(s.settings.classification, data);
+        const auto = autoLabelCategories(s.settings.classification, data, s.settings.classes);
         labeled = auto.added;
-        const next: AppState = { ...s, imported: data, importedAt: today(), settings: { ...s.settings, classification: auto.settings, accounts: mergeAccountSettings(s.settings.accounts, data.accounts) } };
+        const next: AppState = { ...s, imported: data, importedAt: today(), settings: { ...s.settings, classification: auto.settings, classes: auto.classes, accounts: mergeAccountSettings(s.settings.accounts, data.accounts) } };
         const settled = settleSetAsides(next, today());
         moved = settled.moved;
         return settled.state;

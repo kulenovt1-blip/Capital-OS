@@ -176,15 +176,18 @@ export function trustChip(): HTMLElement {
 
 defineSheet('trust', () => {
   const t = trust();
+  const link = (r: { text: string; href: string; bad?: boolean }) =>
+    h('a', { class: `row${r.bad ? ' bad' : ''}`, href: r.href, onclick: (e: Event) => (e.preventDefault(), go(r.href)) }, h('div', { class: 'main' }, h('div', { class: 'title' }, r.text)), h('span', { class: 'chev' }, '›'));
+  // факты, предположения и оценки — отдельно (D104): сверка сошлась ≠ все цифры проверены
   return {
     title: 'Насколько верить цифрам',
-    body: t.reasons.length
-      ? h(
-          'div',
-          { class: 'rows' },
-          t.reasons.map((r) => h('a', { class: `row${r.bad ? ' bad' : ''}`, href: r.href, onclick: (e: Event) => (e.preventDefault(), go(r.href)) }, h('div', { class: 'main' }, h('div', { class: 'title' }, r.text)), h('span', { class: 'chev' }, '›'))),
-        )
-      : h('div', { class: 'okline' }, '✓ Сверка сошлась, настройка пройдена — цифры считаются по всем данным.'),
+    body: h(
+      'div',
+      { class: 'stack' },
+      t.level === 'bad' ? null : h('div', { class: 'okline' }, '✓ Данные загружены и сверены с MoneyManager'),
+      t.reasons.length ? [h('h3', { class: 'sub' }, h('span', null, t.level === 'bad' ? 'Что не так' : 'Что стоит проверить')), h('div', { class: 'rows' }, t.reasons.map(link))] : h('div', { class: 'okline' }, '✓ Предположений приложения нет — всё проверено тобой'),
+      t.notes.length ? [h('h3', { class: 'sub' }, h('span', null, 'Что основано на оценке')), h('div', { class: 'rows' }, t.notes.map(link))] : null,
+    ),
   };
 });
 

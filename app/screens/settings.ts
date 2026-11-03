@@ -136,6 +136,9 @@ defineSheet('account', (id) => {
       'div',
       { class: 'stack' },
       h('div', { class: 'card' }, h('strong', null, fmt(p.balance)), p.source === 'savings_flow' ? h('div', { class: 'muted' }, 'оценка по сумме переводов', info('savingsFlow')) : null),
+      o.spend.guessedSavings.includes(id)
+        ? h('div', { class: 'card stack' }, h('div', null, 'Приложение отметило этот счёт копилкой по названию. Это так?'), h('button', { class: 'btn primary wide', type: 'button', onclick: () => void patchAccount(id, (a) => ({ ...a, kind: 'savings' }), `«${p.title}» — копилка`) }, 'Да, это копилка'))
+        : null,
       rows(
         row({
           title: 'Копилка',

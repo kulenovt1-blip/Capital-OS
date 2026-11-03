@@ -63,8 +63,8 @@ function incomeStep(): HTMLElement {
     h('div', { class: 'q' }, 'Какие у тебя доходы?'),
     found.length
       ? [
-          h('p', { class: 'one-line' }, 'Нашли в бэкапе — оставь включёнными те, что верны. Сумму и число можно поправить потом в «Ещё → Доходы».'),
-          rows(found.map((c) => row({ title: c.title, sub: `≈ ${fmt(c.amount)}, около ${c.dayOfMonth}-го · ${c.months} мес. подряд`, value: toggle(pick.get(c.categoryId) ?? true, (v) => (pick.set(c.categoryId, v), refresh()), `Доход «${c.title}»`), chevron: false }))),
+          h('p', { class: 'one-line' }, 'Похоже, это регулярные доходы — нашли их в бэкапе. Оставь включёнными только те, что приходят каждый месяц. Сумму и число можно поправить потом в «Ещё → Доходы».'),
+          rows(found.map((c) => row({ title: c.title, sub: `≈ ${fmt(c.amount)}, около ${c.dayOfMonth}-го · было в ${c.months} из 3 последних месяцев`, value: toggle(pick.get(c.categoryId) ?? true, (v) => (pick.set(c.categoryId, v), refresh()), `Доход «${c.title}»`), chevron: false }))),
         ]
       : h('p', { class: 'one-line' }, 'Регулярных доходов в бэкапе не нашлось. Добавь, когда и сколько приходит — так приложение будет знать, до какого числа считать «Можно тратить».'),
     list ? [h('h3', { class: 'sub' }, h('span', null, 'Уже есть')), list] : null,

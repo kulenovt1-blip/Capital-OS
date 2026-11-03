@@ -6,7 +6,8 @@
 import { add, median, min, mulDiv, pos, sub, sum, ZERO, type Money } from './money';
 import { addDays, addMonths, monthKey, monthsBetween, type IsoDate, type MonthKey } from './date';
 import { classGroup, classifyAll, suggestClassForCategory, type ClassificationSettings, type OpClass } from './classify';
-import { classRegistry, type Behavior, type ClassDef, type ClassSettings } from './classes';
+import { UNCHECKED_CLASS_ID, classRegistry, type Behavior, type ClassDef, type ClassSettings } from './classes';
+export { UNCHECKED_CLASS_ID };
 import { eligibleGoals, ladder, listOrder, requiredMonthly, type StrategyParams } from './ladder';
 import { assignMoney, type Goal, type GoalFunding } from './goals';
 import { step, type Outcome } from './explain';
@@ -50,7 +51,9 @@ export function arrivedIncomes(state: AppState, today: IsoDate, o: Overview = bu
     if (o.spend.kinds[op.accountId] !== 'spend') continue;
     out.push({ opId: op.id, date: op.date, amount: op.amount, accountId: op.accountId, title: op.categoryId && cats.get(op.categoryId) ? categoryName(cats.get(op.categoryId)!, state.settings.categoryLabels) : 'доход' });
   }
-  return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.opId < b.opId ? 1 : -1));
+  // подарки — в конце: первым предлагается распределить зарплату, стипендию, пособие (D104)
+  const gift = new Set(o.classification.ops.filter((c) => c.cls === 'I_gift').map((c) => c.op.id));
+  return out.sort((a, b) => Number(gift.has(a.opId)) - Number(gift.has(b.opId)) || (a.date < b.date ? 1 : a.date > b.date ? -1 : a.opId < b.opId ? 1 : -1));
 }
 
 export interface SplitLine {
@@ -226,7 +229,7 @@ export function detectNewIncomes(state: AppState, today: IsoDate, o: Overview = 
   const by = new Map<string, { perMonth: Map<MonthKey, Money>; days: number[] }>();
   for (const c of o.classification.ops) {
     const op = c.op;
-    if (op.kind !== 'income' || classGroup(c.cls) !== 'income' || MINOR_INCOME.has(c.cls) || !op.categoryId) continue;
+    if (op.kind !== 'income' || classGroup(c.cls) !== 'income' || MINOR_INCOME.has(c.cls) || c.cls === 'I_gift' || !op.categoryId) continue;
     if (op.date < from || op.date > today) continue;
     const e = by.get(op.categoryId) ?? { perMonth: new Map<MonthKey, Money>(), days: [] as number[] };
     e.perMonth.set(monthKey(op.date), add(e.perMonth.get(monthKey(op.date)) ?? ZERO, op.amount));
@@ -234,6 +237,8 @@ export function detectNewIncomes(state: AppState, today: IsoDate, o: Overview = 
     by.set(op.categoryId, e);
   }
   const dismissed = new Set(state.settings.dismissedIncomes ?? []);
+  // подарки и не узнанные приложением доходы — не повод считать доход регулярным (D104)
+  for (const r of state.settings.classification.rules) if (r.categoryId && r.auto && r.class === 'I_other') dismissed.add(r.categoryId);
   const known = state.settings.incomeSchedule;
   const out: IncomeCandidate[] = [];
   for (const [catId, e] of [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
@@ -337,13 +342,14 @@ export function nextOrder(goals: readonly Goal[], parentId?: string): number {
 
 // ───────────────────────── 4 корзины трат ─────────────────────────
 
-export type Basket = 'everyday' | 'regular' | 'oneoff' | 'debts';
+export type Basket = 'everyday' | 'regular' | 'oneoff' | 'debts' | 'check';
 
 export const BASKET_LABELS: Record<Basket, string> = {
   everyday: 'Повседневное',
   regular: 'Регулярное',
   oneoff: 'Разовое',
   debts: 'Долги и рассрочки',
+  check: 'Нужно проверить',
 };
 
 export const BASKET_HINTS: Record<Basket, string> = {
@@ -351,9 +357,12 @@ export const BASKET_HINTS: Record<Basket, string> = {
   regular: 'каждый месяц, но можно урезать: развлечения, подписки, учёба',
   oneoff: 'крупные или редкие траты — не завышают «обычно уходит»',
   debts: 'платежи по рассрочкам и кредитам — считаются по графику, вычитаются заранее',
+  check: 'приложение не узнало категорию: в «обычно уходит» и прогнозе — по среднему за месяц, а не как каждый месяц',
 };
 
-export function basketOf(b: Behavior): Basket | null {
+
+export function basketOf(b: Behavior, classId?: OpClass): Basket | null {
+  if (classId === UNCHECKED_CLASS_ID) return 'check';
   if (b === 'base') return 'everyday';
   if (b === 'regular') return 'regular';
   if (b === 'installment') return 'debts';
@@ -362,43 +371,102 @@ export function basketOf(b: Behavior): Basket | null {
 }
 
 export const ONEOFF_CLASS_ID = 'U_E_razovoe' as OpClass;
+export const NEVER_CLASS_ID = 'U_E_ne_povtoritsya' as OpClass;
 
-/** Класс, которым категория попадает в корзину. Для «разового» — свой класс «Разовое», если его ещё нет. */
-export function basketClass(basket: Basket, classes: ClassSettings): { cls: OpClass; classes: ClassSettings } {
+/** Как ведёт себя «разовая» трата дальше (D104): повторится иногда / до даты / больше не будет. */
+export type OneoffKind = { kind: 'repeat' } | { kind: 'until'; date: IsoDate } | { kind: 'never' };
+
+export const ONEOFF_LABELS = { repeat: 'редкие, но повторяются', until: 'до даты', never: 'больше не повторится' } as const;
+
+/** Тип «Не проверено» есть в настройках (создаётся один раз). */
+export function ensureUncheckedClass(classes: ClassSettings): ClassSettings {
+  if (classes.custom.some((c) => c.id === UNCHECKED_CLASS_ID)) return classes;
+  const def: ClassDef = { id: UNCHECKED_CLASS_ID, label: 'Не проверено', group: 'expense', behavior: 'irregular', builtin: false };
+  return { ...classes, custom: [...classes.custom, def] };
+}
+
+function ensureClass(classes: ClassSettings, def: ClassDef): ClassSettings {
+  return classes.custom.some((c) => c.id === def.id) ? classes : { ...classes, custom: [...classes.custom, def] };
+}
+
+/** Класс, которым категория попадает в корзину. Для «разового» — по ответу «повторится / до даты / больше не будет». */
+export function basketClass(basket: Basket, classes: ClassSettings, oneoff: OneoffKind = { kind: 'repeat' }): { cls: OpClass; classes: ClassSettings } {
   if (basket === 'everyday') return { cls: 'E_base', classes };
   if (basket === 'regular') return { cls: 'E_other', classes };
   if (basket === 'debts') return { cls: 'E_installment_own', classes };
-  const existing = classRegistry(classes).find((c) => c.group === 'expense' && (c.behavior === 'irregular' || c.behavior === 'excluded') && !c.builtin);
-  if (existing) return { cls: existing.id, classes };
-  const def: ClassDef = { id: ONEOFF_CLASS_ID, label: 'Разовое', group: 'expense', behavior: 'irregular', builtin: false };
-  return { cls: def.id, classes: { ...classes, custom: [...classes.custom, def] } };
+  if (basket === 'check') return { cls: UNCHECKED_CLASS_ID, classes: ensureUncheckedClass(classes) };
+  if (oneoff.kind === 'never') {
+    const def: ClassDef = { id: NEVER_CLASS_ID, label: 'Больше не повторится', group: 'expense', behavior: 'excluded', builtin: false };
+    return { cls: def.id, classes: ensureClass(classes, def) };
+  }
+  if (oneoff.kind === 'until') {
+    const d = oneoff.date;
+    const id = `U_E_do_${d.replace(/-/g, '_')}` as OpClass;
+    const def: ClassDef = { id, label: `Временное до ${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`, group: 'expense', behavior: 'temporary', endDate: d, builtin: false };
+    return { cls: id, classes: ensureClass(classes, def) };
+  }
+  const def: ClassDef = { id: ONEOFF_CLASS_ID, label: 'Редкие траты', group: 'expense', behavior: 'irregular', builtin: false };
+  return { cls: def.id, classes: ensureClass(classes, def) };
+}
+
+/** Какой вид «разового» у класса — для подписи. */
+export function oneoffOf(c: ClassDef | undefined): keyof typeof ONEOFF_LABELS | null {
+  if (!c) return null;
+  if (c.behavior === 'irregular') return 'repeat';
+  if (c.behavior === 'temporary') return 'until';
+  if (c.behavior === 'excluded') return 'never';
+  return null;
 }
 
 /**
- * Разметить сами категории без правила (D96): по названию (частые слова), неизвестные — «прочее».
- * Правила помечаются `auto` — их видно и можно поправить в «Раскладке трат».
+ * Разметить сами категории без правила (D96, D104): по названию (частые слова) — тип по подсказке, с пометкой `auto`
+ * («проверь»); не узнанные траты — в «Не проверено» (в прогнозе по среднему, не как регулярные); доходы — «прочий».
  */
-export function autoLabelCategories(cls: ClassificationSettings, data: Pick<ImportedData, 'operations' | 'categories' | 'tags'>): { settings: ClassificationSettings; added: number } {
+export function autoLabelCategories(cls: ClassificationSettings, data: Pick<ImportedData, 'operations' | 'categories' | 'tags'>, classes: ClassSettings = { custom: [], overrides: {} }): { settings: ClassificationSettings; classes: ClassSettings; added: number } {
   const rep = classifyAll(data, cls);
   const cats = new Map<string, Category>(data.categories.map((c) => [c.id, c]));
   const rules = [...cls.rules];
   let added = 0;
+  let outClasses = classes;
   for (const u of rep.unclassified) {
     if (u.reason !== 'no_rule' || !u.categoryId) continue;
     const cat = cats.get(u.categoryId);
     if (!cat) continue;
     const name = categoryName(cat);
-    const c: OpClass = suggestClassForCategory(name, u.opKind) ?? (u.opKind === 'expense' ? 'E_other' : 'I_other');
+    const hint = suggestClassForCategory(name, u.opKind);
+    let c: OpClass;
+    if (hint) c = hint;
+    else if (u.opKind === 'expense') {
+      c = UNCHECKED_CLASS_ID;
+      outClasses = ensureUncheckedClass(outClasses);
+    } else c = 'I_other';
     rules.push({ categoryId: cat.id, categoryTitle: name, opKind: u.opKind, class: c, auto: true });
     added++;
   }
-  return { settings: added ? { ...cls, rules } : cls, added };
+  return { settings: added ? { ...cls, rules } : cls, classes: outClasses, added };
+}
+
+/** Категории, разложенные приложением и ещё не проверенные человеком (D104). */
+export function unconfirmedCategories(cls: ClassificationSettings): { guessed: string[]; unknown: string[] } {
+  const guessed: string[] = [];
+  const unknown: string[] = [];
+  for (const r of cls.rules) {
+    if (!r.categoryId) continue;
+    if (r.class === UNCHECKED_CLASS_ID) unknown.push(r.categoryId);
+    else if (r.auto) guessed.push(r.categoryId);
+  }
+  return { guessed, unknown };
+}
+
+/** «Всё верно»: снять пометку «разложено само» со всех узнанных по названию категорий. Не узнанные остаются «проверить». */
+export function confirmGuessedCategories(cls: ClassificationSettings): ClassificationSettings {
+  return { ...cls, rules: cls.rules.map((r) => (r.auto && r.class !== UNCHECKED_CLASS_ID ? (({ auto: _a, ...rest }) => rest)(r) : r)) };
 }
 
 /** Суммы корзин в обычный месяц — для «Раскладки трат». */
 export function basketOfClass(id: OpClass, reg: readonly ClassDef[]): Basket | null {
   const c = reg.find((x) => x.id === id);
-  return c && c.group === 'expense' ? basketOf(c.behavior) : null;
+  return c && c.group === 'expense' ? basketOf(c.behavior, c.id) : null;
 }
 
 // ───────────────────────── нераспределённое в копилках ─────────────────────────
