@@ -105,47 +105,55 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
     return r.yes !== null && r.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если да — ${fmtShort(r.yes)}, если нет — ${fmtShort(r.no)}`) : null;
   };
 
+  const more = (text: string, ...body: (HTMLElement | null)[]) => h('details', { class: 'fold' }, h('summary', null, text), h('div', { class: 'stack' }, ...body));
+  const label = (l: string) => l.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase());
+
   for (const f of found.filter((x) => x.id === 'interest_ignored' && x.level === 'fail')) {
     const x = hf.interest.find((i) => i.accountId === f.ref);
     if (!x) continue;
     shown.add(f);
     const setRate = (bp: number) => void act((s) => ({ ...s, settings: { ...s.settings, accounts: s.settings.accounts.map((a) => (a.accountId === x.accountId ? { ...a, rateBp: bp } : a)) } }), bp > 0 ? `Проценты по «${x.title}» в прогнозе: ${pct(bp)} годовых` : 'Проценты не считаем');
-    nodes.push(card('Проценты', f.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, accounts: s.settings.accounts.map((a) => (a.accountId === x.accountId ? { ...a, rateBp: yes ? x.suggestedRateBp : 0 } : a)) } })), h('span', { class: 'muted' }, 'Ставку можно поменять в «Ещё → Счета».'), chips(btn(`Да, ${pct(x.suggestedRateBp)}`, () => setRate(x.suggestedRateBp)), btn('Нет', () => setRate(0)))));
+    nodes.push(card('Проценты', `«${x.title}»: банк начисляет ≈ ${pct(x.suggestedRateBp)} годовых. Считать проценты дальше?`,
+      pv((s, yes) => ({ ...s, settings: { ...s.settings, accounts: s.settings.accounts.map((a) => (a.accountId === x.accountId ? { ...a, rateBp: yes ? x.suggestedRateBp : 0 } : a)) } })),
+      chips(btn(`Да, ${pct(x.suggestedRateBp)}`, () => setRate(x.suggestedRateBp)), btn('Нет', () => setRate(0))),
+      more('Откуда это', h('p', { class: 'muted' }, f.text), h('p', { class: 'muted' }, 'Ставку можно поменять в «Ещё → Счета».'))));
   }
   const lumpsF = found.find((x) => x.id === 'lumps_lost' && x.level === 'fail');
   if (lumpsF) {
     shown.add(lumpsF);
     const ids = new Set(lumpsF.ref!.split(','));
     const setL = (id: string, v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [id]: v } } }), v ? 'Крупные траты будут в прогнозе' : 'Крупные траты не повторятся');
-    nodes.push(
-      card(
-        'Крупные траты',
-        'Крупные траты сверх обычного месяца в прогноз не входят. Будут ещё такие?',
-        ...hf.lumps.filter((l) => ids.has(l.classId)).map((l) =>
-          h('div', { class: 'stack' },
-            h('span', null, `${l.label.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase())}: за год ${fmt(l.total)}, в обычный месяц ${fmt(l.median)}`),
-            pv((s, yes) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [l.classId]: yes } } })),
-            h('span', { class: 'muted' }, `крупные: ${l.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')}`),
-            chips(btn(`Да, +${fmtShort(l.extraMonthly)} в месяц`, () => setL(l.classId, true)), btn('Нет, это было разово', () => setL(l.classId, false))),
-          ),
-        ),
-      ),
-    );
+    // по одному вопросу на категорию, а не одна карточка на три
+    for (const l of hf.lumps.filter((x) => ids.has(x.classId))) {
+      nodes.push(card('Крупные траты', `${label(l.label)}: за год ${fmt(l.total)}, а в обычный месяц ${fmt(l.median)}. Крупные траты повторятся?`,
+        pv((s, yes) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [l.classId]: yes } } })),
+        chips(btn(`Да, +${fmtShort(l.extraMonthly)} в месяц`, () => setL(l.classId, true)), btn('Нет, это было разово', () => setL(l.classId, false))),
+        more('Какие именно', h('p', { class: 'muted' }, l.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')))));
+    }
   }
   const habitF = found.find((x) => x.id === 'installment_habit' && x.level === 'fail');
   if (habitF && hf.installments) {
     shown.add(habitF);
     const setH = (v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, newInstallments: v } }), v ? 'В прогнозе — новые рассрочки, как раньше' : 'Новых рассрочек не будет');
-    nodes.push(card('Рассрочки', habitF.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, newInstallments: yes } })), h('span', { class: 'muted' }, `«Да» — в прогнозе на рассрочки в месяц уходит в среднем ${fmt(hf.installments.avgMonthly)}, как за последний год (вместе с текущими). Конкретную покупку лучше добавить в «Планирую… → Новая рассрочка».`), chips(btn('Да, как раньше', () => setH(true)), btn('Нет', () => setH(false)))));
+    nodes.push(card('Рассрочки', `Рассрочки были ${hf.installments.monthsWith} мес. из ${hf.installments.months}, в среднем ${fmt(hf.installments.avgMonthly)} в месяц. Будут новые?`,
+      pv((s, yes) => ({ ...s, settings: { ...s.settings, newInstallments: yes } })),
+      chips(btn('Да, как раньше', () => setH(true)), btn('Нет', () => setH(false))),
+      more('Что значит «да»', h('p', { class: 'muted' }, habitF.text), h('p', { class: 'muted' }, 'В прогнозе на рассрочки будет уходить в среднем столько же, как за последний год (вместе с текущими). Конкретную покупку лучше добавить в «Планирую… → Новая рассрочка».'))));
   }
   const incF = found.find((x) => x.id === 'income_omitted' && x.level === 'fail');
   if (incF && hf.extraIncome) {
     shown.add(incF);
     const setI = (v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, extraIncome: v } }), v ? 'Подарки и прочее — в прогнозе' : 'Подарки и прочее не учитываем');
-    nodes.push(card('Подарки и прочие поступления', incF.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, extraIncome: yes } })), chips(btn(`Да, +${fmtShort(hf.extraIncome.extraMonthly)} в месяц`, () => setI(true)), btn('Нет', () => setI(false)))));
+    nodes.push(card('Подарки и прочие поступления', `Подарки деньгами, кешбэк и прочее — ≈ ${fmt(hf.extraIncome.extraMonthly)} в месяц сверх твоих доходов. Учитывать?`,
+      pv((s, yes) => ({ ...s, settings: { ...s.settings, extraIncome: yes } })),
+      chips(btn(`Да, +${fmtShort(hf.extraIncome.extraMonthly)} в месяц`, () => setI(true)), btn('Нет', () => setI(false))),
+      more('Откуда это', h('p', { class: 'muted' }, incF.text))));
   }
   return { nodes, shown };
 }
+
+/** Какой по счёту вопрос показан: «Потом» листает дальше (D121). */
+let qSkip = 0;
 
 function horizonSeg(k: number): HTMLElement {
   return seg(HORIZONS.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза');
@@ -181,7 +189,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': 'Прогноз' },
       h('div', { class: 'label' }, `Через ${word} у тебя будет`),
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
-      h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
+      h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас'),
       // долг дольше года: «через год» — за вычетом долга, и это нужно сказать, иначе сравнивают с «На руках» (D114, С6)
       debtLeft > 0 ? h('div', { class: 'subline' }, `Это за вычетом долга: через год ты ещё должен ${fmtShort(debtLeft)}, на счетах будет примерно ${fmtShort(((cap ?? 0) + debtLeft) as Money)}.`) : null,
       h('div', { class: 'subline' }, rwText),
@@ -192,35 +200,29 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
   const found = sanityCheck(st, today()).findings;
+  const qs: HTMLElement[] = [];
   const drops = found.filter((f) => f.id === 'income_drop_flat_spend' && f.level === 'fail' && f.ref);
-  for (const f of drops) root.append(dropCard(f.text, f.months![0]!, f.ref!));
+  for (const f of drops) qs.push(dropCard(f.text, f.months![0]!, f.ref!));
   const infl = found.find((f) => f.id === 'one_sided_inflation' && f.level === 'fail' && f.ref);
   if (infl) {
     const ids = new Set(infl.ref!.split(','));
     const setIdx = (id: string, v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === id ? { ...x, indexed: v } : x)) } }), v ? 'Доход будет расти вместе с ценами' : 'Доход не растёт');
-    root.append(
-      h(
-        'section',
-        { class: 'warnline stack', 'aria-label': 'Рост доходов' },
-        h('strong', null, `Траты в прогнозе дорожают на ${(st.settings.inflationBp / 100).toString().replace('.', ',')} % в год. Эти доходы повышают каждый год?`),
-        ...st.settings.incomeSchedule.filter((x) => ids.has(x.id)).map((x) =>
-          (() => {
-            const pv = previewIndexed(st, today(), x.id, 36);
-            return h(
-              'div',
-              { class: 'stack' },
-              h('span', null, `${x.title} · ${fmt(x.amount)}`),
-              pv.yes !== null && pv.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если повышают — ${fmtShort(pv.yes)}, если нет — ${fmtShort(pv.no)}.`) : null,
-              h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет')),
-            );
-          })(),
+    const inflText = `${(st.settings.inflationBp / 100).toString().replace('.', ',')} %`;
+    for (const x of st.settings.incomeSchedule.filter((i) => ids.has(i.id))) {
+      const pv = previewIndexed(st, today(), x.id, 36);
+      qs.push(
+        h('section', { class: 'warnline stack', 'aria-label': 'Рост дохода' },
+          h('strong', null, `«${x.title}» · ${fmt(x.amount)}. Его повышают каждый год вместе с ценами?`),
+          pv.yes !== null && pv.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если да — ${fmtShort(pv.yes)}, если нет — ${fmtShort(pv.no)}`) : null,
+          h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет')),
+          h('details', { class: 'fold' }, h('summary', null, 'Зачем это'), h('p', { class: 'muted' }, `Траты в прогнозе дорожают на ${inflText} в год. Если доход не растёт, остаток каждый год тает.`)),
         ),
-      ),
-    );
+      );
+    }
   }
   const short = found.find((f) => f.id === 'labels_exceed_money' && f.level === 'fail');
   if (short) {
-    root.append(h('section', { class: 'warnline stack', 'aria-label': 'Не хватит денег' }, h('strong', null, short.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('fc-draw', '') }, 'Выбрать цели'))));
+    qs.push(h('section', { class: 'warnline stack', 'aria-label': 'Не хватит денег' }, h('strong', null, short.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('fc-draw', '') }, 'Выбрать цели'))));
   }
   // траты взяты за месяцы с другим доходом (D113): предложить считать по месяцам без зарплаты
   const bPv = found.some((f) => f.id === 'baseline_other_income') ? previewBaselineMode(st, today(), 12) : null;
@@ -228,12 +230,12 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     const pv = bPv;
     if (pv) {
       const set = (mode: 'last' | 'no_work') => void act((x) => ({ ...x, settings: { ...x.settings, baselineMode: mode } }), mode === 'no_work' ? 'Обычные траты — по месяцам без зарплаты' : 'Обычные траты — по последним месяцам');
-      root.append(
+      qs.push(
         h(
           'section',
           { class: 'warnline stack', 'aria-label': 'Траты и зарплата' },
-          h('strong', null, 'Обычные траты сейчас считаются в том числе по месяцам, когда была зарплата, а её больше нет. Считать по месяцам без зарплаты?'),
-          h('div', null, `Обычно уходит: ${fmt(pv.usualNow)} → ${fmt(pv.usualNoWork)} в месяц (по ${nWord(pv.months, 'месяцу', 'месяцам', 'месяцам')} без работы).`),
+          h('strong', null, 'Траты считаются и по месяцам с зарплатой, а её больше нет. Считать по месяцам без неё?'),
+          h('div', { class: 'muted' }, `Обычно уходит: ${fmt(pv.usualNow)} → ${fmt(pv.usualNoWork)} в месяц`),
           pv.capitalNow !== null && pv.capitalNoWork !== null ? h('div', null, `Через год: ${fmtShort(pv.capitalNow)} → ${fmtShort(pv.capitalNoWork)}.`) : null,
           h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => set('no_work') }, 'Да, без зарплаты'), h('button', { class: 'chip', type: 'button', onclick: () => set('last') }, 'Нет, как сейчас')),
         ),
@@ -243,7 +245,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // редкие траты (1–2 за год), которые прогноз раскладывает на каждый месяц, — спросить, повторятся ли (D110)
   const sparse = sparseExpenses(st, today(), ov());
   if (sparse.length) {
-    root.append(
+    qs.push(
       h(
         'section',
         { class: 'warnline stack', 'aria-label': 'Редкие траты' },
@@ -254,7 +256,17 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     );
   }
   const asked = hiddenQuestions(found);
-  root.append(...asked.nodes);
+  qs.push(...asked.nodes);
+  // вопросы — по одному (D121): стена из восьми карточек пугает, один вопрос с «Потом» — нет
+  if (qs.length) {
+    const i = qSkip % qs.length;
+    root.append(
+      h('div', { class: 'stack tight' },
+        h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px' }, h('span', { class: 'muted' }, `Вопрос ${i + 1} из ${qs.length}`), qs.length > 1 ? h('button', { class: 'chip', type: 'button', onclick: () => { qSkip = i + 1; refresh(); } }, 'Потом') : null),
+        qs[i]!,
+      ),
+    );
+  }
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
@@ -318,15 +330,18 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
 
   {
     const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
-    root.append(rows(row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') })));
+    // одна группа строк вместо четырёх отдельных карточек (D121)
+    root.append(
+      rows(
+        row({ title: 'Из А в Б', sub: 'к какому сроку что нужно — посчитаю, что изменить', href: sheetHref('a-to-b') }),
+        row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что это даст', href: sheetHref('save-where') }),
+        row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') }),
+        row({ title: 'Если станет хуже или лучше', sub: 'сценарии', href: '#/forecast-more' }),
+      ),
+      sub('Планирую…'),
+      h('div', { class: 'chips wrap' }, [...PLAN_CHIPS.map((k) => h('a', { class: 'chip', href: sheetHref('plan', k) }, KINDS[k].label)), h('a', { class: 'chip', href: sheetHref('plan', 'own') }, 'Другое…')]),
+    );
   }
-  root.append(
-    rows(row({ title: 'Из А в Б', sub: 'скажи, к какому сроку что нужно, — посчитаю, что для этого изменить', href: sheetHref('a-to-b') })),
-    rows(row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что даст, если там тратить меньше', href: sheetHref('save-where') })),
-    sub('Планирую…'),
-    h('p', { class: 'one-line' }, 'Что изменится, если… Выбери событие — посчитаю, в план попадёт только по кнопке.'),
-    h('div', { class: 'chips wrap' }, [...PLAN_CHIPS.map((k) => h('a', { class: 'chip', href: sheetHref('plan', k) }, KINDS[k].label)), h('a', { class: 'chip', href: sheetHref('plan', 'own') }, 'Другое…')]),
-  );
   if (st.settings.plannedEvents.length) {
     root.append(
       sub('В плане'),
@@ -348,7 +363,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   }
   const att = attention(items);
   if (att) root.append(att);
-  root.append(rows(row({ title: 'Если станет хуже или лучше', sub: 'что будет, если станет хуже или лучше', href: '#/forecast-more' })), explainLink('forecast', 'Из чего прогноз'));
+  root.append(explainLink('forecast', 'Из чего прогноз'));
   return root;
 }
 
@@ -486,7 +501,7 @@ function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement
     // остальные доходы прогноз продолжает как есть — сказать прямо (D119)
     (() => {
       const others = st.settings.incomeSchedule.filter((x) => x.id !== incomeId && (!x.end || x.end > from));
-      return others.length ? h('span', { class: 'muted' }, `Остальные доходы после этого прогноз продолжает как есть: ${others.map((x) => `«${x.title}» ${fmt(x.amount)}`).join(', ')}. Если какой-то тоже закончится — `, h('a', { href: '#/settings' }, 'укажи дату'), '.') : '';
+      return others.length ? h('details', { class: 'fold' }, h('summary', null, 'Что с остальными доходами'), h('p', { class: 'muted' }, `Остальные доходы после этого прогноз продолжает как есть: ${others.map((x) => `«${x.title}» ${fmt(x.amount)}`).join(', ')}. Если какой-то тоже закончится — `, h('a', { href: '#/settings' }, 'укажи дату'), '.')) : '';
     })(),
   );
 }

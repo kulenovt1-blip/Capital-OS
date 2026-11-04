@@ -35,6 +35,9 @@ const FORBIDDEN: [RegExp, string][] = [
   [/\b20\d\d-\d\d\b(?!-)/, 'месяц в виде 2026-05'],
 ];
 
+/** Предельная высота главных экранов в экранах телефона (D121). */
+const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6 };
+
 const CONFIGURED = ['plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'distribute', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
@@ -181,6 +184,11 @@ for (const scheme of ['light', 'dark'] as const) {
       if (scheme === 'light' && stateName === 'configured' && name === 'overview') {
         const top = await page.locator('.hero').first().evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
         if (top > 300) problems.push(`главная плашка начинается на ${Math.round(top)} px`);
+      }
+      // лимит высоты (D121): главные экраны не растут обратно в стену текста; смотрим в светлой теме, один раз
+      if (scheme === 'light' && stateName === 'configured' && HEIGHT_LIMIT[name]) {
+        const screens = (await page.evaluate(() => document.documentElement.scrollHeight)) / 844;
+        if (screens > HEIGHT_LIMIT[name]!) problems.push(`экран «${name}» ${screens.toFixed(1)} экрана телефона — больше лимита ${HEIGHT_LIMIT[name]}`);
       }
       if (errors.length) problems.push(...errors.splice(0).map((e) => `ошибка страницы: ${e}`));
       if (problems.length) {

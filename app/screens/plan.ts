@@ -36,7 +36,8 @@ export const KINDS: Record<Kind, KindDef> = {
 };
 
 /** Порядок кнопок «Планирую…» на «Прогнозе». */
-export const PLAN_CHIPS: Kind[] = ['job', 'study', 'cut', 'move', 'buy', 'inst', 'loss', 'payoff', 'change'];
+/** Шесть частых событий на «Прогнозе»; остальные (потеря дохода, досрочное закрытие, смена дохода) — в «Другое…» (D121). */
+export const PLAN_CHIPS: Kind[] = ['job', 'study', 'cut', 'move', 'buy', 'inst'];
 
 let draft: { kind: Kind; event: LifeEvent; result: WhatIfResult } | null = null;
 let appliedPreset: string | null = null;

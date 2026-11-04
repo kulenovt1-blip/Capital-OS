@@ -92,7 +92,7 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
       id: 'cushion_ignores_money',
       // порядок целей — решение человека (04.11): деньги остаются за выбранной целью; это не ошибка модели, но человек должен видеть
       level: 'warn',
-      text: `Подушка: ${tg(cushion.progress)} из ${tg(cushion.goal.targetMin)}, хотя на счетах ${tg(o.spend.onHand)}. Приложение считает подушкой только деньги, отложенные именно на неё — деньги других целей не засчитываются`,
+      text: `Подушка: ${tg(cushion.progress)} из ${tg(cushion.goal.targetMin)}, хотя на счетах ${tg(o.spend.onHand)}: деньги других целей подушке не засчитываются`,
     });
   }
 
