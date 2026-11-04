@@ -23,6 +23,9 @@ export function baseClassIds(reg: readonly ClassDef[], today: IsoDate): OpClass[
 import type { AppState } from './state';
 import type { ImportedData } from './types';
 
+/** Доход меньше этой доли обычных месячных трат (в %) не ограничивает окно «до дохода» (D111). */
+export const WINDOW_INCOME_SHARE_PCT = 25;
+
 export interface NextIncome {
   date: IsoDate;
   source: 'schedule' | 'default';
@@ -33,16 +36,22 @@ export interface NextIncome {
  * Ближайшее ожидаемое поступление строго после сегодня (DECISIONS D34).
  * Без расписания — сегодня + defaultIncomeHorizonDays.
  */
-export function nextIncomeDate(settings: Settings, today: IsoDate): NextIncome {
-  let best: NextIncome | null = null;
-  const from = addDays(today, 1);
-  for (const it of [...settings.incomeSchedule].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-    const start = it.start ? maxDate(from, it.start) : from;
-    const d = nextDayOfMonth(start, it.dayOfMonth);
-    if (it.end && d > it.end) continue;
-    if (!best || d < best.date) best = { date: d, source: 'schedule', title: it.title };
-  }
-  return best ?? { date: addDays(today, settings.defaultIncomeHorizonDays), source: 'default' };
+export function nextIncomeDate(settings: Settings, today: IsoDate, minAmount: Money = ZERO): NextIncome {
+  // D111: «до дохода» — до ближайшего дохода, который что-то значит для трат; мелкое поступление окно не режет.
+  // Если крупных нет вовсе — как раньше, ближайший любой.
+  const pick = (min: Money): NextIncome | null => {
+    let best: NextIncome | null = null;
+    const from = addDays(today, 1);
+    for (const it of [...settings.incomeSchedule].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      if (it.amount < min) continue;
+      const start = it.start ? maxDate(from, it.start) : from;
+      const d = nextDayOfMonth(start, it.dayOfMonth);
+      if (it.end && d > it.end) continue;
+      if (!best || d < best.date) best = { date: d, source: 'schedule', title: it.title };
+    }
+    return best;
+  };
+  return (minAmount > 0 ? pick(minAmount) : null) ?? pick(ZERO) ?? { date: addDays(today, settings.defaultIncomeHorizonDays), source: 'default' };
 }
 
 /** Куда идти исправлять: экран и, если есть, раздел на нём. */
@@ -186,7 +195,12 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const fundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
   const installments = detectInstallments(state, today, classification);
 
-  const nextIncome = nextIncomeDate(state.settings, today);
+  // обычные траты нужны раньше: от них зависит, какой доход считать «настоящим» для окна «до дохода» (D111)
+  const reg = classRegistry(state.settings.classes);
+  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths);
+  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты');
+  const usualEarly = add(baseline.median, regular.median);
+  const nextIncome = nextIncomeDate(state.settings, today, mulDiv(usualEarly, WINDOW_INCOME_SHARE_PCT, 100));
   if (nextIncome.source === 'default') {
     explanation.push(step('overview.income_default', `Расписание доходов не задано: горизонт до следующего дохода принят ${state.settings.defaultIncomeHorizonDays} дн. (до ${day(nextIncome.date)})`, { date: nextIncome.date, level: 'warn' }));
   } else {
@@ -204,9 +218,6 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   );
 
   // цели: суммы по правилам, дерево, превышения назначений
-  const reg = classRegistry(state.settings.classes);
-  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths);
-  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты');
   const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
   const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
     essential: add(baseline.median, obligationsMonthly),

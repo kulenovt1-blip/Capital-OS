@@ -24,6 +24,7 @@ import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
 import { applyRepeatAnswer, baseForecast, capitalAt, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
+import { buildOverview } from '../../engine/overview';
 import type { OpClass } from '../../engine/classify';
 import { acc, cat, dataset, exp, inc, trf } from '../support/build';
 
@@ -296,5 +297,28 @@ describe('редкие траты: «повторится?» (D110, аудит �
 
   it('без редких трат вопросов нет', () => {
     expect(ids(profile({ rare: false }))).toEqual([]);
+  });
+});
+
+describe('окно «можно тратить до…» (D111, аудит №4 С7)', () => {
+  const withSmall = (amount: number): AppState => {
+    const s = profile();
+    return { ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, { id: 'small', title: 'Мелкий перевод', dayOfMonth: 11, amount: tenge(amount), kind: 'stable' }] } };
+  };
+
+  it('мелкий доход (меньше четверти месячных трат) окно не режет: до пособия 12-го, а не до перевода 11-го', () => {
+    const o = buildOverview(withSmall(4_000), TODAY);
+    expect(o.nextIncome).toMatchObject({ date: '2026-11-12', title: 'Пособие' });
+    expect(sanityCheck(withSmall(4_000), TODAY).findings.map((f) => f.id)).not.toContain('spend_window_small_income');
+  });
+
+  it('доход, который что-то значит для трат, окно ограничивает как раньше', () => {
+    expect(buildOverview(withSmall(60_000), TODAY).nextIncome).toMatchObject({ date: '2026-11-11', title: 'Мелкий перевод' });
+  });
+
+  it('если все доходы мелкие — ближайший любой, окно не пропадает', () => {
+    const s = withSmall(4_000);
+    const tiny = { ...s, settings: { ...s.settings, incomeSchedule: [{ id: 'small', title: 'Мелкий перевод', dayOfMonth: 11, amount: tenge(4_000), kind: 'stable' as const }] } };
+    expect(buildOverview(tiny, TODAY).nextIncome).toMatchObject({ date: '2026-11-11', source: 'schedule' });
   });
 });

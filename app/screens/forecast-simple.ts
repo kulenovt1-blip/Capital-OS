@@ -112,6 +112,8 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       h('div', { class: 'label' }, `Через ${word} у тебя будет`),
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
       h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
+      // та же база, что у числа выше: капитал за вычетом долгов (D111) — иначе его не с чем сравнить на «Обзоре»
+      capitalAt(sim, 0) === null ? null : h('div', { class: 'subline' }, `Сейчас: ${fmtShort(capitalAt(sim, 0) as Money)} (деньги и вклады за вычетом долгов — это не то же, что «На руках» на «Обзоре»)`),
       h('div', { class: 'subline' }, rwText),
       spendParts(),
     ),
