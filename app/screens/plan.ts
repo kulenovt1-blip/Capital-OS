@@ -15,7 +15,7 @@ import { ov } from '../ctx';
 import { errorsBox, fmt, fmtShort, monthGen, monthWord, moneyInput, newId, nWord, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 
-type Kind = 'job' | 'study' | 'loss' | 'change' | 'move' | 'buy' | 'inst' | 'payoff';
+type Kind = 'job' | 'study' | 'loss' | 'change' | 'cut' | 'move' | 'buy' | 'inst' | 'payoff';
 
 interface KindDef {
   label: string;
@@ -28,6 +28,7 @@ export const KINDS: Record<Kind, KindDef> = {
   study: { label: 'Конец учёбы', hint: 'стипендия или другой доход закончится' },
   loss: { label: 'Потеря дохода', hint: 'один из доходов пропадёт' },
   change: { label: 'Доход изменится', hint: 'прибавка или снижение — новая сумма в месяц' },
+  cut: { label: 'Урежу траты', hint: 'буду тратить меньше в месяц' },
   move: { label: 'Переезд, аренда', hint: 'траты в месяц станут больше или меньше' },
   buy: { label: 'Крупная покупка', hint: 'разовая трата' },
   inst: { label: 'Новая рассрочка', hint: 'платёж в месяц на несколько месяцев' },
@@ -35,7 +36,7 @@ export const KINDS: Record<Kind, KindDef> = {
 };
 
 /** Порядок кнопок «Планирую…» на «Прогнозе». */
-export const PLAN_CHIPS: Kind[] = ['job', 'study', 'move', 'buy', 'inst', 'loss', 'payoff', 'change'];
+export const PLAN_CHIPS: Kind[] = ['job', 'study', 'cut', 'move', 'buy', 'inst', 'loss', 'payoff', 'change'];
 
 let draft: { kind: Kind; event: LifeEvent; result: WhatIfResult } | null = null;
 let draftKind: Kind | null = null;
@@ -108,19 +109,20 @@ function kindForm(kind: Kind): { form: HTMLFormElement; read: () => { event?: Li
     if (!sel) return { empty: h('div', { class: 'card stack' }, h('strong', null, 'Нет рассрочек и долгов с будущими платежами'), h('p', { class: 'muted' }, 'Если долг есть — заведи его, и приложение посчитает, что даст досрочное погашение.'), h('a', { class: 'btn primary wide', href: '#/debts' }, 'Открыть «Долги и рассрочки»')) };
     parts.push(sel);
   }
-  const titleLabel: Partial<Record<Kind, [string, string]>> = { job: ['Откуда доход', 'Новая работа'], move: ['Что меняется', 'Аренда'], buy: ['Что покупаешь', ''], inst: ['Что берёшь в рассрочку', ''] };
+  const titleLabel: Partial<Record<Kind, [string, string]>> = { job: ['Откуда доход', 'Новая работа'], cut: ['На чём', 'Меньше трат'], move: ['Что меняется', 'Аренда'], buy: ['Что покупаешь', ''], inst: ['Что берёшь в рассрочку', ''] };
   const tl = titleLabel[kind];
   if (tl) parts.push(field(tl[0], h('input', { name: 'title', value: tl[1], placeholder: kind === 'buy' || kind === 'inst' ? 'Например: ноутбук' : '', autocomplete: 'off', required: true })));
-  const amountLabel: Partial<Record<Kind, string>> = { job: 'Сколько в месяц, ₸', move: 'На сколько в месяц, ₸', buy: 'Сколько стоит, ₸', inst: 'Платёж в месяц, ₸', change: 'Новая сумма в месяц, ₸' };
+  const amountLabel: Partial<Record<Kind, string>> = { job: 'Сколько в месяц, ₸', cut: 'На сколько меньше в месяц, ₸', move: 'На сколько в месяц, ₸', buy: 'Сколько стоит, ₸', inst: 'Платёж в месяц, ₸', change: 'Новая сумма в месяц, ₸' };
   if (kind === 'move') parts.push(dirBox);
   if (amountLabel[kind]) parts.push(field(amountLabel[kind]!, moneyInput('amount')));
   if (kind === 'inst') parts.push(field('Сколько месяцев', h('input', { name: 'months', type: 'number', min: 1, max: 60, inputmode: 'numeric', value: '12' })));
   const dateLabel: Record<Kind, string> = {
     job: 'Первая зарплата', study: 'С какого числа дохода не будет', loss: 'С какого числа дохода не будет', change: 'С какого числа новая сумма',
+    cut: 'С какого числа',
     move: 'С какого числа', buy: 'Когда', inst: 'Первый платёж', payoff: 'Когда закроешь',
   };
   parts.push(dateField('date', dateLabel[kind], kind === 'buy' || kind === 'payoff' ? today() : nextMonthStart(), kind === 'job' ? 'дальше — каждый месяц в этот же день' : undefined));
-  if (kind === 'job' || kind === 'move') parts.push(field('До какого числа (если временно)', h('input', { name: 'until', type: 'date' }), 'пусто — без конца'));
+  if (kind === 'job' || kind === 'move' || kind === 'cut') parts.push(field('До какого числа (если временно)', h('input', { name: 'until', type: 'date' }), 'пусто — без конца'));
   const err = h('div');
   const form = h('form', { class: 'stack', id }, ...parts.filter(Boolean), err);
   for (const [k, v] of Object.entries(typed)) {
@@ -163,6 +165,9 @@ function kindForm(kind: Kind): { form: HTMLFormElement; read: () => { event?: Li
         break;
       case 'change':
         event = { ...base, kind: 'income_change', title: `${income!.title}: ${fmt(amount!)} в месяц`, target: income!.id, amount: amount! };
+        break;
+      case 'cut':
+        event = { ...base, kind: 'recurring_change', title, amount: -amount! as Money, ...(until ? { until } : {}) };
         break;
       case 'move':
         event = { ...base, kind: 'recurring_change', title, amount: (direction === 'less' ? -amount! : amount!) as Money, ...(until ? { until } : {}) };
@@ -238,7 +243,9 @@ function resultCard(res: WhatIfResult, event: LifeEvent): HTMLElement {
 
 // ───────────────────────── подэкран ─────────────────────────
 
-defineSheet('plan', (arg) => {
+defineSheet('plan', (raw) => {
+  // «вид@ГГГГ-ММ-ДД» — форма с подставленной датой (вопрос «Что изменится?» на «Прогнозе», D108)
+  const [arg = '', preset] = raw.split('@');
   const kind = (arg in KINDS ? arg : null) as Kind | null;
   if (!kind) {
     // «Своё событие»: сначала — что происходит, списком с пояснениями
@@ -247,10 +254,10 @@ defineSheet('plan', (arg) => {
       body: rows((Object.keys(KINDS) as Kind[]).map((k) => row({ title: KINDS[k].label, sub: KINDS[k].hint, href: sheetHref('plan', k) }))),
     };
   }
-  if (draftKind !== kind) {
+  if (draftKind !== kind || (preset && typed.date !== preset)) {
     draft = null;
     draftKind = kind;
-    typed = {};
+    typed = preset ? { date: preset } : {};
     typedDirection = 'more';
   }
   const f = kindForm(kind);

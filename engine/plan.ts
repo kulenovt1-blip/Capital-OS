@@ -117,7 +117,7 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
     deposits,
     liabilities: o.capital.liabilities.total,
     payments,
-    incomes: state.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth, kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)), ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}) })),
+    incomes: state.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth, kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)), ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}), ...(x.indexed && state.settings.inflationBp > 0 ? { growth: { rateBp: state.settings.inflationBp, everyMonths: 12 } } : {}) })),
     expenses,
     events: state.settings.plannedEvents,
     goals: o.goals,
@@ -125,6 +125,7 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
     strategy: { id: state.settings.planStrategy },
     strategySettings: state.settings.strategy,
     baseMedian: o.baseline.median,
+    drawOrder: (state.settings.drawOrder ?? []).filter((id) => o.goals.some((g) => g.id === id && g.status === 'active')),
   };
   return { input, overview: o, warnings, notes };
 }

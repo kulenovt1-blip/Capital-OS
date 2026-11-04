@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, buildSimInput, classRegistry, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress } from '../ctx';
@@ -89,6 +89,21 @@ export function setOverviewBuilder(_b: OverviewBuilder): void {}
 /** Месячная сумма → в день (как «обычно уходит»: × 12 ÷ 365). */
 const mulDivDay = (m: Money): Money => mulDiv(m, 12, 365);
 
+/**
+ * Редкие траты (подарки, одежда…) — отдельной строкой, теми же числами, что в прогнозе (D109).
+ * В «≈ в день» их не смешиваем: за неделю до дохода они почти никогда не случаются, а в среднем «съели» бы большую часть.
+ */
+function rareLine(): HTMLElement | null {
+  const st = getState();
+  if (!st.imported) return null;
+  const reg = classRegistry(st.settings.classes);
+  const rare = buildSimInput(st, today()).input.expenses.filter((e) => reg.find((c) => c.id === e.key)?.behavior === 'irregular');
+  const total = rare.reduce((a, e) => a + e.monthly, 0) as Money;
+  if (total <= 0) return null;
+  const names = [...rare].sort((a, b) => b.monthly - a.monthly).slice(0, 2).map((e) => e.title.split(' (')[0]!.toLowerCase());
+  return h('a', { href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `+ редкие траты ≈ ${fmt(total)} в месяц (${names.join(', ')}${rare.length > 2 ? '…' : ''}) ›`);
+}
+
 function heroBlock(o: Overview): HTMLElement {
   const sp = o.spend;
   const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
@@ -104,6 +119,7 @@ function heroBlock(o: Overview): HTMLElement {
           sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '',
           // часть «обычно уходит» — по категориям, которые приложение не узнало (D104)
           sp.uncheckedMonthly > 0 ? h('span', null, ' · ', h('a', { href: '#/baskets', style: 'color:inherit' }, `не проверено ${fmt(mulDivDay(sp.uncheckedMonthly))} в день ›`)) : null,
+          rareLine(),
         );
   return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
@@ -128,7 +144,8 @@ function cushionRow(o: Overview): HTMLElement | null {
   return rows(
     row({
       title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
-      sub: `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
+      // деньги есть, но отложены на другие цели — сказать прямо (D107, аудит №4 К1)
+      sub: !ready && o.spend.onHand >= n.goal.targetMin ? `${fmt(n.progress)} из ${fmt(n.goal.targetMin)} · деньги на счетах есть, но отложены на другие цели` : `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
       value: ready ? h('span', { class: 'good' }, '✓') : undefined,
       href: '#/goals',
     }),
