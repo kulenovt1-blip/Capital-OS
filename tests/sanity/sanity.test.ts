@@ -22,6 +22,8 @@ import { createGoal, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
+import { applyRepeatAnswer, baseForecast, capitalAt, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { classRegistry } from '../../engine/classes';
 import type { OpClass } from '../../engine/classify';
 import { acc, cat, dataset, exp, inc, trf } from '../support/build';
 
@@ -241,5 +243,58 @@ describe('здравый смысл: чистый профиль без ложн
     expect(sanityFails(profile({ ...clean, inflationBp: 1000 }), TODAY)).toEqual(['one_sided_inflation']);
     // редкие траты — не ошибка: они показываются отдельно и на «Обзоре», и в прогнозе (D109)
     expect(sanityFails(profile({ ...clean, rare: true }), TODAY)).toEqual([]);
+  });
+});
+
+describe('редкие траты: «повторится?» (D110, аудит №4 С2)', () => {
+  const ids = (s: AppState) => sparseExpenses(s, TODAY).map((x) => x.categoryId);
+
+  it('находит категории с 1–2 тратами за год; 3 и больше, ежемесячные и рассрочки — нет', () => {
+    const s = profile();
+    // одежда — 2 траты; подарки — 3; еда и развлечения — каждый месяц; телефон — рассрочка
+    expect(ids(s)).toEqual(['clothes']);
+    const x = sparseExpenses(s, TODAY)[0]!;
+    expect(x.count).toBe(2);
+    expect(x.total).toBe(tenge(60_000));
+    expect(x.monthly).toBeGreaterThan(0);
+  });
+
+  it('вопрос виден в проверке здравого смысла как предупреждение с категорией', () => {
+    const f = sanityCheck(profile(), TODAY).findings.filter((x) => x.id === 'oneoff_averaged');
+    expect(f.map((x) => x.ref)).toEqual(['clothes']);
+    expect(f[0]!.level).toBe('warn');
+    // новых ошибок это не добавляет
+    expect(sanityFails(profile(), TODAY)).toEqual([...KNOWN_DEFECTS, ...UNANSWERED].sort());
+  });
+
+  it('«разовая»: трата уходит из прогноза, вопрос не повторяется, капитал растёт', () => {
+    const s = profile();
+    const after = applyRepeatAnswer(s, 'clothes', 'never');
+    expect(ids(after)).toEqual([]);
+    expect(sanityCheck(after, TODAY).findings.map((x) => x.id)).not.toContain('oneoff_averaged');
+    const reg = classRegistry(after.settings.classes);
+    expect(reg.find((c) => c.id === 'U_E_ne_povtoritsya')?.behavior).toBe('excluded');
+    expect(capitalAt(baseForecast(after, TODAY, 12), 12)!).toBeGreaterThan(capitalAt(baseForecast(s, TODAY, 12), 12)!);
+  });
+
+  it('«повторяется»: прогноз не меняется, но вопрос снят', () => {
+    const s = profile();
+    const after = applyRepeatAnswer(s, 'clothes', 'repeat');
+    expect(ids(after)).toEqual([]);
+    expect(capitalAt(baseForecast(after, TODAY, 12), 12)).toBe(capitalAt(baseForecast(s, TODAY, 12), 12));
+  });
+
+  it('предпросмотр совпадает с тем, что получится после ответа, и состояние не меняет', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    const pv = previewRepeat(s, TODAY, 'clothes', 12);
+    expect(JSON.stringify(s)).toBe(before);
+    expect(pv.now).toBe(capitalAt(baseForecast(s, TODAY, 12), 12));
+    expect(pv.ifNever).toBe(capitalAt(baseForecast(applyRepeatAnswer(s, 'clothes', 'never'), TODAY, 12), 12));
+    expect(pv.ifNever!).toBeGreaterThan(pv.now!);
+  });
+
+  it('без редких трат вопросов нет', () => {
+    expect(ids(profile({ rare: false }))).toEqual([]);
   });
 });

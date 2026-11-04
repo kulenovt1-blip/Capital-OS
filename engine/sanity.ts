@@ -14,6 +14,7 @@ import { addDays, formatDateRu, fullMonthsBefore, monthKey, type IsoDate, type M
 import { monthlyFlows } from './ledger';
 import { classRegistry } from './classes';
 import { flattenTree } from './goals';
+import { sparseExpenses } from './simple';
 import { buildSimInput } from './plan';
 import { simulate, type SimResult } from './simulate';
 import type { Overview } from './overview';
@@ -53,8 +54,6 @@ export const SANITY = {
   incomeDrop: 0.25,
   /** Цель «не достигается», но набрано столько → нельзя показывать как «никогда». */
   mostlyReached: 0.5,
-  /** Категория «редкого» с таким числом операций за год и меньше → похоже на разовое. */
-  oneoffOps: 2,
   /** Ближайший доход меньше этой доли месячных трат → окно «до дохода» режется мелким поступлением. */
   smallIncome: 0.25,
   /** Доля платежей по рассрочкам в месяце подушки → подушка больше чем наполовину из временного долга. */
@@ -183,20 +182,13 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
     }
   }
 
-  // 8. Разовое, усреднённое как ежегодное
-  const ops = o.classification?.ops ?? [];
-  const yearStart = fullMonthsBefore(today, 12)[0];
-  const reg = classRegistry(state.settings.classes);
-  for (const e of input.expenses) {
-    const c = reg.find((x) => x.id === e.key);
-    if (!c || c.behavior !== 'irregular') continue;
-    const n = ops.filter((x) => x.cls === c.id && (!yearStart || monthKey(x.op.date) >= yearStart) && x.op.date < today).length;
-    if (n > 0 && n <= SANITY.oneoffOps) {
-      out.push({ id: 'oneoff_averaged', level: 'warn', text: `«${c.label}»: ${n === 1 ? 'одна трата' : `${n} траты`} за год, а в прогнозе ${tg(e.monthly)} каждый месяц. Если это было разово — отметь в «Раскладке трат»` });
-    }
+  // 8. Разовое, усреднённое как ежегодное: спрашиваем «повторится?» (D110), пока человек не ответил
+  for (const x of sparseExpenses(state, today, o)) {
+    out.push({ id: 'oneoff_averaged', level: 'warn', ref: x.categoryId, text: `«${x.title}»: ${x.count === 1 ? 'одна трата' : `${x.count} траты`} за год, а в прогнозе ${tg(x.monthly)} каждый месяц. Это повторится?` });
   }
 
   // 9. Траты взяты за период с другим доходом
+  const ops = o.classification?.ops ?? [];
   const win = fullMonthsBefore(today, state.settings.baselineMonths);
   if (win.length >= 4) {
     const fl = monthlyFlows(ops, win);

@@ -4,8 +4,8 @@
  * автоматическая разметка и 4 корзины трат. Чистые функции; дата — параметр.
  */
 import { add, median, min, mulDiv, pos, sub, sum, ZERO, type Money } from './money';
-import { addDays, addMonths, monthKey, monthsBetween, type IsoDate, type MonthKey } from './date';
-import { classGroup, classifyAll, suggestClassForCategory, type ClassificationSettings, type OpClass } from './classify';
+import { addDays, addMonths, fullMonthsBefore, monthKey, monthsBetween, type IsoDate, type MonthKey } from './date';
+import { classGroup, classifyAll, setCategoryClass, suggestClassForCategory, type ClassificationSettings, type OpClass } from './classify';
 import { UNCHECKED_CLASS_ID, classRegistry, type Behavior, type ClassDef, type ClassSettings } from './classes';
 export { UNCHECKED_CLASS_ID };
 import { eligibleGoals, ladder, listOrder, requiredMonthly, type StrategyParams } from './ladder';
@@ -605,4 +605,74 @@ export function cushionStatus(n: { goal: Goal; progress: Money } | undefined): '
   if (!n) return 'none';
   if (n.goal.targetMin <= 0) return 'unknown';
   return n.progress >= n.goal.targetMin ? 'ready' : 'saving';
+}
+
+
+/** Редкая трата, про которую не спрошено, повторится ли она (D110). */
+export interface SparseExpense {
+  categoryId: string;
+  title: string;
+  count: number;
+  total: Money;
+  last: IsoDate;
+  /** Сколько прогноз берёт на неё сейчас, в месяц. */
+  monthly: Money;
+}
+
+/** Сколько трат в категории считаем «редкой» (как проверка здравого смысла). */
+export const SPARSE_MAX_OPS = 2;
+
+/**
+ * Категории, где за последние 12 месяцев было 1–2 траты, а прогноз раскладывает их на каждый месяц (D110, аудит №4, С2):
+ * «не проверено» (по среднему) и «редкие» (сумма за год ÷ 12). Уже отвеченные (`repeatAnswered`) не возвращаются.
+ * Сначала самые дорогие по вкладу в месяц.
+ */
+export function sparseExpenses(state: AppState, today: IsoDate, o: Overview = buildOverview(state, today)): SparseExpense[] {
+  if (!state.imported || !o.classification) return [];
+  const answered = new Set(state.settings.repeatAnswered ?? []);
+  const reg = classRegistry(state.settings.classes);
+  const ops = o.classification.ops;
+  let first: IsoDate | null = null;
+  for (const c of ops) if (first === null || c.op.date < first) first = c.op.date;
+  if (first === null) return [];
+  const months = fullMonthsBefore(today, 12).filter((m) => m >= monthKey(first!));
+  if (!months.length) return [];
+  const inWindow = new Set<string>(months);
+  const by = new Map<string, { classes: Set<OpClass>; count: number; total: Money; last: IsoDate }>();
+  for (const c of ops) {
+    if (c.op.kind !== 'expense' || c.op.categoryId === null || !inWindow.has(monthKey(c.op.date))) continue;
+    const v = by.get(c.op.categoryId) ?? { classes: new Set<OpClass>(), count: 0, total: ZERO, last: c.op.date };
+    v.classes.add(c.cls);
+    v.count++;
+    v.total = add(v.total, c.op.amount);
+    if (c.op.date > v.last) v.last = c.op.date;
+    by.set(c.op.categoryId, v);
+  }
+  const out: SparseExpense[] = [];
+  for (const [categoryId, v] of by) {
+    if (answered.has(categoryId) || v.count > SPARSE_MAX_OPS || v.classes.size !== 1) continue;
+    const cls = [...v.classes][0]!;
+    const def = reg.find((c) => c.id === cls);
+    if (!def || (def.behavior !== 'irregular' && cls !== UNCHECKED_CLASS_ID)) continue;
+    const cat = state.imported.categories.find((c) => c.id === categoryId);
+    if (!cat) continue;
+    out.push({ categoryId, title: categoryName(cat, state.settings.categoryLabels), count: v.count, total: v.total, last: v.last, monthly: mulDiv(v.total, 1, months.length) });
+  }
+  return out.sort((a, b) => b.monthly - a.monthly || a.title.localeCompare(b.title, 'ru'));
+}
+
+/** Ответ на «повторится ли?»: категория уходит из прогноза или остаётся «редкой» (по среднему за год). */
+export function applyRepeatAnswer(state: AppState, categoryId: string, answer: 'never' | 'repeat'): AppState {
+  const cat = state.imported?.categories.find((c) => c.id === categoryId);
+  const answeredSet = [...new Set([...(state.settings.repeatAnswered ?? []), categoryId])];
+  if (!cat) return { ...state, settings: { ...state.settings, repeatAnswered: answeredSet } };
+  const { cls, classes } = basketClass('oneoff', state.settings.classes, { kind: answer });
+  return { ...state, settings: { ...state.settings, classes, repeatAnswered: answeredSet, classification: setCategoryClass(state.settings.classification, cat, cls, 'expense') } };
+}
+
+/** Предпросмотр: капитал через k месяцев, если оставить как есть, и если ответить «разовая». */
+export function previewRepeat(state: AppState, today: IsoDate, categoryId: string, k = 12): { now: Money | null; ifNever: Money | null } {
+  const now = capitalAt(baseForecast(state, today, Math.max(k, 12)), k);
+  const ifNever = capitalAt(baseForecast(applyRepeatAnswer(state, categoryId, 'never'), today, Math.max(k, 12)), k);
+  return { now, ifNever };
 }

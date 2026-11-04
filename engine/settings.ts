@@ -194,6 +194,8 @@ export interface Settings {
   dismissedIncomes?: string[];
   /** Перенос на новую модель экранов сделан (D96). */
   simpleMigrated?: boolean;
+  /** Категории редких трат, про которые уже сказано «разовая» или «повторяется» (D110). */
+  repeatAnswered?: string[];
   /** Первый запуск (3 шага) пройден или пропущен (D96). */
   firstRunDone?: boolean;
 }

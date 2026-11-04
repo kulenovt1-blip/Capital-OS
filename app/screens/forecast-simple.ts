@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { buildSimInput, capitalAt, classRegistry, listOrder, runWhatIf, sanityCheck, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { applyRepeatAnswer, buildSimInput, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -155,8 +155,21 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   if (short) {
     root.append(h('section', { class: 'warnline stack', 'aria-label': 'Не хватит денег' }, h('strong', null, short.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('fc-draw', '') }, 'Выбрать цели'))));
   }
+  // редкие траты (1–2 за год), которые прогноз раскладывает на каждый месяц, — спросить, повторятся ли (D110)
+  const sparse = sparseExpenses(st, today(), ov());
+  if (sparse.length) {
+    root.append(
+      h(
+        'section',
+        { class: 'warnline stack', 'aria-label': 'Редкие траты' },
+        h('strong', null, 'Эти траты были 1–2 раза за год, а прогноз тратит их каждый месяц. Повторятся?'),
+        rows(sparse.slice(0, 3).map((x) => row({ title: x.title, sub: `${nWord(x.count, 'трата', 'траты', 'трат')} за год на ${fmt(x.total)} · в прогнозе ≈ ${fmt(x.monthly)} в месяц`, href: sheetHref('oneoff-q', x.categoryId) }))),
+        sparse.length > 3 ? h('p', { class: 'muted' }, `Ещё ${sparse.length - 3} — после этих.`) : null,
+      ),
+    );
+  }
   // порядок — по важности: что меняет вывод сильнее, то выше
-  const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch', 'oneoff_averaged'];
+  const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
     .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short)
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -279,6 +292,35 @@ defineSheet('fc-draw', () => {
         }),
       ),
       order.length ? null : h('p', { class: 'muted' }, 'Пока ничего не отмечено — прогноз не трогает цели и показывает, что за ними числится больше, чем будет денег.'),
+    ),
+  };
+});
+
+/** «Повторится ли эта трата?» (D110): предпросмотр — как изменится капитал через год при каждом ответе. */
+defineSheet('oneoff-q', (catId) => {
+  const st = getState();
+  const x = sparseExpenses(st, today(), ov()).find((e) => e.categoryId === catId);
+  if (!x) return null;
+  const pv = previewRepeat(st, today(), catId, 12);
+  const diff = pv.now !== null && pv.ifNever !== null ? ((pv.ifNever - pv.now) as Money) : null;
+  const answer = (a: 'never' | 'repeat') =>
+    void act((s) => applyRepeatAnswer(s, catId, a), a === 'never' ? `«${x.title}» — разовая, из прогноза убрана` : `«${x.title}» — повторяется, в прогнозе остаётся`).then(() => closeSheet());
+  return {
+    title: x.title,
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, `За год: ${nWord(x.count, 'трата', 'траты', 'трат')} на ${fmt(x.total)}, последняя ${fmtDay(x.last)}. Прогноз сейчас считает ≈ ${fmt(x.monthly)} в месяц и каждый год дорожает.`),
+      h('strong', null, 'Что изменится через год'),
+      rows(
+        row({ title: 'Повторяется', sub: 'траты остаются в прогнозе', value: pv.now === null ? '—' : fmtShort(pv.now) }),
+        row({ title: 'Разовая', sub: diff !== null && diff > 0 ? `+${fmtShort(diff)} к капиталу` : 'убрать из прогноза', value: pv.ifNever === null ? '—' : fmtShort(pv.ifNever) }),
+      ),
+      h('p', { class: 'muted' }, 'Если трата бывает раз в несколько месяцев — выбери «Повторяется»: прогноз берёт среднее за год, но не добавляет её в «обычно уходит». Каждый месяц до даты — в «Данные → Раскладка трат».'),
+      h('div', { class: 'chips wrap' },
+        h('button', { class: 'btn wide', type: 'button', onclick: () => answer('never') }, 'Разовая — больше не повторится'),
+        h('button', { class: 'btn wide', type: 'button', onclick: () => answer('repeat') }, 'Повторяется'),
+      ),
     ),
   };
 });
