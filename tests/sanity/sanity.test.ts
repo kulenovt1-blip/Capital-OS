@@ -67,16 +67,19 @@ interface ProfileOpts {
   /** Рассрочка. */
   installment?: boolean;
   inflationBp?: number;
+  /** Первый месяц истории (по умолчанию 2025-09, 14 месяцев). */
+  from?: string;
 }
 
 /** Обезличенный профиль: студент с пособием и стипендией, два месяца летней работы, карта ~20 тыс., копилка ~650 тыс. */
 function profile(o: ProfileOpts = {}): AppState {
   const { incomeEnds = true, pastJob = true, rare = true, boundSavings = true, installment = true } = o;
   const cats = [cat('food', 'Продукты'), cat('fun', 'Развлечения'), cat('gifts', 'Подарки'), cat('clothes', 'Одежда'), cat('job', 'Зарплата', 'income'), cat('stip', 'Стипендия', 'income'), cat('ben', 'Пособие', 'income'), cat('phone', 'Телефон')];
-  const ops = [inc('2025-09-01', 'card', 20_000, null)];
+  const first = o.from ?? '2025-09';
+  const ops = [inc(`${first}-01`, 'card', 20_000, null)];
   const rareOps: Record<string, number> = rare ? { '2025-12': 40_000, '2026-03': 40_000, '2026-04': 30_000, '2026-07': 40_000, '2026-09': 30_000 } : {};
   let card = 20_000;
-  for (const m of months('2025-09', '2026-10')) {
+  for (const m of months(first, '2026-10')) {
     const job = pastJob && m >= '2026-07' && m <= '2026-08';
     const income = (job ? 150_000 : 0) + 40_000 + 50_000;
     if (job) ops.push(inc(`${m}-05`, 'card', 150_000, 'job'));
@@ -321,4 +324,21 @@ describe('окно «можно тратить до…» (D111, аудит №4 
     const tiny = { ...s, settings: { ...s.settings, incomeSchedule: [{ id: 'small', title: 'Мелкий перевод', dayOfMonth: 11, amount: tenge(4_000), kind: 'stable' as const }] } };
     expect(buildOverview(tiny, TODAY).nextIncome).toMatchObject({ date: '2026-11-11', source: 'schedule' });
   });
+});
+
+describe('история разной длины: 1, 3 и 12+ месяцев (аудит №4, §4)', () => {
+  const allowed = [...KNOWN_DEFECTS, ...UNANSWERED];
+  for (const [name, from] of [['1 месяц', '2026-10'], ['3 месяца', '2026-08'], ['14 месяцев', '2025-09']] as const) {
+    it(`${name}: ничего не ломается, цифры конечные, новых ошибок нет`, () => {
+      const s = profile({ from });
+      const r = sanityCheck(s, TODAY);
+      expect(r.ctx!.sim.months.length).toBeGreaterThan(12);
+      for (const m of r.ctx!.sim.months) expect(Number.isFinite(m.capital)).toBe(true);
+      expect(Number.isFinite(r.ctx!.overview.spend.usualMonthly)).toBe(true);
+      // ошибки (fail) — только известные вопросы без ответа, ничего нового из-за короткой истории
+      for (const id of sanityFails(s, TODAY)) expect(allowed).toContain(id);
+      // и после ответов на вопросы — ни одной ошибки
+      expect(sanityFails(answered(s), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
+    });
+  }
 });
