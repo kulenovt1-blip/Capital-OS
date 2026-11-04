@@ -21,7 +21,7 @@ function spendParts(): HTMLElement | null {
   const usual = input.expenses.filter((x) => part(x.key) === 'usual').reduce((a, x) => a + x.monthly, 0) as Money;
   const rare = input.expenses.filter((x) => part(x.key) === 'rare').reduce((a, x) => a + x.monthly, 0) as Money;
   if (usual + rare <= 0) return null;
-  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `Траты в месяц: обычные ${fmtShort(usual)}${rare > 0 ? ` + редкие ${fmtShort(rare)}` : ''} ›`);
+  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Траты в месяц: обычные ${fmtShort(usual)}${rare > 0 ? ` + редкие ${fmtShort(rare)}` : ''} ›`);
 }
 
 /** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
