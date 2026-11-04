@@ -159,23 +159,41 @@ export function settleSetAsides(state: AppState, today: IsoDate): { state: AppSt
     const pending = state.fundings.filter((f) => f.pending && f.accountId === acc).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
     const since = pending[0]!.date;
     // переводы с этого счёта на копилки после даты «Отложил», минус то, что уже перенесено раньше
-    const transfers = state.imported.operations.filter((op) => op.kind === 'transfer' && op.fromAccountId === acc && op.date >= since && kinds[op.toAccountId] === 'savings');
+    const transfers = state.imported.operations
+      .filter((op) => op.kind === 'transfer' && op.fromAccountId === acc && op.date >= since && kinds[op.toAccountId] === 'savings')
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
     const alreadyMoved = sum(state.fundings.filter((f) => f.accountId === acc && f.amount < 0 && f.note === 'переведено на копилку').map((f) => -f.amount as Money));
-    let budget = pos(sub(sum(transfers.map((t) => (t.kind === 'transfer' ? t.fromAmount : ZERO))), alreadyMoved));
-    if (budget <= 0) continue;
-    const target = transfers[transfers.length - 1]!;
-    const to = target.kind === 'transfer' ? target.toAccountId : acc;
+    // очередь переводов: у каждого свой счёт-копилка и свой остаток; уже перенесённое списывается с самых ранних (D106)
+    const queue: { to: string; left: Money }[] = [];
+    let skip = alreadyMoved;
+    for (const t of transfers) {
+      if (t.kind !== 'transfer') continue;
+      const cut = min(skip, t.fromAmount);
+      skip = sub(skip, cut);
+      const left = sub(t.fromAmount, cut);
+      if (left > 0) queue.push({ to: t.toAccountId, left });
+    }
+    const uid = (base: string) => {
+      let id = base;
+      for (let n = 2; [...state.fundings, ...added].some((x) => x.id === id); n++) id = `${base}-${n}`;
+      return id;
+    };
     for (const f of pending) {
-      if (budget <= 0) break;
-      const left = net(acc, f.goalId, added);
-      const take = min(min(left, f.amount), budget);
-      if (take <= 0) continue;
-      added.push(
-        { id: `${f.id}-out`, goalId: f.goalId, accountId: acc, amount: -take as Money, date: today, decisionId: f.decisionId, note: 'переведено на копилку' },
-        { id: `${f.id}-in`, goalId: f.goalId, accountId: to, amount: take, date: today, decisionId: f.decisionId, note: 'переведено на копилку' },
-      );
-      budget = sub(budget, take);
-      moved = add(moved, take);
+      if (!queue.length) break;
+      let want = min(net(acc, f.goalId, added), f.amount);
+      // метки уходят на те копилки, куда реально пошли деньги, по порядку переводов
+      while (want > 0 && queue.length) {
+        const q = queue[0]!;
+        const take = min(want, q.left);
+        added.push(
+          { id: uid(`${f.id}-out`), goalId: f.goalId, accountId: acc, amount: -take as Money, date: today, decisionId: f.decisionId, note: 'переведено на копилку' },
+          { id: uid(`${f.id}-in`), goalId: f.goalId, accountId: q.to, amount: take, date: today, decisionId: f.decisionId, note: 'переведено на копилку' },
+        );
+        want = sub(want, take);
+        q.left = sub(q.left, take);
+        moved = add(moved, take);
+        if (q.left <= 0) queue.shift();
+      }
     }
   }
   return added.length ? { state: { ...state, fundings: [...state.fundings, ...added] }, moved } : { state, moved };
