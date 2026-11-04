@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { SAVING_CUT_PCT, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { SAVING_CUT_PCT, expensePart, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -23,10 +23,9 @@ const HORIZONS: [number, string, string][] = [
 function spendParts(): HTMLElement | null {
   const st = getState();
   const { input } = buildSimInput(st, today());
-  const reg = classRegistry(st.settings.classes);
-  const isRare = (k: string) => reg.find((c) => c.id === k)?.behavior === 'irregular';
-  const usual = input.expenses.filter((x) => !isRare(x.key)).reduce((a, x) => a + x.monthly, 0) as Money;
-  const rare = input.expenses.filter((x) => isRare(x.key)).reduce((a, x) => a + x.monthly, 0) as Money;
+  const part = (k: string) => expensePart(st, k);
+  const usual = input.expenses.filter((x) => part(x.key) === 'usual').reduce((a, x) => a + x.monthly, 0) as Money;
+  const rare = input.expenses.filter((x) => part(x.key) === 'rare').reduce((a, x) => a + x.monthly, 0) as Money;
   if (usual + rare <= 0) return null;
   return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `Траты в месяц: обычные ${fmtShort(usual)}${rare > 0 ? ` + редкие ${fmtShort(rare)}` : ''} ›`);
 }
@@ -55,30 +54,93 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
     input.incomes.length ? rows(input.incomes.map((x) => line(x.title, x.amount, `${x.dayOfMonth}-го${x.end ? ` · до ${dmy(x.end)}` : ''}`)), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(income as Money)) })) : h('p', { class: 'muted' }, 'не заданы'),
     // одна раскладка с «Обзором» (D109): обычные — как «обычно уходит», редкие — отдельно
     ...(() => {
-      const reg = classRegistry(st.settings.classes);
-      const isRare = (k: string) => reg.find((c) => c.id === k)?.behavior === 'irregular';
-      const lineOf = (x: (typeof input.expenses)[number]) => { const [t0, how] = x.title.split(' ('); const t = x.key === 'E_base' ? 'Повседневное' : t0!.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase()); return line(t, x.monthly, [how ? how.replace(/\)$/, '') : '', x.end ? `до ${dmy(x.end)}` : ''].filter(Boolean).join(' · ') || undefined); };
-      const usual = input.expenses.filter((x) => !isRare(x.key));
-      const rare = input.expenses.filter((x) => isRare(x.key));
+      const part = (k: string) => expensePart(st, k);
+      const lineOf = (x: (typeof input.expenses)[number]) => { const [t0, how] = x.title.split(' ('); const t = x.key === 'E_base' ? 'Повседневное' : t0!.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase()); return line(t, x.monthly, [how ? how.replace(/\)$/, '') : '', x.start && x.start > today() ? `с ${dmy(x.start)}` : '', x.end ? `до ${dmy(x.end)}` : ''].filter(Boolean).join(' · ') || undefined); };
+      const usual = input.expenses.filter((x) => part(x.key) === 'usual');
+      const rare = input.expenses.filter((x) => part(x.key) === 'rare');
+      const habit = input.expenses.filter((x) => part(x.key) === 'installments');
       const total = (xs: typeof input.expenses) => xs.reduce((a, x) => a + x.monthly, 0) as Money;
       if (!input.expenses.length) return [sub('Траты в месяц'), h('p', { class: 'muted' }, 'не размечены')];
       return [
         sub('Обычные траты в месяц'),
         rows(usual.map(lineOf), row({ title: h('strong', null, 'Обычные'), value: h('strong', null, fmt(total(usual))) })),
         rare.length ? [sub('Редкие траты в месяц'), rows(rare.map(lineOf), row({ title: h('strong', null, 'Редкие'), value: h('strong', null, fmt(total(rare))) }))] : null,
+        habit.length ? [sub('Новые рассрочки — как раньше'), rows(habit.map((x) => line(`${dmy(x.start!)} – ${dmy(x.end!)}`, x.monthly, 'в месяц сверх текущих платежей')))] : null,
         rows(row({ title: h('strong', null, 'Всего траты'), value: h('strong', null, fmt(spend as Money)) })),
       ];
     })(),
     byDebt.size ? [sub('Платежи по долгам'), rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))] : null,
     sub('Деньги сейчас'),
-    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : undefined))),
+    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, [d.rateBp > 0 ? `${(d.rateBp / 100).toString().replace('.', ',')} % годовых` : '', d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : ''].filter(Boolean).join(' · ') || undefined))),
     sub('Что ещё учтено'),
     rows(
       row({ title: 'Траты дорожают', value: `${(st.settings.inflationBp / 100).toString().replace('.', ',')}% в год` }),
+      ...input.incomes.filter((x) => x.growth).map((x) => row({ title: `«${x.title}» повышают`, value: `каждый год в ${['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'][Number((x.growthAnchor ?? x.start ?? today()).slice(5, 7)) - 1]}` })),
       row({ title: 'Плановые события', value: String(st.settings.plannedEvents.length), href: '#/forecast' }),
     ),
   );
 });
+
+/**
+ * Вопросы о данных, которые прогноз раньше выбрасывал (D119): каждый — на цифрах человека, с ответом в одно касание.
+ * Пока нет ответа — прогноз как раньше (без этих данных), и это видно.
+ */
+function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown: Set<SanityFinding> } {
+  const st = getState();
+  const hf = hiddenFacts(st, today(), ov());
+  const nodes: HTMLElement[] = [];
+  const shown = new Set<SanityFinding>();
+  const card = (label: string, title: string, ...body: (HTMLElement | null)[]) => h('section', { class: 'warnline stack', 'aria-label': label }, h('strong', null, title), ...body);
+  const chips = (...xs: HTMLElement[]) => h('div', { class: 'chips wrap' }, ...xs);
+  const btn = (text: string, fn: () => void) => h('button', { class: 'chip', type: 'button', onclick: fn }, text);
+  const pct = (bp: number) => `${(Math.round(bp / 10) / 10).toString().replace('.', ',')} %`;
+  // предпросмотр, как у остальных вопросов (D114): что будет через 3 года при «да» и при «нет»
+  const pv = (set: (s: typeof st, yes: boolean) => typeof st): HTMLElement | null => {
+    const r = previewAnswer(st, today(), set, 36);
+    return r.yes !== null && r.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если да — ${fmtShort(r.yes)}, если нет — ${fmtShort(r.no)}`) : null;
+  };
+
+  for (const f of found.filter((x) => x.id === 'interest_ignored' && x.level === 'fail')) {
+    const x = hf.interest.find((i) => i.accountId === f.ref);
+    if (!x) continue;
+    shown.add(f);
+    const setRate = (bp: number) => void act((s) => ({ ...s, settings: { ...s.settings, accounts: s.settings.accounts.map((a) => (a.accountId === x.accountId ? { ...a, rateBp: bp } : a)) } }), bp > 0 ? `Проценты по «${x.title}» в прогнозе: ${pct(bp)} годовых` : 'Проценты не считаем');
+    nodes.push(card('Проценты', f.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, accounts: s.settings.accounts.map((a) => (a.accountId === x.accountId ? { ...a, rateBp: yes ? x.suggestedRateBp : 0 } : a)) } })), h('span', { class: 'muted' }, 'Ставку можно поменять в «Ещё → Счета».'), chips(btn(`Да, ${pct(x.suggestedRateBp)}`, () => setRate(x.suggestedRateBp)), btn('Нет', () => setRate(0)))));
+  }
+  const lumpsF = found.find((x) => x.id === 'lumps_lost' && x.level === 'fail');
+  if (lumpsF) {
+    shown.add(lumpsF);
+    const ids = new Set(lumpsF.ref!.split(','));
+    const setL = (id: string, v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [id]: v } } }), v ? 'Крупные траты будут в прогнозе' : 'Крупные траты не повторятся');
+    nodes.push(
+      card(
+        'Крупные траты',
+        'Крупные траты сверх обычного месяца в прогноз не входят. Будут ещё такие?',
+        ...hf.lumps.filter((l) => ids.has(l.classId)).map((l) =>
+          h('div', { class: 'stack' },
+            h('span', null, `${l.label.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase())}: за год ${fmt(l.total)}, в обычный месяц ${fmt(l.median)}`),
+            pv((s, yes) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [l.classId]: yes } } })),
+            h('span', { class: 'muted' }, `крупные: ${l.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')}`),
+            chips(btn(`Да, +${fmtShort(l.extraMonthly)} в месяц`, () => setL(l.classId, true)), btn('Нет, это было разово', () => setL(l.classId, false))),
+          ),
+        ),
+      ),
+    );
+  }
+  const habitF = found.find((x) => x.id === 'installment_habit' && x.level === 'fail');
+  if (habitF && hf.installments) {
+    shown.add(habitF);
+    const setH = (v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, newInstallments: v } }), v ? 'В прогнозе — новые рассрочки, как раньше' : 'Новых рассрочек не будет');
+    nodes.push(card('Рассрочки', habitF.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, newInstallments: yes } })), h('span', { class: 'muted' }, `«Да» — в прогнозе на рассрочки в месяц уходит в среднем ${fmt(hf.installments.avgMonthly)}, как за последний год (вместе с текущими). Конкретную покупку лучше добавить в «Планирую… → Новая рассрочка».`), chips(btn('Да, как раньше', () => setH(true)), btn('Нет', () => setH(false)))));
+  }
+  const incF = found.find((x) => x.id === 'income_omitted' && x.level === 'fail');
+  if (incF && hf.extraIncome) {
+    shown.add(incF);
+    const setI = (v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, extraIncome: v } }), v ? 'Подарки и прочее — в прогнозе' : 'Подарки и прочее не учитываем');
+    nodes.push(card('Подарки и прочие поступления', incF.text, pv((s, yes) => ({ ...s, settings: { ...s.settings, extraIncome: yes } })), chips(btn(`Да, +${fmtShort(hf.extraIncome.extraMonthly)} в месяц`, () => setI(true)), btn('Нет', () => setI(false)))));
+  }
+  return { nodes, shown };
+}
 
 function horizonSeg(k: number): HTMLElement {
   return seg(HORIZONS.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза');
@@ -186,10 +248,12 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       ),
     );
   }
+  const asked = hiddenQuestions(found);
+  root.append(...asked.nodes);
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
-    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income'))
+    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income') && !asked.shown.has(f))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
     const top = sane.slice(0, 3);
@@ -398,8 +462,14 @@ function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement
     apply,
     h('div', { class: 'chips wrap' },
       h('a', { class: 'chip', href: sheetHref('plan', `job@${from}`) }, 'Будет другой доход'),
+      h('a', { class: 'chip', href: sheetHref('plan', `move@${from}`) }, 'Переезд, новые расходы'),
       h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndsAnswered: [...new Set([...(s.settings.incomeEndsAnswered ?? []), incomeId])] } }), 'Записано: ничего не изменится') }, 'Ничего не изменится'),
     ),
+    // остальные доходы прогноз продолжает как есть — сказать прямо (D119)
+    (() => {
+      const others = st.settings.incomeSchedule.filter((x) => x.id !== incomeId && (!x.end || x.end > from));
+      return others.length ? h('span', { class: 'muted' }, `Остальные доходы после этого прогноз продолжает как есть: ${others.map((x) => `«${x.title}» ${fmt(x.amount)}`).join(', ')}. Если какой-то тоже закончится — `, h('a', { href: '#/settings' }, 'укажи дату'), '.') : '';
+    })(),
   );
 }
 

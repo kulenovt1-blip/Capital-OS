@@ -27,3 +27,4 @@ export * from './sanity';
 export * from './stage';
 export * from './saving';
 export * from './route';
+export * from './hidden';

@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, buildSimInput, classRegistry, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, stageNow } from '../ctx';
@@ -96,8 +96,8 @@ const mulDivDay = (m: Money): Money => mulDiv(m, 12, 365);
 function rareLine(): HTMLElement | null {
   const st = getState();
   if (!st.imported) return null;
-  const reg = classRegistry(st.settings.classes);
-  const rare = buildSimInput(st, today()).input.expenses.filter((e) => reg.find((c) => c.id === e.key)?.behavior === 'irregular');
+  // редкие — те же, что в прогнозе: за год / 12 и крупные сверх обычного месяца (D109, D119)
+  const rare = buildSimInput(st, today()).input.expenses.filter((e) => expensePart(st, e.key) === 'rare');
   const total = rare.reduce((a, e) => a + e.monthly, 0) as Money;
   if (total <= 0) return null;
   const names = [...rare].sort((a, b) => b.monthly - a.monthly).slice(0, 2).map((e) => e.title.split(' (')[0]!.toLowerCase());
@@ -145,7 +145,14 @@ function cushionRow(o: Overview): HTMLElement | null {
     row({
       title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
       // деньги есть, но отложены на другие цели — сказать прямо (D107, аудит №4 К1)
-      sub: !ready && o.spend.onHand >= n.goal.targetMin ? `${fmt(n.progress)} из ${fmt(n.goal.targetMin)} · деньги на счетах есть, но отложены на другие цели` : `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
+      sub: [
+        `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
+        !ready && o.spend.onHand >= n.goal.targetMin ? 'деньги на счетах есть, но отложены на другие цели' : '',
+        // из чего подушка (D119, решение владельца): жизнь + платежи по рассрочкам — рассрочки кончатся, подушка станет меньше
+        n.goal.targetRule?.kind === 'months_of_base' && n.goal.targetRule.basis === 'essential' && o.spend.obligationsMonthly > 0
+          ? `${n.goal.targetRule.months ?? getState().settings.reserveMonths} мес. × (жизнь ${fmt(o.baseline.median)} + рассрочки ${fmt(o.spend.obligationsMonthly)})`
+          : '',
+      ].filter(Boolean).join(' · '),
       value: ready ? h('span', { class: 'good' }, '✓') : undefined,
       href: '#/goals',
     }),

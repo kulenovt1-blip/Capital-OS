@@ -223,7 +223,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const bWindow = baselineWindow(state, classification?.ops ?? [], today);
   const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths, undefined, bWindow);
   const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты', bWindow);
-  const usualEarly = add(baseline.median, regular.median);
+  // как в прогнозе — сумма медиан по каждому классу (D119): иначе «обычные траты» на «Обзоре» и в прогнозе — два разных числа
+  const regularMedian = sum(regularClassIds(reg, today).map((c) => baselineMonthly(classification?.ops ?? [], today, c, state.settings.baselineMonths, undefined, bWindow).median));
+  const usualEarly = add(baseline.median, regularMedian);
   const nextIncome = nextIncomeDate(state.settings, today, mulDiv(usualEarly, WINDOW_INCOME_SHARE_PCT, 100));
   if (nextIncome.source === 'default') {
     explanation.push(step('overview.income_default', `Расписание доходов не задано: горизонт до следующего дохода принят ${state.settings.defaultIncomeHorizonDays} дн. (до ${day(nextIncome.date)})`, { date: nextIncome.date, level: 'warn' }));
@@ -245,7 +247,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
   const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
     essential: add(baseline.median, obligationsMonthly),
-    all: add(add(add(baseline.median, regular.median), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
+    all: add(add(add(baseline.median, regularMedian), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
   });
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
@@ -322,12 +324,12 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const days = Math.max(1, daysBetween(today, nextIncome.date));
   // не узнанные категории: в «обычно уходит» — по среднему за месяц, а не медианой как регулярные (D104)
   const unchecked = averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly;
-  const usualMonthly = add(add(baseline.median, regular.median), unchecked);
+  const usualMonthly = add(add(baseline.median, regularMedian), unchecked);
   const spend: SpendView = {
     kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
-    onHand, inSavings, locked, obligationsMonthly, regularMedian: regular.median,
+    onHand, inSavings, locked, obligationsMonthly, regularMedian,
   };
   return {
     spend,

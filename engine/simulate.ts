@@ -29,6 +29,8 @@ export interface IncomeStream {
   kind: IncomeKind;
   /** Рост на rateBp каждые everyMonths месяцев от начала потока (или симуляции). */
   growth?: { rateBp: number; everyMonths: number };
+  /** От какой даты считать шаги роста (месяц прошлого повышения, D119); без неё — от начала потока или симуляции. */
+  growthAnchor?: IsoDate;
 }
 
 export interface ExpenseBaseline {
@@ -282,7 +284,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
   const progress = new Map(inp.progress);
 
   // события, меняющие потоки, применяются к параметрам заранее
-  const streams: Stream[] = inp.incomes.map((s) => ({ ...s, anchor: s.start ?? inp.start }));
+  const streams: Stream[] = inp.incomes.map((s) => ({ ...s, anchor: s.growthAnchor ?? s.start ?? inp.start }));
   const expenses = inp.expenses.map((x) => ({ ...x }));
   const events = [...inp.events].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
   for (const e of events) {
@@ -397,7 +399,8 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
       m.interestAccrued = add(m.interestAccrued, it);
     }
     // прирост месяца назначается целям по стратегии (метки, капитал не меняется)
-    const surplus = sub(sub(sub(m.income, m.expenses), m.obligations), m.events);
+    // проценты — тоже прирост: по копилке, привязанной к цели, они и есть её деньги (D119)
+    const surplus = add(sub(sub(sub(m.income, m.expenses), m.obligations), m.events), m.interestAccrued);
     if (surplus > 0 && inp.goals.length) {
       const r = ladder({ amount: surplus, today: last, goals: inp.goals, progress, fundedThisMonth: new Map(), strategy: inp.strategy, settings: inp.strategySettings });
       for (const [g, a] of Object.entries(r.byGoal)) {
