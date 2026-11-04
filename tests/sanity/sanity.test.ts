@@ -28,13 +28,12 @@ import { acc, cat, dataset, exp, inc, trf } from '../support/build';
 const TODAY = '2026-11-04';
 
 /**
- * Известные ошибки модели (аудит №4, claude/audit-4-model-sanity.md). Исправил — убери строку.
- * К4 labels_exceed_money — метки в прогнозе не уменьшаются при нехватке денег; С1 expense_mismatch — два разных числа трат.
- * (К1 «подушка не видит денег» — не ошибка: порядок целей решает человек, D108; теперь warn.)
+ * Известные ошибки модели (аудит №4, claude/audit-4-model-sanity.md). Исправил — убери строку. Цель — пусто.
+ * Закрыты: К1 подушка (D108 — не ошибка, решение человека, warn), К2 и К3 (D108 — вопросы), К4 и С1 (D109).
  */
-const KNOWN_DEFECTS: SanityId[] = ['expense_mismatch', 'labels_exceed_money'];
-/** Вопросы, на которые человек ещё не ответил (D108): пока нет ответа — вывод держится на допущении. */
-const UNANSWERED: SanityId[] = ['income_drop_flat_spend', 'one_sided_inflation'];
+const KNOWN_DEFECTS: SanityId[] = [];
+/** Вопросы, на которые человек ещё не ответил: пока нет ответа — вывод держится на допущении (D108, D109). */
+const UNANSWERED: SanityId[] = ['income_drop_flat_spend', 'labels_exceed_money', 'one_sided_inflation'];
 
 function months(from: string, to: string): string[] {
   const out: string[] = [];
@@ -128,9 +127,9 @@ function profile(o: ProfileOpts = {}): AppState {
   };
 }
 
-/** Человек ответил на вопросы: пособие повышают, после стипендии «ничего не изменится». */
+/** Человек ответил на вопросы: пособие повышают, после стипендии «ничего не изменится», при нехватке брать из подушки, потом из базы. */
 function answered(s: AppState): AppState {
-  return { ...s, settings: { ...s.settings, incomeEndsAnswered: ['stip'], incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === 'ben' ? { ...x, indexed: true } : x)) } };
+  return { ...s, settings: { ...s.settings, incomeEndsAnswered: ['stip'], drawOrder: ['cushion', 'base'], incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === 'ben' ? { ...x, indexed: true } : x)) } };
 }
 
 describe('здравый смысл: профиль «как у живого человека»', () => {
@@ -201,6 +200,33 @@ describe('здравый смысл: профиль «как у живого ч�
   });
 });
 
+describe('нехватка денег: сначала свободные, потом цели, которые выбрал человек (D109)', () => {
+  const roots = (m: { goalProgress: Record<string, number> }) => (m.goalProgress.base ?? 0) + (m.goalProgress.cushion ?? 0);
+
+  it('без выбора — цели не трогаются, вопрос «из каких целей брать?»', () => {
+    const r = sanityCheck(profile(), TODAY);
+    expect(r.findings.find((f) => f.id === 'labels_exceed_money')?.level).toBe('fail');
+    expect(Object.keys(r.ctx!.sim.drawnFrom)).toEqual([]);
+  });
+
+  it('с выбором — за целями никогда не числится больше, чем денег; берётся по порядку, который выбрал человек', () => {
+    const r = sanityCheck(answered(profile()), TODAY);
+    for (const m of r.ctx!.sim.months) expect(roots(m)).toBeLessThanOrEqual(Math.max(0, m.assets));
+    expect(r.findings.some((f) => f.id === 'labels_exceed_money')).toBe(false);
+    // первая в списке — подушка: из неё и берётся, база не тронута, пока подушки хватает
+    const d = r.ctx!.sim.drawnFrom;
+    expect(Object.keys(d)).toContain('cushion');
+    expect(r.findings.some((f) => f.id === 'goal_drawn' && f.ref === 'cushion')).toBe(true);
+  });
+
+  it('пока свободные деньги есть — цели не трогаются', () => {
+    // нехватка меньше свободных денег: на карте 500 тыс. свободных
+    const s = answered(profile());
+    const rich = { ...s, imported: { ...s.imported!, operations: [...s.imported!.operations, { kind: 'income' as const, id: 'gift', date: '2026-10-30', amount: tenge(500_000), accountId: 'card', categoryId: null, tagIds: [], comment: '' }] } };
+    expect(sanityCheck(rich, TODAY).ctx!.sim.drawnFrom).toEqual({});
+  });
+});
+
 describe('здравый смысл: чистый профиль без ложных срабатываний', () => {
   it('стабильный доход, подушка с деньгами, без инфляции, без рассрочек и редких трат — ошибок нет', () => {
     const s = profile({ incomeEnds: false, pastJob: false, rare: false, boundSavings: false, installment: false, inflationBp: 0 });
@@ -213,6 +239,7 @@ describe('здравый смысл: чистый профиль без ложн
     const clean = { incomeEnds: false, pastJob: false, rare: false, boundSavings: false, installment: false, inflationBp: 0 };
     expect(sanityFails(profile({ ...clean, incomeEnds: true }), TODAY)).toEqual(['income_drop_flat_spend']);
     expect(sanityFails(profile({ ...clean, inflationBp: 1000 }), TODAY)).toEqual(['one_sided_inflation']);
-    expect(sanityFails(profile({ ...clean, rare: true }), TODAY)).toEqual(['expense_mismatch']);
+    // редкие траты — не ошибка: они показываются отдельно и на «Обзоре», и в прогнозе (D109)
+    expect(sanityFails(profile({ ...clean, rare: true }), TODAY)).toEqual([]);
   });
 });

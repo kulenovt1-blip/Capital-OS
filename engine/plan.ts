@@ -125,6 +125,7 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
     strategy: { id: state.settings.planStrategy },
     strategySettings: state.settings.strategy,
     baseMedian: o.baseline.median,
+    drawOrder: (state.settings.drawOrder ?? []).filter((id) => o.goals.some((g) => g.id === id && g.status === 'active')),
   };
   return { input, overview: o, warnings, notes };
 }

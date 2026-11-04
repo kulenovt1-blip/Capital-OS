@@ -10,7 +10,7 @@
  *  - проценты по вкладу копятся во вкладе и недоступны до availableFrom (§6.2);
  *  - назначения целям — метки: на капитал не влияют; месячный прирост назначается по стратегии.
  */
-import { add, applyBp, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
+import { add, applyBp, min, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
 import { addDays, addMonths, daysInMonth, endOfMonth, formatMonthRu, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate, type MonthKey } from './date';
 import { day, money, step, type Explanation } from './explain';
 import type { IncomeKind } from './settings';
@@ -98,6 +98,11 @@ export interface SimInput {
   strategy: StrategyParams;
   strategySettings: StrategySettings;
   baseMedian: Money;
+  /**
+   * Из каких целей брать, когда свободные деньги кончились (D109), — по порядку. Нет списка — метки не трогаются,
+   * а «закреплено больше, чем есть» остаётся вопросом к человеку.
+   */
+  drawOrder?: readonly GoalId[];
 }
 
 export interface ScenarioPatch {
@@ -151,6 +156,8 @@ export interface SimMonth {
   goalProgress: Record<GoalId, Money>;
   /** Назначено целям из прироста месяца. */
   allocated: Record<GoalId, Money>;
+  /** Взято из целей в конце месяца, когда свободных денег не хватило (D109). */
+  drawn: Record<GoalId, Money>;
   /** Резерв в десятых долях месяца базовых расходов. */
   reserveMonthsTenths: number | null;
 }
@@ -166,6 +173,10 @@ export interface SimResult {
   months: SimMonth[];
   gaps: Gap[];
   goalDates: Record<GoalId, MonthKey | null>;
+  /** Из каких целей пришлось взять при нехватке: с какого месяца и сколько всего (D109). */
+  drawnFrom: Record<GoalId, { from: MonthKey; total: Money }>;
+  /** С какого месяца за целями числится больше, чем есть денег (и брать не из чего). */
+  overAssignedFrom: MonthKey | null;
   capitalAfter: Record<number, Money | null>;
   minCapital: { month: MonthKey; value: Money };
   violations: string[];
@@ -299,7 +310,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
     const dim = daysInMonth(Number(first.slice(0, 4)), Number(first.slice(5, 7)));
     const m: SimMonth = {
       month: monthKey(first), income: ZERO, expenses: ZERO, obligations: ZERO, events: ZERO, interestAccrued: ZERO,
-      cashEnd: ZERO, depositsEnd: ZERO, liquidEnd: ZERO, assets: ZERO, liabilities: ZERO, capital: ZERO, goalProgress: {}, allocated: {}, reserveMonthsTenths: null,
+      cashEnd: ZERO, depositsEnd: ZERO, liquidEnd: ZERO, assets: ZERO, liabilities: ZERO, capital: ZERO, goalProgress: {}, allocated: {}, drawn: {}, reserveMonthsTenths: null,
     };
     let interestDays = 0;
     for (let d = first; d <= last; d = addDays(d, 1)) {
@@ -401,6 +412,21 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
     m.assets = add(cash, depositsEnd);
     m.liabilities = liabilities;
     m.capital = sub(m.assets, liabilities);
+    // нехватка (D109): свободные деньги уже ушли сами (метки не превышают денег, пока свободные есть);
+    // если за целями числится больше, чем денег, — берём из целей, которые человек отметил, по его порядку
+    const excess = sub(sum([...progress.values()]), pos(m.assets));
+    if (excess > 0 && inp.drawOrder?.length) {
+      let left = excess;
+      for (const id of inp.drawOrder) {
+        const have = progress.get(id) ?? ZERO;
+        if (have <= 0) continue;
+        const take = min(have, left);
+        progress.set(id, sub(have, take));
+        m.drawn[id] = add(m.drawn[id] ?? ZERO, take);
+        left = sub(left, take);
+        if (left <= 0) break;
+      }
+    }
     m.goalProgress = subtreeProgress(inp.goals, progress);
     const reserve = inp.goals.find((g) => g.role === 'safety' && g.parentId === undefined && g.status === 'active');
     m.reserveMonthsTenths = reserve && inp.baseMedian > 0 ? Math.floor(((m.goalProgress[reserve.id] ?? 0) * 10) / inp.baseMedian) : null;
@@ -434,11 +460,20 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
   let minCap = months[0]!;
   for (const m of months) if (m.capital < minCap.capital) minCap = m;
 
+  const drawnFrom: Record<GoalId, { from: MonthKey; total: Money }> = {};
+  for (const m of months)
+    for (const [id, a] of Object.entries(m.drawn)) {
+      const d = drawnFrom[id];
+      drawnFrom[id] = d ? { from: d.from, total: add(d.total, a) } : { from: m.month, total: a };
+    }
+
   return {
     scenarioId: scenario.id,
     months,
     gaps,
     goalDates,
+    drawnFrom,
+    overAssignedFrom,
     capitalAfter,
     minCapital: { month: minCap.month, value: minCap.capital },
     violations,

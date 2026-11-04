@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { buildSimInput, capitalAt, listOrder, runWhatIf, sanityCheck, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { buildSimInput, capitalAt, classRegistry, listOrder, runWhatIf, sanityCheck, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -18,6 +18,18 @@ const HORIZONS: [number, string, string][] = [
   [6, 'полгода', 'полгода'],
   [12, 'год', 'год'],
 ];
+
+/** Траты в прогнозе теми же частями, что на «Обзоре» (D109). */
+function spendParts(): HTMLElement | null {
+  const st = getState();
+  const { input } = buildSimInput(st, today());
+  const reg = classRegistry(st.settings.classes);
+  const isRare = (k: string) => reg.find((c) => c.id === k)?.behavior === 'irregular';
+  const usual = input.expenses.filter((x) => !isRare(x.key)).reduce((a, x) => a + x.monthly, 0) as Money;
+  const rare = input.expenses.filter((x) => isRare(x.key)).reduce((a, x) => a + x.monthly, 0) as Money;
+  if (usual + rare <= 0) return null;
+  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `Траты в месяц: обычные ${fmtShort(usual)}${rare > 0 ? ` + редкие ${fmtShort(rare)}` : ''} ›`);
+}
 
 /** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
 registerExplain('forecast', 'Из чего прогноз', () => [], () => {
@@ -41,10 +53,22 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
     h('p', { class: 'muted' }, 'Каждый месяц: доходы − обычные траты − платежи по долгам. Остаток копится и раскладывается по целям — по порядку списка.'),
     sub('Доходы в месяц'),
     input.incomes.length ? rows(input.incomes.map((x) => line(x.title, x.amount, `${x.dayOfMonth}-го${x.end ? ` · до ${dmy(x.end)}` : ''}`)), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(income as Money)) })) : h('p', { class: 'muted' }, 'не заданы'),
-    sub('Траты в месяц'),
-    input.expenses.length
-      ? rows(input.expenses.map((x) => { const [t0, how] = x.title.split(' ('); const t = x.key === 'E_base' ? 'Повседневное' : t0!.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase()); return line(t, x.monthly, [how ? how.replace(/\)$/, '') : '', x.end ? `до ${dmy(x.end)}` : ''].filter(Boolean).join(' · ') || undefined); }), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(spend as Money)) }))
-      : h('p', { class: 'muted' }, 'не размечены'),
+    // одна раскладка с «Обзором» (D109): обычные — как «обычно уходит», редкие — отдельно
+    ...(() => {
+      const reg = classRegistry(st.settings.classes);
+      const isRare = (k: string) => reg.find((c) => c.id === k)?.behavior === 'irregular';
+      const lineOf = (x: (typeof input.expenses)[number]) => { const [t0, how] = x.title.split(' ('); const t = x.key === 'E_base' ? 'Повседневное' : t0!.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase()); return line(t, x.monthly, [how ? how.replace(/\)$/, '') : '', x.end ? `до ${dmy(x.end)}` : ''].filter(Boolean).join(' · ') || undefined); };
+      const usual = input.expenses.filter((x) => !isRare(x.key));
+      const rare = input.expenses.filter((x) => isRare(x.key));
+      const total = (xs: typeof input.expenses) => xs.reduce((a, x) => a + x.monthly, 0) as Money;
+      if (!input.expenses.length) return [sub('Траты в месяц'), h('p', { class: 'muted' }, 'не размечены')];
+      return [
+        sub('Обычные траты в месяц'),
+        rows(usual.map(lineOf), row({ title: h('strong', null, 'Обычные'), value: h('strong', null, fmt(total(usual))) })),
+        rare.length ? [sub('Редкие траты в месяц'), rows(rare.map(lineOf), row({ title: h('strong', null, 'Редкие'), value: h('strong', null, fmt(total(rare))) }))] : null,
+        rows(row({ title: h('strong', null, 'Всего траты'), value: h('strong', null, fmt(spend as Money)) })),
+      ];
+    })(),
     byDebt.size ? [sub('Платежи по долгам'), rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))] : null,
     sub('Деньги сейчас'),
     rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : undefined))),
@@ -89,6 +113,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
       h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
       h('div', { class: 'subline' }, rwText),
+      spendParts(),
     ),
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
@@ -126,10 +151,14 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       ),
     );
   }
+  const short = found.find((f) => f.id === 'labels_exceed_money' && f.level === 'fail');
+  if (short) {
+    root.append(h('section', { class: 'warnline stack', 'aria-label': 'Не хватит денег' }, h('strong', null, short.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('fc-draw', '') }, 'Выбрать цели'))));
+  }
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch', 'oneoff_averaged'];
   const sane = found
-    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl)
+    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short)
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
     const top = sane.slice(0, 3);
@@ -164,13 +193,20 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
           const partial = date === null && lastMonth ? (lastProgress[g.id] ?? 0) : null;
           const pct = partial !== null && partial > 0 && g.targetMin > 0 ? Math.floor((partial * 100) / g.targetMin) : null;
           const value = pct !== null && pct >= 1 ? `${pct} %` : when(date);
-          const sub2 = pct !== null && pct >= 1 ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
+          const drawn = sim.drawnFrom[g.id];
+          const base2 = pct !== null && pct >= 1 ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
+          // из цели придётся взять при нехватке — сказать на строке (D109)
+          const sub2 = drawn ? [base2, `с ${monthGen(drawn.from)} из неё уйдёт ${fmtShort(drawn.total)}`].filter(Boolean).join(' · ') : base2;
           return row({ title: g.title, sub: sub2, value, href: sheetHref('fc-goal', g.id) });
         }),
       ),
     );
   }
 
+  {
+    const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
+    root.append(rows(row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') })));
+  }
   root.append(
     sub('Планирую…'),
     h('p', { class: 'one-line' }, 'Что изменится, если… Выбери событие — посчитаю, в план попадёт только по кнопке.'),
@@ -201,3 +237,48 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   return root;
 }
 
+
+/**
+ * «Если денег не хватит» (D109): из каких целей брать, когда свободные деньги кончились, — по порядку, который выбирает человек.
+ * Объяснение — на его собственных цифрах из прогноза, а не абстрактно.
+ */
+defineSheet('fc-draw', () => {
+  const st = getState();
+  const o = ov();
+  const sim = forecastNow();
+  const order = st.settings.drawOrder ?? [];
+  const free = Math.max(0, o.spend.onHand - o.fundings.reduce((a, f) => a + f.amount, 0)) as Money;
+  const negMonths = sim.months.slice(1).filter((m) => m.income - m.expenses - m.obligations - m.events < 0);
+  const negSum = negMonths.reduce((a, m) => a + (m.expenses + m.obligations + m.events - m.income), 0) as Money;
+  const example = negMonths.length
+    ? `По прогнозу с ${monthGen(negMonths[0]!.month)} траты больше дохода — всего на ${fmt(negSum)} за ${nWord(negMonths.length, 'месяц', 'месяца', 'месяцев')}. Сначала на это уйдут свободные деньги — те, что не закреплены ни за одной целью (сейчас ${fmt(free)}).${sim.overAssignedFrom || Object.keys(sim.drawnFrom).length ? ' Их не хватит — остальное придётся взять из накоплений на цели.' : ' Их хватит — цели не пострадают.'}`
+    : `Например: если в каком-то месяце траты окажутся на 20 000 ₸ больше дохода, сначала уйдут свободные деньги — те, что не закреплены ни за одной целью (сейчас ${fmt(free)}). Когда они кончатся — деньги отмеченных ниже целей.`;
+  const goals = listOrder(o.goals).filter((g) => g.status === 'active' && !g.folder);
+  const toggle = (id: string) =>
+    void act((x) => {
+      const cur = x.settings.drawOrder ?? [];
+      return { ...x, settings: { ...x.settings, drawOrder: cur.includes(id) ? cur.filter((y) => y !== id) : [...cur, id] } };
+    }, order.includes(id) ? 'Из этой цели брать не будем' : 'Отмечено: брать, если не хватит');
+  return {
+    title: 'Если денег не хватит',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, example),
+      h('p', { class: 'muted' }, 'Отметь цели, из которых можно брать, — в том порядке, в каком готов их тратить: первая отмеченная тратится первой. Это только для прогноза: приложение ничего не переводит и сами цели не меняет.'),
+      rows(
+        goals.map((g) => {
+          const i = order.indexOf(g.id);
+          const have = o.fundings.filter((f) => f.goalId === g.id).reduce((a, f) => a + f.amount, 0) as Money;
+          return row({
+            title: g.title,
+            sub: `сейчас за ней ${fmt(have)}`,
+            value: h('span', { class: i >= 0 ? 'chip on' : 'chip' }, i >= 0 ? `${i + 1}-я` : 'не брать'),
+            onClick: () => toggle(g.id),
+          });
+        }),
+      ),
+      order.length ? null : h('p', { class: 'muted' }, 'Пока ничего не отмечено — прогноз не трогает цели и показывает, что за ними числится больше, чем будет денег.'),
+    ),
+  };
+});

@@ -174,6 +174,8 @@ export interface Settings {
   plannedEvents: LifeEvent[];
   /** Доходы с датой окончания, про которые человек ответил «ничего не изменится» (D108). */
   incomeEndsAnswered?: string[];
+  /** Из каких целей брать при нехватке денег, по порядку (D109). Не задано — вопрос на «Прогнозе». */
+  drawOrder?: string[];
   /** Свои классы и изменённое поведение встроенных (D50). */
   classes: ClassSettings;
   openingDebts: OpeningDebts;

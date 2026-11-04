@@ -34,6 +34,7 @@ export interface SanityFinding {
 export type SanityId =
   | 'cushion_ignores_money'
   | 'labels_exceed_money'
+  | 'goal_drawn'
   | 'expense_mismatch'
   | 'income_drop_flat_spend'
   | 'one_sided_inflation'
@@ -94,20 +95,37 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
     });
   }
 
-  // 2. За целями в прогнозе закреплено больше, чем есть денег
+  // 2. Свободные деньги кончились, а за целями числится больше, чем денег (D109)
   const roots = new Set(input.goals.filter((g) => g.parentId === undefined).map((g) => g.id));
   const over = months.filter((m) => sum(Object.entries(m.goalProgress).filter(([id]) => roots.has(id)).map(([, v]) => v)) > pos(m.assets)).map((m) => m.month);
+  const draws = Object.entries(sim.drawnFrom);
   if (over.length) {
-    out.push({ id: 'labels_exceed_money', level: 'fail', months: over, text: `С ${mo(over[0]!)} за целями в прогнозе числится больше, чем будет денег — даты целей слишком оптимистичны` });
+    const asked = (input.drawOrder ?? []).length > 0;
+    out.push({
+      id: 'labels_exceed_money',
+      level: asked ? 'warn' : 'fail',
+      months: over,
+      text: asked
+        ? `С ${mo(over[0]!)} не хватает даже целей, из которых ты разрешил брать, — даты целей слишком оптимистичны`
+        : `С ${mo(over[0]!)} свободные деньги кончатся, а за целями будет числиться больше, чем денег. Из каких целей брать?`,
+    });
+  }
+  for (const [id, d] of draws) {
+    const g = input.goals.find((x) => x.id === id);
+    if (g) out.push({ id: 'goal_drawn', level: 'warn', ref: id, months: [d.from], text: `С ${mo(d.from)} из «${g.title}» уйдёт ${tg(d.total)} — свободных денег не хватит` });
   }
 
-  // 3. Два разных «сколько я трачу»
-  const fcMonthly = full[0]?.expenses ?? ZERO;
-  if (o.spend.usualMonthly > 0 && fcMonthly > mulDiv(o.spend.usualMonthly, Math.round(SANITY.expenseRatio * 100), 100)) {
+  // 3. «Обычные траты» на «Обзоре» и в прогнозе — одно и то же (D109: редкие показываются отдельно на обоих экранах)
+  const reg0 = classRegistry(state.settings.classes);
+  const isRare = (key: string) => reg0.find((c) => c.id === key)?.behavior === 'irregular';
+  const fcUsual = sum(input.expenses.filter((e) => !isRare(e.key)).map((e) => e.monthly));
+  const lo = Math.min(o.spend.usualMonthly, fcUsual) as Money;
+  const hi = Math.max(o.spend.usualMonthly, fcUsual) as Money;
+  if (lo > 0 && hi > mulDiv(lo as Money, Math.round(SANITY.expenseRatio * 100), 100)) {
     out.push({
       id: 'expense_mismatch',
       level: 'fail',
-      text: `На «Обзоре» обычно уходит ${tg(o.spend.usualMonthly)} в месяц, а прогноз считает ${tg(fcMonthly)} (с редкими тратами) — «хватает» на «Обзоре» сравнивается с меньшим числом`,
+      text: `Обычные траты на «Обзоре» — ${tg(o.spend.usualMonthly)} в месяц, а в прогнозе — ${tg(fcUsual)}: экраны считают по-разному`,
     });
   }
 
