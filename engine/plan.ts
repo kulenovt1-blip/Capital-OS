@@ -14,7 +14,7 @@ import { incomeKindRegistry } from './income-kinds';
 import { assignMoney, directFunded, type GoalFunding } from './goals';
 import { compareStrategies, type CompareResult, type StrategyParams, type StrategyRow } from './allocate';
 import { simulate, whatIf, compareAlternatives, type ExpenseBaseline, type LifeEvent, type SimDeposit, type SimInput, type SimResult, type WhatIfResult, type AlternativeResult } from './simulate';
-import { buildOverview, type Overview } from './overview';
+import { baselineWindow, buildOverview, type Overview } from './overview';
 import type { AppState, Decision } from './state';
 
 /**
@@ -63,7 +63,7 @@ export function forecastExpenses(state: AppState, today: IsoDate, ops: readonly 
         continue;
       }
     } else {
-      const b = baselineMonthly(ops, today, c.id, state.settings.baselineMonths);
+      const b = baselineMonthly(ops, today, c.id, state.settings.baselineMonths, undefined, baselineWindow(state, ops, today));
       monthly = b.median;
       how = `медиана за ${b.months.length} мес.`;
     }

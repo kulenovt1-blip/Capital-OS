@@ -190,7 +190,7 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
   // 9. Траты взяты за период с другим доходом
   const ops = o.classification?.ops ?? [];
   const win = fullMonthsBefore(today, state.settings.baselineMonths);
-  if (win.length >= 4) {
+  if (win.length >= 4 && state.settings.baselineMode === undefined) {
     const fl = monthlyFlows(ops, win);
     const avg = mulDiv(sum(win.map((m) => fl[m]!.income)), 1, win.length);
     const lastM = win[win.length - 1]!;

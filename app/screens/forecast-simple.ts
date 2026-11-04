@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { applyRepeatAnswer, buildSimInput, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { applyRepeatAnswer, buildSimInput, previewBaselineMode, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -157,6 +157,24 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   if (short) {
     root.append(h('section', { class: 'warnline stack', 'aria-label': 'Не хватит денег' }, h('strong', null, short.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('fc-draw', '') }, 'Выбрать цели'))));
   }
+  // траты взяты за месяцы с другим доходом (D113): предложить считать по месяцам без зарплаты
+  const bPv = found.some((f) => f.id === 'baseline_other_income') ? previewBaselineMode(st, today(), 12) : null;
+  {
+    const pv = bPv;
+    if (pv) {
+      const set = (mode: 'last' | 'no_work') => void act((x) => ({ ...x, settings: { ...x.settings, baselineMode: mode } }), mode === 'no_work' ? 'Обычные траты — по месяцам без зарплаты' : 'Обычные траты — по последним месяцам');
+      root.append(
+        h(
+          'section',
+          { class: 'warnline stack', 'aria-label': 'Траты и зарплата' },
+          h('strong', null, 'Обычные траты сейчас считаются в том числе по месяцам, когда была зарплата, а её больше нет. Считать по месяцам без зарплаты?'),
+          h('div', null, `Обычно уходит: ${fmt(pv.usualNow)} → ${fmt(pv.usualNoWork)} в месяц (по ${nWord(pv.months, 'месяцу', 'месяцам', 'месяцам')} без работы).`),
+          pv.capitalNow !== null && pv.capitalNoWork !== null ? h('div', null, `Через год: ${fmtShort(pv.capitalNow)} → ${fmtShort(pv.capitalNoWork)}.`) : null,
+          h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => set('no_work') }, 'Да, без зарплаты'), h('button', { class: 'chip', type: 'button', onclick: () => set('last') }, 'Нет, как сейчас')),
+        ),
+      );
+    }
+  }
   // редкие траты (1–2 за год), которые прогноз раскладывает на каждый месяц, — спросить, повторятся ли (D110)
   const sparse = sparseExpenses(st, today(), ov());
   if (sparse.length) {
@@ -173,7 +191,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
-    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short)
+    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income'))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
     const top = sane.slice(0, 3);

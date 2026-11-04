@@ -2,11 +2,11 @@
  * Экран «Обзор» как чистая функция: из состояния и даты — всё, что показывается.
  */
 import { sub, sum, ZERO, type Money } from './money';
-import { addDays, nextDayOfMonth, maxDate, type IsoDate } from './date';
+import { addDays, fullMonthsBefore, monthKey, nextDayOfMonth, maxDate, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import { detectInstallments, type InstallmentScan } from './installment-detect';
-import { classifyAll, type ClassificationReport } from './classify';
-import { averageMonthly, baselineMonthly, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
+import { classifyAll, type ClassificationReport, type ClassifiedOp } from './classify';
+import { averageMonthly, baselineMonthly, monthlyFlows, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
 import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
 import { accountKindGuess, accountsNeedingReview, type AccountKind } from './settings';
 import { daysBetween } from './date';
@@ -25,6 +25,29 @@ import type { ImportedData } from './types';
 
 /** Доход меньше этой доли обычных месячных трат (в %) не ограничивает окно «до дохода» (D111). */
 export const WINDOW_INCOME_SHARE_PCT = 25;
+
+/** Минимум месяцев без работы, при котором режим «без зарплаты» включается (иначе — последние, как раньше). */
+export const MIN_NO_WORK_MONTHS = 3;
+
+/**
+ * Месяцы для «обычных трат» (D113). По умолчанию — последние `baselineMonths` полных. Режим `no_work` — последние
+ * `baselineMonths` полных месяцев, в которых не было дохода от работы, хоть бы и давно: человек, который лето поработал,
+ * а до этого полтора года не работал, не должен считать обычные траты по месяцам с зарплатой.
+ * Если таких месяцев меньше `MIN_NO_WORK_MONTHS` — как по умолчанию. undefined — по умолчанию (без окна).
+ */
+export function baselineWindow(state: AppState, ops: readonly ClassifiedOp[], today: IsoDate): MonthKey[] | undefined {
+  if (state.settings.baselineMode !== 'no_work') return undefined;
+  let first: IsoDate | null = null;
+  for (const c of ops) if (first === null || c.op.date < first) first = c.op.date;
+  if (first === null) return undefined;
+  const reg = classRegistry(state.settings.classes);
+  const work = new Set(reg.filter((c) => c.group === 'income' && c.behavior === 'work').map((c) => c.id));
+  const all = fullMonthsBefore(today, 120).filter((m) => m >= monthKey(first!));
+  const flows = monthlyFlows(ops, all);
+  const free = all.filter((m) => ![...work].some((c) => (flows[m]!.byClass[c] ?? ZERO) > 0));
+  const pick = free.slice(-state.settings.baselineMonths);
+  return pick.length >= MIN_NO_WORK_MONTHS ? pick : undefined;
+}
 
 export interface NextIncome {
   date: IsoDate;
@@ -197,8 +220,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
 
   // обычные траты нужны раньше: от них зависит, какой доход считать «настоящим» для окна «до дохода» (D111)
   const reg = classRegistry(state.settings.classes);
-  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths);
-  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты');
+  const bWindow = baselineWindow(state, classification?.ops ?? [], today);
+  const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths, undefined, bWindow);
+  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты', bWindow);
   const usualEarly = add(baseline.median, regular.median);
   const nextIncome = nextIncomeDate(state.settings, today, mulDiv(usualEarly, WINDOW_INCOME_SHARE_PCT, 100));
   if (nextIncome.source === 'default') {

@@ -11,7 +11,7 @@ export { UNCHECKED_CLASS_ID };
 import { eligibleGoals, ladder, listOrder, requiredMonthly, type StrategyParams } from './ladder';
 import { assignMoney, type Goal, type GoalFunding } from './goals';
 import { step, type Outcome } from './explain';
-import { buildOverview, type Overview } from './overview';
+import { baselineWindow, buildOverview, type Overview } from './overview';
 import { buildSimInput, planIncome } from './plan';
 import { simulate, type SimResult } from './simulate';
 import type { CompareResult } from './allocate';
@@ -675,4 +675,21 @@ export function previewRepeat(state: AppState, today: IsoDate, categoryId: strin
   const now = capitalAt(baseForecast(state, today, Math.max(k, 12)), k);
   const ifNever = capitalAt(baseForecast(applyRepeatAnswer(state, categoryId, 'never'), today, Math.max(k, 12)), k);
   return { now, ifNever };
+}
+
+
+/** Что даст режим «обычные траты — по месяцам без зарплаты» (D113): для предпросмотра. null — таких месяцев не хватает. */
+export function previewBaselineMode(state: AppState, today: IsoDate, k = 12): { months: number; usualNow: Money; usualNoWork: Money; capitalNow: Money | null; capitalNoWork: Money | null } | null {
+  const o = buildOverview(state, today);
+  const win = baselineWindow({ ...state, settings: { ...state.settings, baselineMode: 'no_work' } }, o.classification?.ops ?? [], today);
+  if (!win) return null;
+  const alt = { ...state, settings: { ...state.settings, baselineMode: 'no_work' as const } };
+  const o2 = buildOverview(alt, today);
+  return {
+    months: win.length,
+    usualNow: o.spend.usualMonthly,
+    usualNoWork: o2.spend.usualMonthly,
+    capitalNow: capitalAt(baseForecast({ ...state, settings: { ...state.settings, baselineMode: 'last' } }, today, Math.max(k, 12)), k),
+    capitalNoWork: capitalAt(baseForecast(alt, today, Math.max(k, 12)), k),
+  };
 }

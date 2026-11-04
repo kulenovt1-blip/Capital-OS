@@ -22,7 +22,7 @@ import { createGoal, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
-import { applyRepeatAnswer, baseForecast, capitalAt, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { applyRepeatAnswer, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
 import type { OpClass } from '../../engine/classify';
@@ -341,4 +341,48 @@ describe('история разной длины: 1, 3 и 12+ месяцев (а
       expect(sanityFails(answered(s), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
     });
   }
+});
+
+describe('обычные траты по месяцам без зарплаты (D113, аудит №4 С2б)', () => {
+  // профиль: работа только в июле–августе 2026; до этого — 10 месяцев без работы; сентябрь–октябрь — без работы
+  const mode = (s: AppState, m: 'last' | 'no_work'): AppState => ({ ...s, settings: { ...s.settings, baselineMode: m } });
+  const usual = (s: AppState) => buildOverview(s, TODAY).spend.usualMonthly;
+
+  it('по умолчанию окно — последние месяцы, режим «без зарплаты» — только месяцы без работы, давние тоже', () => {
+    const s = profile({ rare: false });
+    const o = buildOverview(mode(s, 'no_work'), TODAY);
+    const months = o.baseline.months;
+    expect(months).not.toContain('2026-07');
+    expect(months).not.toContain('2026-08');
+    expect(months.length).toBe(6);
+    expect(months[0]! < '2026-07').toBe(true);
+    expect(buildOverview(s, TODAY).baseline.months).toContain('2026-07');
+  });
+
+  it('предпросмотр совпадает с расчётом после ответа и не меняет состояние', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    const pv = previewBaselineMode(s, TODAY, 12)!;
+    expect(JSON.stringify(s)).toBe(before);
+    expect(pv.usualNow).toBe(usual(s));
+    expect(pv.usualNoWork).toBe(usual(mode(s, 'no_work')));
+    expect(pv.capitalNoWork).toBe(capitalAt(baseForecast(mode(s, 'no_work'), TODAY, 12), 12));
+  });
+
+  it('месяцев без работы меньше трёх — режим не включается, всё как по умолчанию', () => {
+    const s = profile({ from: '2026-07' });
+    expect(previewBaselineMode(s, TODAY)).toBeNull();
+    expect(usual(mode(s, 'no_work'))).toBe(usual(s));
+  });
+
+  it('после ответа предупреждение о тратах за месяцы с другим доходом не повторяется', () => {
+    const s = profile();
+    const ask = (x: AppState) => sanityCheck(x, TODAY).findings.map((f) => f.id);
+    expect(ask(mode(s, 'no_work'))).not.toContain('baseline_other_income');
+    expect(ask(mode(s, 'last'))).not.toContain('baseline_other_income');
+  });
+
+  it('Обзор и прогноз считают обычные траты одним числом в обоих режимах', () => {
+    for (const m of ['last', 'no_work'] as const) expect(sanityFails(answered(mode(profile(), m)), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
+  });
 });
