@@ -3,26 +3,15 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { SAVING_CUT_PCT, expensePart, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { SAVING_CUT_PCT, cushionFill, expensePart, roadmap, type RoadmapStep, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
 import { attention, fmt, fmtDay, fmtShort, monthGen, monthTo, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
-import { warningItems } from './forecast';
+import { HORIZONS, warningItems } from './forecast';
 import { KINDS, PLAN_CHIPS, eventLine } from './plan';
-
-/** Короткие сроки (1–5 мес., D120) нужны, чтобы сверить прогноз с жизнью: «через 3 месяца» проверяется, «через год» — нет. Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…». */
-const HORIZONS: [number, string, string][] = [
-  [1, '1', 'месяц'],
-  [2, '2', '2 месяца'],
-  [3, '3', '3 месяца'],
-  [4, '4', '4 месяца'],
-  [5, '5', '5 месяцев'],
-  [6, '6', 'полгода'],
-  [12, 'год', 'год'],
-];
 
 /** Траты в прогнозе теми же частями, что на «Обзоре» (D109). */
 function spendParts(): HTMLElement | null {
@@ -273,26 +262,33 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income') && !asked.shown.has(f))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
-    // у каждой находки — действие; без действия это не плашка, а справка (D120: «висит и ничего не предлагает» — раздражает)
-    const action = (f: SanityFinding): { label: string; href: string } | null => {
+    // у каждой находки — действие, которое её действительно убирает; без действия это не плашка, а справка (D120: «висит и ничего не предлагает» — раздражает).
+    // «Порядок целей» плашку про подушку не убирал: порядок метки денег не меняет — теперь перенос в подушку или «так задумано» (D122)
+    type Act = { label: string; href?: string; run?: () => void };
+    const action = (f: SanityFinding): Act[] => {
       if (f.id === 'negative_months' && f.months?.[0]) {
         const d = `${f.months[0]}-01`;
-        return { label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) };
+        return [{ label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) }];
       }
-      if (f.id === 'cushion_ignores_money') return { label: 'Порядок целей', href: '#/goals' };
-      if (f.id === 'goal_drawn') return { label: 'Выбрать, из чего брать', href: sheetHref('fc-draw', '') };
-      return null;
+      if (f.id === 'cushion_ignores_money') {
+        return [
+          ...(cushionFill(st, today(), 'preview') ? [{ label: 'В подушку', href: sheetHref('cushion-fill') }] : []),
+          { label: 'Так задумано', run: () => void act((s) => ({ ...s, settings: { ...s.settings, sanityAnswered: [...new Set([...(s.settings.sanityAnswered ?? []), f.id])] } }), 'Записано: так задумано') },
+        ];
+      }
+      if (f.id === 'goal_drawn') return [{ label: 'Выбрать, из чего брать', href: sheetHref('fc-draw', '') }];
+      return [];
     };
     const acts = sane.map((f) => [f, action(f)] as const);
-    const todo = acts.filter(([, a]) => a);
-    const info = acts.filter(([, a]) => !a);
+    const todo = acts.filter(([, a]) => a.length);
+    const info = acts.filter(([, a]) => !a.length);
     if (todo.length) {
       root.append(
         h(
           'section',
           { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
           h('strong', null, 'Проверь, прежде чем верить прогнозу'),
-          ...todo.map(([f, a]) => h('div', { class: 'stack tight' }, h('div', null, f.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: a!.href }, a!.label)))),
+          ...todo.map(([f, a]) => h('div', { class: 'stack tight' }, h('div', null, f.text), h('div', { class: 'chips wrap' }, a.map((x) => (x.href ? h('a', { class: 'chip', href: x.href }, x.label) : h('button', { class: 'chip', type: 'button', onclick: x.run }, x.label)))))),
         ),
       );
     }
@@ -333,7 +329,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     // одна группа строк вместо четырёх отдельных карточек (D121)
     root.append(
       rows(
-        row({ title: 'Из А в Б', sub: 'к какому сроку что нужно — посчитаю, что изменить', href: sheetHref('a-to-b') }),
+        row({ title: 'Из А в Б', sub: 'карта шагов к запасу на год', href: sheetHref('a-to-b') }),
         row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что это даст', href: sheetHref('save-where') }),
         row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') }),
         row({ title: 'Если станет хуже или лучше', sub: 'сценарии', href: '#/forecast-more' }),
@@ -587,15 +583,84 @@ function monthKeyNext(t: string, ahead = 0): string {
 }
 
 
-// ───────────────────────── «Из А в Б» (D117) ─────────────────────────
+// ───────────────────────── «Из А в Б» — дорожная карта (D122) ─────────────────────────
+
+/** Подпись на карточке шага. */
+const stepTag = (s: RoadmapStep): string => (s.status === 'done' ? 'готово' : s.status === 'now' ? (s.id === 'goals' ? 'можно уже сейчас' : 'сейчас') : 'дальше');
+
+/** Про сам шаг, одной-двумя фразами, на цифрах человека. */
+function stepFacts(s: RoadmapStep, needMonthly: Money, liquid: Money): HTMLElement[] {
+  if (s.id === 'plus') {
+    return [
+      h('p', null, s.missing > 0 ? `Сейчас траты больше доходов на ≈ ${fmt(s.missing)} в месяц: запас не растёт, а тает.` : 'Сейчас доходы равны тратам: запас не растёт.'),
+      s.by ? h('p', { class: 'muted' }, `По прогнозу доходы начнут превышать траты с ${monthGen(s.by)} — но ждать необязательно.`) : h('p', { class: 'muted' }, 'За срок прогноза доходы и траты сами не сойдутся — нужно что-то менять.'),
+    ];
+  }
+  const n = Math.round(s.target! / needMonthly);
+  const out: HTMLElement[] = [h('p', null, `Нужно ${fmt(s.target!)} — это ${nWord(n, 'месяц', 'месяца', 'месяцев')} обычной жизни вместе с платежами по долгам (${fmt(needMonthly)} в месяц). Сейчас есть ${fmt(liquid)}${s.missing > 0 ? `, не хватает ${fmt(s.missing)}` : ''}.`)];
+  if (s.missing === 0) out.push(h('p', { class: 'muted' }, 'По сегодняшним тратам денег уже хватает, а с ростом цен выходит чуть меньше. Продолжай откладывать — это вопрос ближайших месяцев.'));
+  else out.push(s.by ? h('p', null, h('strong', null, `При нынешнем темпе — к ${monthTo(s.by)}.`)) : h('p', { class: 'muted' }, 'При нынешних доходах и тратах за пять лет прогноза этот запас не набирается — нужно откладывать больше.'));
+  return out;
+}
+
+defineSheet('a-to-b', () => {
+  const r = roadmap(getState(), today());
+  if (!r) return { title: 'Из А в Б', body: h('p', { class: 'muted' }, 'Чтобы собрать карту, нужны загруженные данные и размеченные траты.') };
+  const f = r.from;
+  const now = r.steps.find((x) => x.status === 'now' && x.id !== 'goals');
+  const links = (...xs: HTMLElement[]) => h('div', { class: 'chips wrap' }, ...xs);
+  const steps = r.steps.map((s) => {
+    if (s.status === 'done') return row({ title: `✓ ${s.title}`, sub: s.id === 'goals' ? 'все цели набраны' : undefined, chevron: false });
+    if (s === now) {
+      return h(
+        'section',
+        { class: 'card stack tight', 'aria-label': s.title },
+        h('div', { class: 'muted' }, 'Сейчас'),
+        h('strong', null, s.title),
+        h('p', { class: 'muted' }, s.why),
+        ...stepFacts(s, r.needMonthly, r.liquid),
+        s.speedUp.length
+          ? h('div', { class: 'stack tight' }, h('strong', null, 'Что ускорит'), h('p', { class: 'muted' }, 'Откладывать больше в месяц — меньше тратить или больше получать, для денег это одно и то же:'), rows(s.speedUp.map((x) => row({ title: `+${fmt(x.extraMonthly)} в месяц`, sub: x.monthsSooner ? `на ${nWord(x.monthsSooner, 'месяц', 'месяца', 'месяцев')} раньше` : 'тогда набирается', value: `к ${monthTo(x.by!)}`, chevron: false }))))
+          : null,
+        r.debtFree ? h('p', { class: 'muted' }, `Платежи по долгам кончатся к ${monthTo(r.debtFree.from)}: освободится ≈ ${fmt(r.debtFree.freed)} в месяц — это уже в расчёте.`) : null,
+        links(h('a', { class: 'chip', href: sheetHref('save-where') }, 'Где можно сэкономить'), h('a', { class: 'chip', href: sheetHref('plan', 'job') }, 'Добавить доход')),
+      );
+    }
+    if (s.id === 'goals') {
+      return h(
+        'section',
+        { class: 'stack tight', 'aria-label': s.title },
+        rows(
+          row({ title: s.title, sub: s.status === 'next' ? 'начнёшь, когда будет подушка' : s.goals.length ? undefined : 'пока нет целей — заведи на «Целях»', value: stepTag(s), href: s.goals.length ? undefined : '#/goals', chevron: !s.goals.length }),
+          ...s.goals.map((g) => row({ title: g.title, sub: `${fmt(g.progress)} из ${fmt(g.target)}`, value: g.date ? monthWord(g.date) : 'позже срока прогноза', href: sheetHref('fc-goal', g.id) })),
+        ),
+      );
+    }
+    return rows(row({ title: s.title, sub: s.monthly ? undefined : `нужно ${fmt(s.target!)} · не хватает ${fmt(s.missing)}`, value: s.by ? monthWord(s.by) : 'не набирается', chevron: false }));
+  });
+  return {
+    title: 'Из А в Б',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('section', { class: 'card stack tight', 'aria-label': 'Где ты сейчас' }, h('div', { class: 'muted' }, `Ты здесь · ступень ${f.stage} из 5`), h('strong', null, f.title), h('p', null, f.portrait)),
+      r.allDone ? h('div', { class: 'okline' }, 'Запас на год есть. Дальше — цели и твои решения: как делить остаток между запасом и целями, выбираешь ты.') : h('p', { class: 'muted' }, 'Куда: запас на год и деньги на цели. Шаги идут по порядку — сначала то, что защищает от неожиданностей.'),
+      ...steps,
+      rows(row({ title: 'Нужно успеть к конкретной дате?', sub: 'выбери цель и месяц — посчитаю, что изменить', href: sheetHref('to-date') })),
+      h('p', { class: 'muted' }, 'Это прикидка при нынешнем темпе, а не предсказание. Считается по тому, что есть в бэкапе: наличные и долги вне MoneyManager не видны.'),
+    ),
+  };
+});
+
+// ───────────────────────── «Успеть к дате» (D117; до D122 называлось «Из А в Б») ─────────────────────────
 
 let routeGoal: string | null = null;
 let routeBy: string | null = null;
 
-defineSheet('a-to-b', () => {
+defineSheet('to-date', () => {
   const st = getState();
   const goals = listOrder(ov().goals).filter((g) => g.status === 'active' && !g.folder);
-  if (!goals.length) return { title: 'Из А в Б', body: h('p', { class: 'muted' }, 'Сначала заведи цель на «Целях» — например, подушку.') };
+  if (!goals.length) return { title: 'Успеть к дате', body: h('p', { class: 'muted' }, 'Сначала заведи цель на «Целях» — например, подушку.') };
   const t = today();
   const goal = goals.find((g) => g.id === routeGoal) ?? goals[0]!;
   const months: string[] = [];
@@ -671,7 +736,7 @@ defineSheet('a-to-b', () => {
     }
   }
   return {
-    title: 'Из А в Б',
+    title: 'Успеть к дате',
     body: h(
       'div',
       { class: 'stack' },

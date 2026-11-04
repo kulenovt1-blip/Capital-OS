@@ -9,7 +9,7 @@ import { classGroup, classifyAll, setCategoryClass, suggestClassForCategory, typ
 import { UNCHECKED_CLASS_ID, classRegistry, type Behavior, type ClassDef, type ClassSettings } from './classes';
 export { UNCHECKED_CLASS_ID };
 import { eligibleGoals, ladder, listOrder, requiredMonthly, type StrategyParams } from './ladder';
-import { assignMoney, type Goal, type GoalFunding } from './goals';
+import { BOUND_PREFIX, assignMoney, flattenTree, type Goal, type GoalFunding } from './goals';
 import { step, type Outcome } from './explain';
 import { baselineWindow, buildOverview, type Overview } from './overview';
 import { buildSimInput, planIncome } from './plan';
@@ -529,6 +529,85 @@ export function distributeSavings(o: Overview, today: IsoDate, idPrefix: string)
     }
   }
   return { fundings, byGoal };
+}
+
+// ───────────────────────── «Перенести в подушку» (D122) ─────────────────────────
+
+export interface CushionFill {
+  cushionId: string;
+  /** Сколько подушке не хватает до своей суммы. */
+  need: Money;
+  /** Сколько переносим (не больше, чем не хватает и чем есть). */
+  moved: Money;
+  /** Из свободных денег в копилках (ни за какой целью). */
+  fromFree: Money;
+  /** Из закреплённого за другими целями — снизу списка вверх. */
+  fromGoals: { goalId: string; title: string; amount: Money }[];
+  /** Записи закрепления: минус у цели-источника, плюс подушке — на том же счёте, сами деньги не двигаются. */
+  fundings: GoalFunding[];
+}
+
+/**
+ * Подушке не хватает до её суммы, а деньги на счетах есть: какие метки переставить в подушку. Сначала свободные деньги в копилках,
+ * потом закреплённое за другими целями — с последней в списке (ей достаются деньги позже всех). Деньги по счетам не двигаются —
+ * меняются только метки «за какой целью», поэтому на каждом счёте переносится не больше, чем на нём закреплено.
+ * Состояние не меняется: функция возвращает записи, добавляет их вызывающий (после подтверждения). null — подушки нет, она набрана или переносить нечего.
+ */
+export function cushionFill(state: AppState, today: IsoDate, idPrefix: string): CushionFill | null {
+  if (!state.imported) return null;
+  const o = buildOverview(state, today);
+  const node = flattenTree(o.goalTree).find((n) => n.goal.role === 'safety' && n.goal.parentId === undefined && n.goal.status === 'active');
+  if (!node || node.goal.targetMin <= 0) return null;
+  const need = pos(sub(node.goal.targetMin, node.progress));
+  if (need <= 0) return null;
+  const cushionId = node.goal.id;
+  const own = new Set(flattenTree([node]).map((n) => n.goal.id)); // сама подушка и её подцели: их метки уже в её прогрессе
+  const fundings: GoalFunding[] = [];
+  let left: Money = need;
+  let fromFree: Money = ZERO;
+  /** Запись «в подушку»; если источник — явная метка, у цели-источника та же сумма снимается отдельной записью. */
+  const put = (goalId: string, accountId: string, takeExplicit: Money, amount: Money, note: string, tag: string) => {
+    if (takeExplicit > 0) fundings.push({ id: `${idPrefix}-${tag}-out`, goalId, accountId, amount: -takeExplicit as Money, date: today, decisionId: null, note });
+    fundings.push({ id: `${idPrefix}-${tag}-in`, goalId: cushionId, accountId, amount, date: today, decisionId: null, note });
+  };
+
+  // 1. свободные деньги в копилках
+  for (const p of o.capital.accounts) {
+    if (left <= 0) break;
+    if (p.excluded || o.spend.kinds[p.accountId] !== 'savings') continue;
+    const free = pos(sub(p.balance, sum(o.fundings.filter((f) => f.accountId === p.accountId).map((f) => f.amount))));
+    const take = min(left, free);
+    if (take <= 0) continue;
+    left = sub(left, take);
+    fromFree = add(fromFree, take);
+    fundings.push({ id: `${idPrefix}-free-${p.accountId}`, goalId: cushionId, accountId: p.accountId, amount: take, date: today, decisionId: null, note: 'в подушку из свободных денег' });
+  }
+
+  // 2. закреплённое за другими целями, начиная с последней в списке
+  const fromGoals: CushionFill['fromGoals'] = [];
+  for (const g of listOrder(o.goals).filter((x) => x.status === 'active' && !x.folder && !own.has(x.id)).reverse()) {
+    if (left <= 0) break;
+    const title = g.title;
+    let got: Money = ZERO;
+    for (const accountId of [...new Set(o.fundings.filter((f) => f.goalId === g.id).map((f) => f.accountId))].sort()) {
+      if (left <= 0) break;
+      const rows = o.fundings.filter((f) => f.goalId === g.id && f.accountId === accountId);
+      // «весь остаток счёта за целью» (привязка) — виртуальная метка на то, что не назначено явно: она сама уменьшается, когда на счёте
+      // появляется явная метка подушки, поэтому снимать её отдельной записью нельзя (минус и плюс сократились бы, а цель сохранила весь остаток)
+      const bound = sum(rows.filter((f) => f.id.startsWith(BOUND_PREFIX)).map((f) => f.amount));
+      const have = sum(rows.map((f) => f.amount));
+      const take = min(left, have);
+      if (take <= 0) continue;
+      const takeBound = min(take, pos(bound));
+      left = sub(left, take);
+      got = add(got, take);
+      put(g.id, accountId, sub(take, takeBound), take, `в подушку из «${title}»`, `${g.id}-${accountId}`);
+    }
+    if (got > 0) fromGoals.push({ goalId: g.id, title, amount: got });
+  }
+  const moved = sub(need, left);
+  if (moved <= 0) return null;
+  return { cushionId, need, moved, fromFree, fromGoals, fundings };
 }
 
 // ───────────────────────── «Отложить другую сумму» и «Отложил» ─────────────────────────

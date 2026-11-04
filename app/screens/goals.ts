@@ -3,7 +3,7 @@
  * Форма — три поля; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
  */
 import {
-  STATUS_LABELS, assignMoney, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, moveFunding, nextOrder, reorderGoals,
+  STATUS_LABELS, assignMoney, baseForecast, cushionFill, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, goalShifts, moveFunding, nextOrder, reorderGoals,
   starterGoals, unassignedSavings, updateGoal, withdrawMoney,
   type Goal, type GoalNode, type GoalStatus, type GoalsView, type Flexibility, type Money,
 } from '../../engine/index';
@@ -247,6 +247,57 @@ defineSheet('distribute', () => {
           },
         }, 'Распределить'))
       : undefined,
+  };
+});
+
+/**
+ * «Перенести в подушку» (D122): подушка пуста или не добрана, а деньги на счетах есть, только числятся за другими целями.
+ * Порядок целей метки не меняет, поэтому плашку «Подушка: 0 ₸ из …» убирает только перенос — или ответ «так задумано».
+ * Предпросмотр: откуда сколько и как сдвинутся даты остальных целей; ничего не меняется, пока не нажата кнопка.
+ */
+defineSheet('cushion-fill', () => {
+  const st = getState();
+  const t = today();
+  const fill = cushionFill(st, t, 'preview');
+  if (!fill) return { title: 'Перенести в подушку', body: h('p', { class: 'muted' }, 'Переносить нечего: подушка набрана, а свободных денег в копилках и закреплённого за другими целями нет.') };
+  const after = { ...st, fundings: [...st.fundings, ...fill.fundings] };
+  const shifts = goalShifts(st, t, baseForecast(st, t, 36), baseForecast(after, t, 36)).filter((x) => x.goalId !== fill.cushionId);
+  const word = (m: string | null) => (m ? monthWord(m) : 'не набирается');
+  const answer = () => void act((s) => ({ ...s, settings: { ...s.settings, sanityAnswered: [...new Set([...(s.settings.sanityAnswered ?? []), 'cushion_ignores_money'])] } }), 'Записано: так задумано').then(() => closeSheet());
+  return {
+    title: 'Перенести в подушку',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, `Подушке не хватает ${fmt(fill.need)}. Деньги на счетах никуда не переводятся — меняется только то, за какой целью они числятся.`),
+      sub('Откуда взять'),
+      rows(
+        [
+          fill.fromFree > 0 ? row({ title: 'Свободные деньги в копилках', value: `−${fmt(fill.fromFree)}` }) : null,
+          ...fill.fromGoals.map((x) => row({ title: x.title, value: `−${fmt(x.amount)}` })),
+          row({ title: h('strong', null, 'В подушку'), value: h('strong', null, `+${fmt(fill.moved)}`) }),
+        ].filter((x): x is HTMLElement => x !== null),
+      ),
+      fill.moved < fill.need ? h('p', { class: 'muted' }, `Этого хватает не на всю подушку: останется ${fmt((fill.need - fill.moved) as Money)}.`) : null,
+      shifts.length
+        ? h('div', { class: 'stack tight' }, h('strong', null, 'Что получат остальные цели'), ...shifts.slice(0, 4).map((x) => h('div', null, `${x.title}: ${word(x.from)} → ${word(x.to)}`)))
+        : h('p', { class: 'muted' }, 'Даты других целей не меняются.'),
+      h('button', { class: 'btn wide', type: 'button', onclick: answer }, 'Оставить как есть — так задумано'),
+    ),
+    bar: stickyBar(
+      null,
+      h('button', {
+        class: 'btn primary',
+        type: 'button',
+        onclick: async () => {
+          const f = cushionFill(getState(), today(), newId('cf'));
+          closeSheet();
+          if (!f) return;
+          flashGoals([f.cushionId]);
+          await act((s) => ({ ...s, fundings: [...s.fundings, ...f.fundings] }), `В подушку перенесено ${fmt(f.moved)}`);
+        },
+      }, 'Перенести'),
+    ),
   };
 });
 

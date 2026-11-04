@@ -22,10 +22,12 @@ import { createGoal, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
-import { personStage } from '../../engine/stage';
+import { liquidReachMonth, personStage } from '../../engine/stage';
 import { savingOptions } from '../../engine/saving';
 import { planToGoal } from '../../engine/route';
-import { applyRepeatAnswer, cutEvent, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { flattenTree } from '../../engine/goals';
+import { roadmap } from '../../engine/roadmap';
+import { applyRepeatAnswer, cushionFill, cutEvent, reorderGoals, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
 import { buildSimInput } from '../../engine/plan';
@@ -540,7 +542,8 @@ describe('«Твой этап» (D115)', () => {
     const r = personStage(noSavings(profile()), TODAY)!;
     expect(r.stage).toBe(1);
     expect(r.coverMonths).toBe(0);
-    expect(r.next).toMatchObject({ toStage: 2, missing: tenge(35_000), by: '2027-01' });
+    // месяц — по помесячному прогнозу (D122): остаток ноября уже приходит, поэтому декабрь, а не «35 000 / 20 000 в месяц → январь»
+    expect(r.next).toMatchObject({ toStage: 2, missing: tenge(35_000), by: '2026-12' });
   });
 
   it('считается по деньгам сейчас: те же доходы и траты, но другие накопления — другой этап', () => {
@@ -641,6 +644,162 @@ describe('«Из А в Б» (D117)', () => {
     expect(planToGoal(s, TODAY, 'base', '2026-10')).toBeNull();
     expect(planToGoal(emptyState(), TODAY, 'base', '2027-03')).toBeNull();
     planToGoal(s, TODAY, 'cushion', '2027-06');
+    expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe('«Подушка: 0 из …» (D122)', () => {
+  const o = (st: AppState) => buildOverview(st, TODAY);
+  const cushion = (st: AppState) => flattenTree(o(st).goalTree).find((n) => n.goal.id === 'cushion')!;
+  const has = (st: AppState) => sanityCheck(st, TODAY).findings.some((f) => f.id === 'cushion_ignores_money');
+  const apply = (st: AppState): AppState => {
+    const f = cushionFill(st, TODAY, 'cf')!;
+    return { ...st, fundings: [...st.fundings, ...f.fundings] };
+  };
+  /** На каждом счёте закреплено за целями не больше, чем на нём лежит: «назначено больше, чем есть» не возникает. */
+  const overAssigned = (st: AppState): boolean => {
+    const ov = o(st);
+    return ov.capital.accounts.some((a) => ov.fundings.filter((f) => f.accountId === a.accountId).reduce((x, f) => x + f.amount, 0) > a.balance);
+  };
+  /** Копилка не привязана к цели: метки явные, часть денег свободна. */
+  const explicit = (): AppState => {
+    const s = profile({ boundSavings: false });
+    return { ...s, fundings: [{ id: 'f-base', goalId: 'base', accountId: 'save', amount: tenge(600_000), date: '2026-10-01', decisionId: null }] };
+  };
+
+  it('плашка есть, когда деньги на счетах закреплены за другой целью, а подушка пуста', () => {
+    expect(has(profile())).toBe(true);
+    expect(cushion(profile()).progress).toBe(0);
+  });
+
+  it('порядок целей плашку не убирает: подушка первой — метки денег прежние (это и была жалоба «выхожу обратно, а плашка висит»)', () => {
+    const s = profile();
+    const first = { ...s, goals: reorderGoals(s.goals, ['cushion', 'base']) };
+    expect(has(first)).toBe(true);
+  });
+
+  it('копилка привязана к цели: перенос добирает подушку до её суммы, цель теряет столько же, лишнего не назначено', () => {
+    const s = profile();
+    const f = cushionFill(s, TODAY, 'cf')!;
+    expect(f.moved).toBe(f.need);
+    expect(f.fromFree).toBe(0);
+    expect(f.fromGoals.map((x) => x.goalId)).toEqual(['base']);
+    expect(f.fromGoals[0]!.amount).toBe(f.moved);
+    // привязка: у «Базы» снимается сама, отдельной записью минус — только у явных меток
+    expect(f.fundings.every((x) => x.amount > 0)).toBe(true);
+    const after = apply(s);
+    expect(cushion(after).progress).toBe(cushion(after).goal.targetMin);
+    const baseBefore = flattenTree(o(s).goalTree).find((n) => n.goal.id === 'base')!.progress;
+    const baseAfter = flattenTree(o(after).goalTree).find((n) => n.goal.id === 'base')!.progress;
+    expect(baseBefore - baseAfter).toBe(f.moved);
+    expect(overAssigned(after)).toBe(false);
+    expect(has(after)).toBe(false);
+  });
+
+  it('явные метки: сначала свободное в копилке, потом метки других целей; сумма на счёте не растёт, плашка уходит', () => {
+    const s = explicit();
+    expect(has(s)).toBe(true);
+    const f = cushionFill(s, TODAY, 'cf')!;
+    expect(f.moved).toBe(f.need);
+    const after = apply(s);
+    expect(overAssigned(after)).toBe(false);
+    expect(has(after)).toBe(false);
+    // всего за целями столько же, сколько было плюс свободное, которое взяли
+    const total = (st: AppState) => o(st).fundings.reduce((x, y) => x + y.amount, 0);
+    expect(total(after) - total(s)).toBe(f.fromFree);
+    expect(cushion(after).progress).toBe(f.need + cushion(s).progress);
+  });
+
+  it('денег не хватает на всю подушку — переносится сколько есть, остаток назван', () => {
+    const s = explicit();
+    const big = { ...s, goals: s.goals.map((g) => (g.id === 'cushion' ? { ...g, targetRule: { kind: 'months_of_base' as const, months: 60, basis: 'essential' as const } } : g)) };
+    const f = cushionFill(big, TODAY, 'cf')!;
+    expect(f.moved).toBeLessThan(f.need);
+    // перенесено всё, что есть на счёте: за подушкой — вся копилка, у других целей и свободных денег не осталось ничего
+    const after = apply(big);
+    expect(overAssigned(after)).toBe(false);
+    expect(cushion(after).progress).toBe(f.moved);
+  });
+
+  it('«так задумано» убирает плашку; без ответа она на месте', () => {
+    const s = profile();
+    expect(has(s)).toBe(true);
+    expect(has({ ...s, settings: { ...s.settings, sanityAnswered: ['cushion_ignores_money'] } })).toBe(false);
+  });
+
+  it('переносить нечего: подушка набрана, нет подушки, нет данных — null; состояние не меняется', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    expect(cushionFill(emptyState(), TODAY, 'cf')).toBeNull();
+    expect(cushionFill({ ...s, goals: s.goals.filter((g) => g.id !== 'cushion') }, TODAY, 'cf')).toBeNull();
+    expect(cushionFill(apply(s), TODAY, 'cf')).toBeNull();
+    cushionFill(s, TODAY, 'cf');
+    expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe('«Из А в Б» — дорожная карта (D122)', () => {
+  const noSavings = (st: AppState): AppState => ({ ...st, settings: { ...st.settings, accounts: st.settings.accounts.map((x) => (x.accountId === 'save' ? { ...x, excluded: true, reviewed: true } : x)) } });
+  const extraCost = (st: AppState, amount: number): AppState => ({ ...st, settings: { ...st.settings, plannedEvents: [...st.settings.plannedEvents, { id: 'x', kind: 'recurring_change', date: '2026-11-05', title: 'Траты', amount: tenge(amount) }] } });
+  const step = (r: NonNullable<ReturnType<typeof roadmap>>, id: string) => r.steps.find((x) => x.id === id)!;
+
+  it('хорошее положение: все ступени лестницы пройдены, остаются цели', () => {
+    const r = roadmap(profile(), TODAY)!;
+    expect(r.allDone).toBe(true);
+    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'done'], ['month', 'done'], ['cushion', 'done'], ['goals', 'now'], ['year', 'done']]);
+    expect(step(r, 'goals').goals.map((g) => [g.title, g.date])).toEqual([['База 1 млн', '2027-04']]);
+  });
+
+  it('денег почти нет: «сейчас» — запас на месяц, дальше по порядку; месяц тот же, что в «Твоём этапе»', () => {
+    const s = noSavings(profile());
+    const r = roadmap(s, TODAY)!;
+    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'done'], ['month', 'now'], ['cushion', 'next'], ['goals', 'next'], ['year', 'next']]);
+    expect(step(r, 'month')).toMatchObject({ target: tenge(55_000), missing: tenge(35_000), by: '2026-12' });
+    // два экрана не должны называть разные месяцы для одного и того же
+    expect(step(r, 'month').by).toBe(personStage(s, TODAY)!.next!.by);
+    expect(step(r, 'cushion')).toMatchObject({ target: tenge(165_000), missing: tenge(145_000), by: '2027-05' });
+    // стипендия кончается в июне 2027 — и годовой запас при этом темпе не набирается: карта это показывает, а не рисует прямую
+    expect(step(r, 'year').by).toBeNull();
+    expect(r.debtFree).toEqual({ from: '2027-09', freed: tenge(25_000) });
+    expect(r.allDone).toBe(false);
+  });
+
+  it('траты больше доходов: первый шаг — выйти в плюс (сколько не хватает в месяц), остальные ждут и не набираются', () => {
+    const r = roadmap(extraCost(noSavings(profile()), 60_000), TODAY)!;
+    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'now'], ['month', 'next'], ['cushion', 'next'], ['goals', 'next'], ['year', 'next']]);
+    expect(step(r, 'plus')).toMatchObject({ monthly: true, missing: tenge(40_000), by: null });
+    expect(step(r, 'month').by).toBeNull();
+    expect(step(r, 'plus').speedUp).toEqual([]);
+  });
+
+  it('добавка в месяц приближает запас: только те, что что-то меняют; месяц сходится с прогнозом, где траты урезаны на ту же сумму', () => {
+    const s = extraCost(noSavings(profile()), 15_000);
+    const m = step(roadmap(s, TODAY)!, 'month');
+    expect(m).toMatchObject({ status: 'now', by: '2027-04' });
+    expect(m.speedUp.map((x) => [x.extraMonthly, x.by, x.monthsSooner])).toEqual([[tenge(5_000), '2027-02', 2], [tenge(10_000), '2027-01', 3]]);
+    // «+5 000 ₸ в месяц» — то же, что событие «тратить меньше на 5 000 ₸»: прогноз с ним приходит в запас не позже названного месяца
+    const cut = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, cutEvent('c', '2026-12-01', tenge(5_000))] } };
+    expect(liquidReachMonth(baseForecast(cut, TODAY, 60), tenge(55_000))! <= '2027-02').toBe(true);
+  });
+
+  it('без добавки запас не набирается, а с ней — да: «раньше на» не называется', () => {
+    const r = roadmap(extraCost(noSavings(profile()), 18_000), TODAY)!;
+    const m = step(r, 'month');
+    expect(m.by).toBeNull();
+    expect(m.speedUp.length).toBeGreaterThan(0);
+    expect(m.speedUp.every((x) => x.by !== null && x.monthsSooner === null)).toBe(true);
+  });
+
+  it('доходы равны тратам: шаг «выйти в плюс» — сейчас, но не в минус', () => {
+    const r = roadmap(extraCost(profile(), 20_000), TODAY)!;
+    expect(step(r, 'plus')).toMatchObject({ status: 'now', missing: 0, monthly: true });
+  });
+
+  it('без данных и без трат карты нет; состояние не меняется', () => {
+    expect(roadmap(emptyState(), TODAY)).toBeNull();
+    const s = profile();
+    const before = JSON.stringify(s);
+    roadmap(s, TODAY);
     expect(JSON.stringify(s)).toBe(before);
   });
 });

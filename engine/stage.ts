@@ -15,6 +15,7 @@ import { add, formatKZT, mulDiv, sum, ZERO, type Money } from './money';
 import type { IsoDate, MonthKey } from './date';
 import { buildOverview } from './overview';
 import { baseForecast, runway } from './simple';
+import type { SimResult } from './simulate';
 import type { AppState } from './state';
 
 export type StageNo = 1 | 2 | 3 | 4 | 5;
@@ -61,15 +62,18 @@ const STAGES: Record<StageNo, { title: string; portrait: string }> = {
 
 const tg = (m: Money): string => formatKZT((Math.round(m / 100) * 100) as Money);
 
-/** Через сколько месяцев набирается нужная сумма при темпе `perMonth`: месяц ключом, null — никогда. */
-function reachMonth(today: IsoDate, missing: Money, perMonth: Money): MonthKey | null {
-  if (missing <= 0) return today.slice(0, 7) as MonthKey;
-  if (perMonth <= 0) return null;
-  const n = Math.ceil(missing / perMonth);
-  if (n > 120) return null;
-  const [y, m] = today.slice(0, 7).split('-').map(Number) as [number, number];
-  const t = y * 12 + (m - 1) + n;
-  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}` as MonthKey;
+/**
+ * Первый месяц, когда деньги на конец месяца дотянут до `target`, если каждый месяц добавлять ещё `extra` (месяц i прогноза — i добавок).
+ * Считается по помесячному прогнозу (D122), а не по среднему остатку: конец стипендии, окончание рассрочек и плановые события видны,
+ * поэтому «к январю» не врёт, когда через полгода доход упадёт. Проценты на добавку не считаются — это запас в пользу человека.
+ * null — не за срок расчёта.
+ */
+export function liquidReachMonth(sim: SimResult, target: Money, extra: Money = ZERO): MonthKey | null {
+  for (let i = 0; i < sim.months.length; i++) {
+    const m = sim.months[i]!;
+    if (m.liquidEnd + extra * i >= target) return m.month;
+  }
+  return null;
 }
 
 export function personStage(state: AppState, today: IsoDate): PersonStage | null {
@@ -82,7 +86,7 @@ export function personStage(state: AppState, today: IsoDate): PersonStage | null
   const needMonthly = add(o.spend.usualMonthly, o.spend.obligationsMonthly);
   const income = sum(state.settings.incomeSchedule.filter((x) => (!x.start || x.start <= today) && (!x.end || x.end > today)).map((x) => x.amount));
   const debtShare = income > 0 ? Math.min(1, o.spend.obligationsMonthly / income) : null;
-  const sim = baseForecast(state, today, 8);
+  const sim = baseForecast(state, today, 60);
   const flows = sim.months.slice(1, 7).map((m) => m.income - m.expenses - m.obligations - m.events);
   const surplusMonthly = (flows.length ? mulDiv(sum(flows as Money[]), 1, flows.length) : ZERO) as Money;
   const cush = state.goals.find((g) => g.role === 'safety' && g.parentId === undefined && g.status === 'active');
@@ -102,7 +106,7 @@ export function personStage(state: AppState, today: IsoDate): PersonStage | null
     const toStage: StageNo = stage === 1 ? 2 : 3;
     const months = stage === 1 ? 1 : cushionMonths;
     const missing = need(months);
-    const by = reachMonth(today, missing, surplusMonthly);
+    const by = liquidReachMonth(sim, mulDiv(needMonthly, months, 1));
     next = {
       toStage,
       toTitle: STAGES[toStage].title,
@@ -121,7 +125,7 @@ export function personStage(state: AppState, today: IsoDate): PersonStage | null
       toStage: 5,
       toTitle: STAGES[5].title,
       missing,
-      by: reachMonth(today, missing, surplusMonthly),
+      by: liquidReachMonth(sim, mulDiv(needMonthly, 12, 1)),
       text: `Чтобы хватало на год без дохода, не хватает ≈ ${tg(missing)}. Цели тоже важны — как делить деньги между запасом и целями, решаешь ты.`,
     };
   }
