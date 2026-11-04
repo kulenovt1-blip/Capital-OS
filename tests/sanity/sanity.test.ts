@@ -26,7 +26,7 @@ import { liquidReachMonth, personStage } from '../../engine/stage';
 import { savingOptions } from '../../engine/saving';
 import { planToGoal } from '../../engine/route';
 import { flattenTree } from '../../engine/goals';
-import { roadmap } from '../../engine/roadmap';
+import { routeTo, higherStages } from '../../engine/roadmap';
 import { applyRepeatAnswer, cushionFill, cutEvent, reorderGoals, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
@@ -528,20 +528,30 @@ describe('предпросмотр «что будет, если…» (D114)', (
 describe('«Твой этап» (D115)', () => {
   const noSavings = (st: AppState): AppState => ({ ...st, settings: { ...st.settings, accounts: st.settings.accounts.map((x) => (x.accountId === 'save' ? { ...x, excluded: true, reviewed: true } : x)) } });
   const extraCost = (st: AppState, amount: number): AppState => ({ ...st, settings: { ...st.settings, plannedEvents: [...st.settings.plannedEvents, { id: 'x', kind: 'recurring_change', date: '2026-11-05', title: 'Траты', amount: tenge(amount) }] } });
-  it('ступени идут по тому, на сколько месяцев хватит денег без дохода, и по тому, остаётся ли откладывать', () => {
-    expect(personStage(profile(), TODAY)!).toMatchObject({ stage: 5, coverMonths: 14 });
-    expect(personStage(extraCost(profile(), 15_000), TODAY)!.stage).toBe(4);
-    // подушка есть, а откладывать нечего (доходы = траты) — третья ступень, следующий шаг про это
-    const flat = personStage(extraCost(profile(), 20_000), TODAY)!;
-    expect(flat.stage).toBe(3);
-    expect(flat.next!.toStage).toBe(4);
-    expect(flat.next!.text).toContain('сэкономить');
+  it('этап — только на сколько месяцев хватит денег без дохода: деньги сразу ÷ (траты + платежи) по границам 1 / 3 / 6 / 12', () => {
+    // 905 000 ÷ 55 000 = 16,4 мес. (округление вниз до десятых — «16,5» не обещаем)
+    expect(personStage(profile(), TODAY)!).toMatchObject({ stage: 5, coverMonths: 16.4, liquid: tenge(905_000), needMonthly: tenge(55_000) });
+    // меньше накоплено при тех же тратах — ниже этап: 60 000 ÷ 55 000 = 1,0 → 2; 245 000 ÷ 55 000 = 4,4 → 3; 415 000 ÷ 55 000 = 7,5 → 4
+    expect(personStage(noSavings(profile()), TODAY)!).toMatchObject({ stage: 1, coverMonths: 0.3 });
+    expect(personStage(profile({ from: '2026-09' }), TODAY)!).toMatchObject({ stage: 2, coverMonths: 1 });
+    expect(personStage(profile({ from: '2026-08' }), TODAY)!).toMatchObject({ stage: 3, coverMonths: 4.4 });
+    expect(personStage(profile({ from: '2026-07' }), TODAY)!).toMatchObject({ stage: 4, coverMonths: 7.5 });
   });
 
-  it('денег почти нет: первая ступень, следующий шаг — сколько не хватает до месяца без дохода и когда при нынешнем темпе', () => {
+  it('сколько остаётся в месяц на этап не влияет — только на то, когда дойдёшь до следующего', () => {
+    const base = personStage(profile({ from: '2026-08' }), TODAY)!;
+    const worse = personStage(extraCost(profile({ from: '2026-08' }), 60_000), TODAY)!;
+    expect(worse.surplusMonthly).toBeLessThan(base.surplusMonthly);
+    expect(worse.stage).toBe(base.stage);
+    expect(worse.coverMonths).toBe(base.coverMonths);
+    expect(worse.next!.by).not.toBe(base.next!.by);
+  });
+
+  it('денег почти нет: первый этап, следующий — сколько не хватает до месяца без дохода и когда при нынешнем темпе', () => {
     const r = personStage(noSavings(profile()), TODAY)!;
     expect(r.stage).toBe(1);
-    expect(r.coverMonths).toBe(0);
+    // 20 000 ÷ 55 000 = 0,3 месяца
+    expect(r.coverMonths).toBe(0.3);
     // месяц — по помесячному прогнозу (D122): остаток ноября уже приходит, поэтому декабрь, а не «35 000 / 20 000 в месяц → январь»
     expect(r.next).toMatchObject({ toStage: 2, missing: tenge(35_000), by: '2026-12' });
   });
@@ -738,68 +748,59 @@ describe('«Подушка: 0 из …» (D122)', () => {
   });
 });
 
-describe('«Из А в Б» — дорожная карта (D122)', () => {
+describe('«Из А в Б» (D123)', () => {
   const noSavings = (st: AppState): AppState => ({ ...st, settings: { ...st.settings, accounts: st.settings.accounts.map((x) => (x.accountId === 'save' ? { ...x, excluded: true, reviewed: true } : x)) } });
   const extraCost = (st: AppState, amount: number): AppState => ({ ...st, settings: { ...st.settings, plannedEvents: [...st.settings.plannedEvents, { id: 'x', kind: 'recurring_change', date: '2026-11-05', title: 'Траты', amount: tenge(amount) }] } });
-  const step = (r: NonNullable<ReturnType<typeof roadmap>>, id: string) => r.steps.find((x) => x.id === id)!;
 
-  it('хорошее положение: все ступени лестницы пройдены, остаются цели', () => {
-    const r = roadmap(profile(), TODAY)!;
-    expect(r.allDone).toBe(true);
-    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'done'], ['month', 'done'], ['cushion', 'done'], ['goals', 'now'], ['year', 'done']]);
-    expect(step(r, 'goals').goals.map((g) => [g.title, g.date])).toEqual([['База 1 млн', '2027-04']]);
-  });
-
-  it('денег почти нет: «сейчас» — запас на месяц, дальше по порядку; месяц тот же, что в «Твоём этапе»', () => {
+  it('человек сам выбирает этап Б: нужно = месяцы этапа × «уходит в месяц»; не хватает = нужно − есть', () => {
     const s = noSavings(profile());
-    const r = roadmap(s, TODAY)!;
-    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'done'], ['month', 'now'], ['cushion', 'next'], ['goals', 'next'], ['year', 'next']]);
-    expect(step(r, 'month')).toMatchObject({ target: tenge(55_000), missing: tenge(35_000), by: '2026-12' });
-    // два экрана не должны называть разные месяцы для одного и того же
-    expect(step(r, 'month').by).toBe(personStage(s, TODAY)!.next!.by);
-    expect(step(r, 'cushion')).toMatchObject({ target: tenge(165_000), missing: tenge(145_000), by: '2027-05' });
-    // стипендия кончается в июне 2027 — и годовой запас при этом темпе не набирается: карта это показывает, а не рисует прямую
-    expect(step(r, 'year').by).toBeNull();
-    expect(r.debtFree).toEqual({ from: '2027-09', freed: tenge(25_000) });
-    expect(r.allDone).toBe(false);
+    const r = routeTo(s, TODAY, 3)!;
+    expect(r.from.stage).toBe(1);
+    expect(r.to.no).toBe(3);
+    // 3 мес. × 55 000 (30 000 траты + 25 000 платежи) = 165 000; есть 20 000
+    expect(r.target).toBe(tenge(165_000));
+    expect(r.missing).toBe(tenge(145_000));
+    // месяц тот же, что на экране «Твой этап» для соседнего этапа, и по пути названы все этапы между А и Б
+    expect(routeTo(s, TODAY, 2)!.by).toBe(personStage(s, TODAY)!.next!.by);
+    expect(r.steps.map((x) => [x.stage.no, x.by])).toEqual([[2, '2026-12'], [3, '2027-05']]);
+    expect(r.by).toBe('2027-05');
   });
 
-  it('траты больше доходов: первый шаг — выйти в плюс (сколько не хватает в месяц), остальные ждут и не набираются', () => {
-    const r = roadmap(extraCost(noSavings(profile()), 60_000), TODAY)!;
-    expect(r.steps.map((x) => [x.id, x.status])).toEqual([['plus', 'now'], ['month', 'next'], ['cushion', 'next'], ['goals', 'next'], ['year', 'next']]);
-    expect(step(r, 'plus')).toMatchObject({ monthly: true, missing: tenge(40_000), by: null });
-    expect(step(r, 'month').by).toBeNull();
-    expect(step(r, 'plus').speedUp).toEqual([]);
+  it('сколько откладывать сверху за срок: (нужно − будет к сроку) ÷ месяцев, округлено вверх до 1 000; если и так успеваешь — 0', () => {
+    const r = routeTo(noSavings(profile()), TODAY, 5)!;
+    // 12 × 55 000 = 660 000; при нынешнем темпе не набирается, за 3 месяца — самая большая добавка
+    expect(r.target).toBe(tenge(660_000));
+    expect(r.by).toBeNull();
+    expect(r.deadlines.map((d) => [d.months, d.month])).toEqual([[3, '2027-02'], [6, '2027-05'], [12, '2027-11'], [24, '2028-11']]);
+    const extra = r.deadlines.map((d) => d.extraMonthly);
+    expect(extra).toEqual([tenge(185_000), tenge(83_000), tenge(47_000), tenge(29_000)]);
+    expect(extra.every((x, i) => i === 0 || x < extra[i - 1]!)).toBe(true);
+    // добавка в самом деле приводит к цели: событие «тратить меньше» на эту сумму даёт нужный запас к сроку
+    const cut = { ...noSavings(profile()), settings: { ...noSavings(profile()).settings, plannedEvents: [cutEvent('c', '2026-12-01', tenge(47_000))] } };
+    expect(liquidReachMonth(baseForecast(cut, TODAY, 60), tenge(660_000))! <= '2027-11').toBe(true);
+    // до месяца без дохода и так успеваем — добавка 0
+    expect(routeTo(noSavings(profile()), TODAY, 2)!.deadlines.slice(0, 3).map((d) => d.extraMonthly)).toEqual([0, 0, 0]);
   });
 
-  it('добавка в месяц приближает запас: только те, что что-то меняют; месяц сходится с прогнозом, где траты урезаны на ту же сумму', () => {
-    const s = extraCost(noSavings(profile()), 15_000);
-    const m = step(roadmap(s, TODAY)!, 'month');
-    expect(m).toMatchObject({ status: 'now', by: '2027-04' });
-    expect(m.speedUp.map((x) => [x.extraMonthly, x.by, x.monthsSooner])).toEqual([[tenge(5_000), '2027-02', 2], [tenge(10_000), '2027-01', 3]]);
-    // «+5 000 ₸ в месяц» — то же, что событие «тратить меньше на 5 000 ₸»: прогноз с ним приходит в запас не позже названного месяца
-    const cut = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, cutEvent('c', '2026-12-01', tenge(5_000))] } };
-    expect(liquidReachMonth(baseForecast(cut, TODAY, 60), tenge(55_000))! <= '2027-02').toBe(true);
+  it('траты больше доходов: сказано, на сколько, и цель не набирается', () => {
+    const r = routeTo(extraCost(noSavings(profile()), 60_000), TODAY, 3)!;
+    expect(r.deficitMonthly).toBe(tenge(40_000));
+    expect(r.by).toBeNull();
   });
 
-  it('без добавки запас не набирается, а с ней — да: «раньше на» не называется', () => {
-    const r = roadmap(extraCost(noSavings(profile()), 18_000), TODAY)!;
-    const m = step(r, 'month');
-    expect(m.by).toBeNull();
-    expect(m.speedUp.length).toBeGreaterThan(0);
-    expect(m.speedUp.every((x) => x.by !== null && x.monthsSooner === null)).toBe(true);
+  it('платежи по долгам кончатся — сказано, когда и сколько освободится', () => {
+    expect(routeTo(noSavings(profile()), TODAY, 3)!.debtFree).toEqual({ from: '2027-09', freed: tenge(25_000) });
   });
 
-  it('доходы равны тратам: шаг «выйти в плюс» — сейчас, но не в минус', () => {
-    const r = roadmap(extraCost(profile(), 20_000), TODAY)!;
-    expect(step(r, 'plus')).toMatchObject({ status: 'now', missing: 0, monthly: true });
-  });
-
-  it('без данных и без трат карты нет; состояние не меняется', () => {
-    expect(roadmap(emptyState(), TODAY)).toBeNull();
+  it('на верхнем этапе выбирать некуда; этап не ниже текущего — нельзя; пустые данные — null; состояние не меняется', () => {
+    expect(higherStages(5)).toEqual([]);
+    expect(higherStages(1).map((d) => d.no)).toEqual([2, 3, 4, 5]);
+    expect(routeTo(profile(), TODAY, 5)).toBeNull();
+    expect(routeTo(noSavings(profile()), TODAY, 1)).toBeNull();
+    expect(routeTo(emptyState(), TODAY, 3)).toBeNull();
     const s = profile();
     const before = JSON.stringify(s);
-    roadmap(s, TODAY);
+    routeTo(noSavings(s), TODAY, 4);
     expect(JSON.stringify(s)).toBe(before);
   });
 });

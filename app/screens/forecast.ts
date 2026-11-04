@@ -47,7 +47,7 @@ function trio(rs: SimResult[]): Trio | null {
 }
 
 /** Сценарий совпал с базой во всех месяцах — показывать его отдельно незачем (D93). */
-const sameAs = (a: SimResult, b: SimResult) => a.months.length === b.months.length && a.months.every((m, i) => m.capital === b.months[i]!.capital);
+const sameAs = (a: SimResult, b: SimResult) => a.months.length === b.months.length && a.months.every((m, i) => m.assets === b.months[i]!.assets);
 
 /**
  * Что меняет сценарий — на твоих цифрах (D101): «Зарплата 180 000 → 144 000 ₸ в месяц», а не «доход от работы −20 %».
@@ -204,7 +204,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
 
   root.append(seg(avail.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза'));
   // `capitalAfter` есть только для 6/12/24/36 мес.; короткие сроки берём из помесячного ряда
-  const capAt = (r: SimResult, m: number): Money | null => r.months[Math.min(m, r.months.length - 1)]?.capital ?? null;
+  const capAt = (r: SimResult, m: number): Money | null => r.months[Math.min(m, r.months.length - 1)]?.assets ?? null;
   const cap = (r: SimResult) => capAt(r, k);
   const lo = cap(tr.worse);
   const hi = cap(tr.better);
@@ -215,19 +215,19 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   root.append(
     h(
       'section',
-      { class: 'hero', 'aria-label': `Капитал через ${word}` },
-      h('div', { class: 'label' }, h('span', null, `Всего у тебя будет через ${word}`, info('net'))),
+      { class: 'hero', 'aria-label': `На руках через ${word}` },
+      h('div', { class: 'label' }, h('span', null, `На руках через ${word} будет`)),
       h('div', { class: `value${(cap(tr.base) ?? 0) < 0 ? ' neg' : ''}` }, cap(tr.base) === null ? '—' : fmtShort(cap(tr.base)!)),
-      h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас', alt ? ` · ${alt}` : ''),
+      h('div', { class: 'subline' }, `если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`, alt ? ` · ${alt}` : ''),
       h('a', { class: 'link', href: sheetHref('fc-scenarios') }, 'Что значит «хуже» и «лучше» ›'),
     ),
   );
 
   const n = Math.min(k + 1, tr.base.months.length);
   const months = tr.base.months.slice(0, n).map((m) => m.month);
-  const vals = (r: SimResult) => r.months.slice(0, n).map((m) => m.capital);
+  const vals = (r: SimResult) => r.months.slice(0, n).map((m) => m.assets);
   const width = Math.min(720, Math.min(960, document.documentElement.clientWidth) - 40);
-  root.append(h('div', { class: 'card' }, bandChart(months, vals(tr.base), vals(tr.worse), vals(tr.better), `Капитал на конец месяца, ${k < 12 ? `${k} мес.` : '1 год'}`, width)));
+  root.append(h('div', { class: 'card' }, bandChart(months, vals(tr.base), vals(tr.worse), vals(tr.better), `Деньги на руках на конец месяца, ${k < 12 ? `${k} мес.` : '1 год'}`, width)));
 
   // таблица: 4 колонки и на телефоне
   const horizons = avail.map(([m]) => m);
@@ -235,7 +235,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
     h(
       'table',
       { class: 'tbl four' },
-      h('caption', { class: 'visually-hidden' }, 'Капитал по сценариям'),
+      h('caption', { class: 'visually-hidden' }, 'Деньги на руках по сценариям'),
       h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Срок'), worseSame ? null : h('th', { scope: 'col' }, 'Хуже'), h('th', { scope: 'col' }, 'Так же'), betterSame ? null : h('th', { scope: 'col' }, 'Лучше'))),
       h(
         'tbody',
