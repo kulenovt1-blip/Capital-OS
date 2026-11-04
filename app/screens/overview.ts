@@ -128,7 +128,8 @@ function cushionRow(o: Overview): HTMLElement | null {
   return rows(
     row({
       title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
-      sub: `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
+      // деньги есть, но отложены на другие цели — сказать прямо (D107, аудит №4 К1)
+      sub: !ready && o.spend.onHand >= n.goal.targetMin ? `${fmt(n.progress)} из ${fmt(n.goal.targetMin)} · деньги на счетах есть, но отложены на другие цели` : `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
       value: ready ? h('span', { class: 'good' }, '✓') : undefined,
       href: '#/goals',
     }),

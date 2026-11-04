@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { buildSimInput, capitalAt, listOrder, runWhatIf, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { buildSimInput, capitalAt, listOrder, runWhatIf, sanityCheck, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -92,13 +92,32 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     ),
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
+  // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
+  // порядок — по важности: что меняет вывод сильнее, то выше
+  const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch', 'oneoff_averaged'];
+  const sane = sanityCheck(st, today())
+    .findings.filter((f) => ORDER.includes(f.id))
+    .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+  if (sane.length) {
+    const top = sane.slice(0, 3);
+    const rest = sane.slice(3);
+    root.append(
+      h(
+        'section',
+        { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
+        h('strong', null, 'Проверь, прежде чем верить прогнозу'),
+        ...top.map((f) => h('div', null, f.text)),
+        rest.length ? h('details', null, h('summary', null, `ещё ${rest.length}`), h('div', { class: 'stack' }, ...rest.map((f) => h('div', null, f.text)))) : null,
+      ),
+    );
+  }
 
   const vd = verdicts();
   const lastMonth = sim.months[sim.months.length - 1]?.month;
   const when = (x: MonthKey | null | undefined) => (x ? monthWord(x) : lastMonth ? `позже ${monthGen(lastMonth)}` : '—');
-  const goals = listOrder(ov().goals)
-    .filter((g) => g.status === 'active' && !g.folder && g.id in sim.goalDates)
-    .sort((a, b) => Number(b.role === 'safety' && b.parentId === undefined) - Number(a.role === 'safety' && a.parentId === undefined));
+  // порядок — тот же, по которому раздаются деньги (D107: раньше подушка ставилась первой только на экране)
+  const goals = listOrder(ov().goals).filter((g) => g.status === 'active' && !g.folder && g.id in sim.goalDates);
+  const lastProgress = sim.months[sim.months.length - 1]?.goalProgress ?? {};
   if (goals.length) {
     root.append(
       sub('Цели'),
@@ -107,7 +126,13 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
           const v = vd.get(g.id);
           const cushion = g.role === 'safety' && g.parentId === undefined;
           const subText = v ? (v.ok ? 'успеваешь' : `к сроку ${fmtDay(v.deadline)} не успеваешь`) : cushion ? 'подушка' : g.deadline ? undefined : 'без срока';
-          return row({ title: g.title, sub: subText, value: when(sim.goalDates[g.id]), href: sheetHref('fc-goal', g.id) });
+          const date = sim.goalDates[g.id];
+          // не набирается за прогноз — сколько наберётся, а не «позже …» (D107)
+          const partial = date === null && lastMonth ? (lastProgress[g.id] ?? 0) : null;
+          const pct = partial !== null && partial > 0 && g.targetMin > 0 ? Math.floor((partial * 100) / g.targetMin) : null;
+          const value = pct !== null ? `${pct} %` : when(date);
+          const sub2 = pct !== null ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
+          return row({ title: g.title, sub: sub2, value, href: sheetHref('fc-goal', g.id) });
         }),
       ),
     );
