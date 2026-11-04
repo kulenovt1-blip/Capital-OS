@@ -18,11 +18,16 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props |
 }
 
 /** Добавить детей (null и false пропускаются). */
+/** Число не рвётся переносом посередине: «1 000 000 ₸» — неразрывные пробелы между цифрами и перед ₸ (D110). */
+export function nbsp(t: string): string {
+  return t.replace(/(\d) (?=\d|₸|%)/g, '$1\u00a0');
+}
+
 export function append(el: Node, children: Child[]): void {
   for (const c of children) {
     if (c === null || c === undefined || c === false) continue;
     if (Array.isArray(c)) append(el, c);
-    else el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+    else el.appendChild(c instanceof Node ? c : document.createTextNode(nbsp(String(c))));
   }
 }
 

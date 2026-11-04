@@ -147,6 +147,18 @@ defineSheet('account', (id) => {
           chevron: false,
         }),
       ),
+      // ставка по копилке (D110): проценты в прогнозе; пусто — не считать
+      kind === 'savings' && !p.excluded && p.source === 'moneymanager'
+        ? (() => {
+            const inp = h('input', { type: 'text', inputmode: 'decimal', placeholder: 'нет', value: s.rateBp ? String(s.rateBp / 100).replace('.', ',') : '', 'aria-label': 'Ставка, % годовых' }) as HTMLInputElement;
+            inp.addEventListener('change', () => {
+              const v = Number(inp.value.replace(',', '.').replace(/[^\d.]/g, ''));
+              const bp = Number.isFinite(v) && v > 0 && v <= 50 ? Math.round(v * 100) : 0;
+              void patchAccount(id, (a) => ({ ...a, rateBp: bp }), bp ? `«${p.title}»: ${String(bp / 100).replace('.', ',')} % годовых в прогнозе` : `«${p.title}»: без процентов`);
+            });
+            return field('Ставка, % годовых — для прогноза', inp);
+          })()
+        : null,
       kind === 'savings' && !p.excluded ? [sub('Снять можно', info('liquid')), liquidityPicker(s.liquidity, (l) => void patchAccount(id, (a) => ({ ...a, liquidity: l }), `«${p.title}»: снять ${liqLabel(l)}`))] : null,
       rows(
         row({
@@ -248,7 +260,20 @@ defineSheet('income-item', (id) => {
   // повышают ли каждый год (D108): два ответа; не спрошено — не растёт, пока не ответишь
   let indexed: 'yes' | 'no' | null = x.indexed === undefined ? null : x.indexed ? 'yes' : 'no';
   const idxBox = h('div');
-  const drawIdx = () => idxBox.replaceChildren(h('span', { class: 'field-label' }, 'Повышают каждый год вместе с ценами?'), seg([['yes', 'Да'], ['no', 'Нет']] as const, indexed ?? ('' as 'yes'), (v) => ((indexed = v), drawIdx()), 'Повышают каждый год'));
+  // месяц повышения (D110): по истории, без истории — январь; можно указать самому
+  const MONTHS_PREP = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
+  let indexMonth: number | undefined = x.indexMonth;
+  const drawIdx = () =>
+    idxBox.replaceChildren(
+      h('span', { class: 'field-label' }, 'Повышают каждый год вместе с ценами?'),
+      seg([['yes', 'Да'], ['no', 'Нет']] as const, indexed ?? ('' as 'yes'), (v) => ((indexed = v), drawIdx()), 'Повышают каждый год'),
+      indexed === 'yes'
+        ? h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'В каком месяце?'),
+            h('select', { 'aria-label': 'Месяц повышения', onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; indexMonth = v ? Number(v) : undefined; } },
+              h('option', { value: '' }, 'как в прошлый раз (по истории; нет истории — в январе)'),
+              MONTHS_PREP.map((m, i) => h('option', { value: String(i + 1), selected: indexMonth === i + 1 }, `в ${m}`))))
+        : '',
+    );
   drawIdx();
   const form = h(
     'form',
@@ -270,8 +295,8 @@ defineSheet('income-item', (id) => {
     if (amount === null || amount <= 0) errs.push('Сумма должна быть больше нуля');
     const start = readStr(form, 'start');
     const end = readStr(form, 'end');
-    const { start: _s, end: _e, indexed: _i, ...base } = x;
-    const item = { ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}) };
+    const { start: _s, end: _e, indexed: _i, indexMonth: _m, ...base } = x;
+    const item = { ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}), ...(indexed === 'yes' && indexMonth ? { indexMonth } : {}) };
     if (!errs.length) errs.push(...validateIncomeItem(item, reg));
     err.replaceChildren(errorsBox(errs) ?? '');
     if (errs.length) return;

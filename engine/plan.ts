@@ -15,6 +15,7 @@ import { assignMoney, directFunded, type GoalFunding } from './goals';
 import { compareStrategies, type CompareResult, type StrategyParams, type StrategyRow } from './allocate';
 import { simulate, whatIf, compareAlternatives, type ExpenseBaseline, type LifeEvent, type SimDeposit, type SimInput, type SimResult, type WhatIfResult, type AlternativeResult } from './simulate';
 import { buildOverview, type Overview } from './overview';
+import { EXTRA_INCOME_ID, LUMPS_SUFFIX, growthAnchor, habitExpenses, hiddenFacts, raiseMonth } from './hidden';
 import type { AppState, Decision } from './state';
 
 /**
@@ -86,13 +87,16 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
   const o = buildOverview(state, today);
   const warnings: Explanation = [];
   const manual = new Map(state.manualAccounts.map((m) => [m.id, m]));
+  const acctRate = new Map(state.settings.accounts.filter((a) => (a.rateBp ?? 0) > 0).map((a) => [a.accountId, a.rateBp!]));
   let cash = ZERO;
   const deposits: SimDeposit[] = [];
   for (const p of o.capital.accounts) {
     if (p.excluded) continue;
     const terms = manual.get(p.accountId)?.deposit;
-    if (terms || p.availableFrom > today) {
-      deposits.push({ id: p.accountId, title: p.title, balance: p.balance, rateBp: terms?.rateBp ?? 0, capitalization: terms?.capitalization ?? 'monthly', availableFrom: p.availableFrom });
+    // ставка по копилке из MoneyManager — по ответу человека (D110)
+    const rate = terms?.rateBp ?? acctRate.get(p.accountId);
+    if (terms || rate || p.availableFrom > today) {
+      deposits.push({ id: p.accountId, title: p.title, balance: p.balance, rateBp: rate ?? 0, capitalization: terms?.capitalization ?? 'monthly', availableFrom: p.availableFrom });
     } else cash = add(cash, p.balance);
   }
   const payments = o.obligations
@@ -102,6 +106,13 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
   const ops = o.classification?.ops ?? [];
   const notes: Explanation = [];
   const expenses = forecastExpenses(state, today, ops, warnings, notes);
+  // данные, которые прогноз раньше выбрасывал (D110): учитываются только по ответу человека
+  const hf = hiddenFacts(state, today, o);
+  for (const l of hf.lumps) {
+    if (state.settings.lumps?.[l.classId] !== true) continue;
+    expenses.push({ key: `${l.classId}${LUMPS_SUFFIX}`, title: `Крупные траты: ${l.label.replace(/^Расход:\s*/, '')} (за 12 мес. сверх обычного месяца)`, monthly: l.extraMonthly, growthBp: state.settings.inflationBp });
+  }
+  if (hf.installments && state.settings.newInstallments === true) expenses.push(...habitExpenses(hf.installments.avgMonthly, payments, today, state.settings.simulationMonths));
   if (!expenses.length) warnings.push(step('plan.no_expenses', 'Нет размеченных трат — прогноз считает траты нулевыми. Разметь категории в «Разметке»', { level: 'warn' }));
   const instMedian = sum(['E_installment_own', 'E_installment_family'].map((c) => baselineMonthly(ops, today, c as OpClass, state.settings.baselineMonths).median));
   if (instMedian > 0 && !state.obligations.some((x) => x.kind === 'installment')) {
@@ -117,7 +128,16 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
     deposits,
     liabilities: o.capital.liabilities.total,
     payments,
-    incomes: state.settings.incomeSchedule.map((x) => ({ id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth, kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)), ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}), ...(x.indexed && state.settings.inflationBp > 0 ? { growth: { rateBp: state.settings.inflationBp, everyMonths: 12 } } : {}) })),
+    incomes: [
+      ...state.settings.incomeSchedule.map((x) => ({
+        id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth,
+        kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)),
+        ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}),
+        // повышение — в месяц, когда его делали раньше (D110), а не через год от сегодня
+        ...(x.indexed && state.settings.inflationBp > 0 ? { growth: { rateBp: state.settings.inflationBp, everyMonths: 12 }, growthAnchor: growthAnchor(today, x.indexMonth ?? raiseMonth(ops, today, x) ?? 1, x.dayOfMonth) } : {}),
+      })),
+      ...(hf.extraIncome && state.settings.extraIncome === true ? [{ id: EXTRA_INCOME_ID, title: 'Подарки, кешбэк и прочее (медиана за 12 мес.)', amount: hf.extraIncome.extraMonthly, dayOfMonth: 15, kind: 'irregular' as const }] : []),
+    ],
     expenses,
     events: state.settings.plannedEvents,
     goals: o.goals,

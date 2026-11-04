@@ -17,6 +17,7 @@ import { flattenTree } from './goals';
 import { buildSimInput } from './plan';
 import { simulate, type SimResult } from './simulate';
 import type { Overview } from './overview';
+import { expensePart, hiddenFacts } from './hidden';
 import type { AppState } from './state';
 
 export type SanityLevel = 'fail' | 'warn';
@@ -42,8 +43,11 @@ export type SanityId =
   | 'goal_mostly_reached'
   | 'oneoff_averaged'
   | 'baseline_other_income'
-  | 'spend_window_small_income'
-  | 'cushion_temporary_debt';
+  | 'cushion_temporary_debt'
+  | 'interest_ignored'
+  | 'lumps_lost'
+  | 'installment_habit'
+  | 'income_omitted';
 
 /** Пороги — в одном месте, чтобы их можно было обсуждать. */
 export const SANITY = {
@@ -55,8 +59,6 @@ export const SANITY = {
   mostlyReached: 0.5,
   /** Категория «редкого» с таким числом операций за год и меньше → похоже на разовое. */
   oneoffOps: 2,
-  /** Ближайший доход меньше этой доли месячных трат → окно «до дохода» режется мелким поступлением. */
-  smallIncome: 0.25,
   /** Доля платежей по рассрочкам в месяце подушки → подушка больше чем наполовину из временного долга. */
   cushionDebtShare: 0.3,
 } as const;
@@ -116,9 +118,7 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
   }
 
   // 3. «Обычные траты» на «Обзоре» и в прогнозе — одно и то же (D109: редкие показываются отдельно на обоих экранах)
-  const reg0 = classRegistry(state.settings.classes);
-  const isRare = (key: string) => reg0.find((c) => c.id === key)?.behavior === 'irregular';
-  const fcUsual = sum(input.expenses.filter((e) => !isRare(e.key)).map((e) => e.monthly));
+  const fcUsual = sum(input.expenses.filter((e) => expensePart(state, e.key) === 'usual').map((e) => e.monthly));
   const lo = Math.min(o.spend.usualMonthly, fcUsual) as Money;
   const hi = Math.max(o.spend.usualMonthly, fcUsual) as Money;
   if (lo > 0 && hi > mulDiv(lo as Money, Math.round(SANITY.expenseRatio * 100), 100)) {
@@ -209,13 +209,6 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
     }
   }
 
-  // 10. Окно «можно тратить» режется мелким доходом
-  const ni = o.nextIncome;
-  const sched = ni.source === 'schedule' ? state.settings.incomeSchedule.find((x) => x.title === ni.title) : undefined;
-  if (sched && o.spend.usualMonthly > 0 && sched.amount < mulDiv(o.spend.usualMonthly, Math.round(SANITY.smallIncome * 100), 100)) {
-    out.push({ id: 'spend_window_small_income', level: 'warn', text: `«Можно тратить до ${formatDateRu(ni.date)}» считается до дохода «${sched.title}» ${tg(sched.amount)} — он меньше четверти месячных трат` });
-  }
-
   // 11. Подушка больше чем наполовину из временного долга
   if (cushion?.goal.targetRule?.kind === 'months_of_base' && cushion.goal.targetRule.basis === 'essential') {
     const ess = add(o.baseline.median, o.spend.obligationsMonthly);
@@ -225,8 +218,31 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
     }
   }
 
+  // 12–15. Данные, которые прогноз раньше молча выбрасывал (D110): без ответа — вывод держится на допущении
+  const hf = hiddenFacts(state, today, o);
+  const rateOf = new Map(state.settings.accounts.map((a) => [a.accountId, a.rateBp]));
+  for (const x of hf.interest) {
+    if (rateOf.get(x.accountId) !== undefined) continue;
+    out.push({ id: 'interest_ignored', level: 'fail', ref: x.accountId, text: `На «${x.title}» банк начислил за ${moN(x.month)} ${tg(x.amount)} — это около ${pct(x.suggestedRateBp)} годовых, а в прогнозе процентов нет. Считать их дальше?` });
+  }
+  const lumps = hf.lumps.filter((l) => state.settings.lumps?.[l.classId] === undefined);
+  if (lumps.length) {
+    out.push({ id: 'lumps_lost', level: 'fail', ref: lumps.map((l) => l.classId).join(','), text: `Крупные траты сверх обычного месяца в прогноз не входят: ${lumps.map((l) => `«${label(l.label)}» — за год ${tg(l.total)}, в прогнозе ${tg(l.median)} в месяц`).join('; ')}. Будут ещё такие?` });
+  }
+  const inst = hf.installments;
+  if (inst && state.settings.newInstallments === undefined && (!inst.currentEnd || inst.currentEnd < horizonEnd)) {
+    out.push({ id: 'installment_habit', level: 'fail', text: `Рассрочки ты платил ${inst.monthsWith} мес. из ${inst.months}, в среднем ${tg(inst.avgMonthly)} в месяц. ${inst.currentEnd ? `После ${mo(monthKey(inst.currentEnd))} текущие кончатся, и` : 'Сейчас текущих нет, и'} прогноз считает, что новых не будет. Будут?` });
+  }
+  const ex = hf.extraIncome;
+  if (ex && state.settings.extraIncome === undefined) {
+    out.push({ id: 'income_omitted', level: 'fail', text: `Подарки деньгами, кешбэк и прочее: в обычный месяц ${tg(ex.medianMonthly)}${ex.covered.length ? ` (из них уже в доходах: ${ex.covered.map((c) => `«${c.title}» ${tg(c.amount)}`).join(', ')})` : ''}. В прогнозе ещё ${tg(ex.extraMonthly)} в месяц не учтено. Учитывать?` });
+  }
+
   return { findings: out, ctx: { overview: o, sim } };
 }
+
+const pct = (bp: number) => `${(Math.round(bp / 10) / 10).toString().replace('.', ',')} %`;
+const label = (l: string) => l.replace(/^Расход:\s*/, '').replace(/^./, (c) => c.toUpperCase());
 
 /** Только id ошибок уровня fail — для «храповика» в tests/sanity. */
 export function sanityFails(state: AppState, today: IsoDate): SanityId[] {

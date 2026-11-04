@@ -24,3 +24,4 @@ export * from './installment-detect';
 export * from './income-kinds';
 export * from './simple';
 export * from './sanity';
+export * from './hidden';

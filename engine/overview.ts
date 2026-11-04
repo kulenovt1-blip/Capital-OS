@@ -206,11 +206,12 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   // цели: суммы по правилам, дерево, превышения назначений
   const reg = classRegistry(state.settings.classes);
   const baseline = baselineMonthly(classification?.ops ?? [], today, baseClassIds(reg, today), state.settings.baselineMonths);
-  const regular = baselineMonthly(classification?.ops ?? [], today, regularClassIds(reg, today), state.settings.baselineMonths, 'Регулярные траты');
+  // как в прогнозе — сумма медиан по каждому классу (D110): иначе «обычные траты» на «Обзоре» и в прогнозе — два разных числа
+  const regularMedian = sum(regularClassIds(reg, today).map((c) => baselineMonthly(classification?.ops ?? [], today, c, state.settings.baselineMonths).median));
   const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
   const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
     essential: add(baseline.median, obligationsMonthly),
-    all: add(add(add(baseline.median, regular.median), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
+    all: add(add(add(baseline.median, regularMedian), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
   });
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
@@ -287,12 +288,12 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const days = Math.max(1, daysBetween(today, nextIncome.date));
   // не узнанные категории: в «обычно уходит» — по среднему за месяц, а не медианой как регулярные (D104)
   const unchecked = averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly;
-  const usualMonthly = add(add(baseline.median, regular.median), unchecked);
+  const usualMonthly = add(add(baseline.median, regularMedian), unchecked);
   const spend: SpendView = {
     kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
-    onHand, inSavings, locked, obligationsMonthly, regularMedian: regular.median,
+    onHand, inSavings, locked, obligationsMonthly, regularMedian,
   };
   return {
     spend,
