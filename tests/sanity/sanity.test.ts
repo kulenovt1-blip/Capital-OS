@@ -24,6 +24,7 @@ import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
 import { personStage } from '../../engine/stage';
 import { savingOptions } from '../../engine/saving';
+import { planToGoal } from '../../engine/route';
 import { applyRepeatAnswer, cutEvent, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
@@ -493,5 +494,55 @@ describe('«Где можно сэкономить» (D116)', () => {
     const planned = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } };
     expect(food.cut!.capitalGain12).toBe(capitalAt(baseForecast(planned, TODAY, 12), 12)! - capitalAt(baseForecast(s, TODAY, 12), 12)!);
     expect(savingOptions(emptyState(), TODAY)).toBeNull();
+  });
+});
+
+describe('«Из А в Б» (D117)', () => {
+  const withCut = (st: AppState, perMonth: number): AppState => ({ ...st, settings: { ...st.settings, plannedEvents: [...st.settings.plannedEvents, cutEvent('r', '2026-12-01', perMonth)] } });
+  const reaches = (st: AppState, id: string, by: string): boolean => {
+    const d = baseForecast(st, TODAY, 36).goalDates[id] ?? null;
+    return d !== null && d <= by;
+  };
+
+  it('успеваешь — ничего менять не нужно', () => {
+    const r = planToGoal(profile(), TODAY, 'base', '2027-12')!;
+    expect(r).toMatchObject({ onTrack: true, missing: 0, lateMonths: null });
+    expect(r.levers.perMonth).toBe(0);
+  });
+
+  it('не успеваешь на месяц: сколько в месяц нужно, и это минимальная сумма — с ней успеваешь, на шаг меньше — нет', () => {
+    const s = profile();
+    const r = planToGoal(s, TODAY, 'base', '2027-03')!;
+    expect(r).toMatchObject({ onTrack: false, lateMonths: 1, reachMonth: '2027-04' });
+    expect(r.missing).toBeGreaterThan(0);
+    const need = r.levers.perMonth!;
+    expect(need).toBeGreaterThan(0);
+    expect(reaches(withCut(s, need), 'base', '2027-03')).toBe(true);
+    expect(reaches(withCut(s, need - 50_000), 'base', '2027-03')).toBe(false);
+  });
+
+  it('не успеть никак (месяц, а нужна вся подушка): рычаг «в месяц» — null; «поставить выше» считает, что получат остальные', () => {
+    const s = profile();
+    const r = planToGoal(s, TODAY, 'cushion', '2026-12')!;
+    expect(r.levers.perMonth).toBeNull();
+    expect(r.levers.reorder).not.toBeNull();
+    expect(r.levers.reorder!.shifts.map((x) => x.goalId)).toContain('base');
+  });
+
+  it('свободные деньги в копилках закрывают недостающее не больше, чем есть', () => {
+    const s = profile({ boundSavings: false });
+    const r = planToGoal(s, TODAY, 'base', '2026-12')!;
+    expect(r.levers.freeSavings.available).toBeGreaterThan(0);
+    expect(r.levers.freeSavings.covers).toBe(Math.min(r.levers.freeSavings.available, r.missing));
+  });
+
+  it('не цель, папка, прошлый месяц и пустое состояние — нет расчёта; состояние не меняется', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    expect(planToGoal(s, TODAY, 'нет-такой', '2027-03')).toBeNull();
+    expect(planToGoal(s, TODAY, 'base', '2026-10')).toBeNull();
+    expect(planToGoal(emptyState(), TODAY, 'base', '2027-03')).toBeNull();
+    planToGoal(s, TODAY, 'cushion', '2027-06');
+    expect(JSON.stringify(s)).toBe(before);
   });
 });

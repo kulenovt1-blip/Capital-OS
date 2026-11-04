@@ -3,11 +3,11 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { SAVING_CUT_PCT, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
-import { ask, h } from '../dom';
+import { SAVING_CUT_PCT, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
-import { attention, fmt, fmtDay, fmtShort, monthGen, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
+import { attention, fmt, fmtDay, fmtShort, monthGen, monthTo, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { warningItems } from './forecast';
@@ -103,7 +103,9 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const cap = capitalAt(sim, k);
   const rw = runwayNow();
   const rwText = rw === null ? 'Если доход пропадёт — денег хватит больше чем на 5 лет.' : rw.months <= 0 ? `Если доход пропадёт — денег не хватит уже в этом месяце.` : `Если доход пропадёт — денег хватит на ${nWord(rw.months, 'месяц', 'месяца', 'месяцев')} (до ${monthGen(rw.until.slice(0, 7))}).`;
-  const debtLeft = debtAfterYear(st, today());
+  // долг дольше года и заметный (не меньше месячных трат и 10 000 ₸): иначе «через год» и «на счетах» отличаются на копейки
+  const debtRaw = debtAfterYear(st, today());
+  const debtLeft = (debtRaw >= Math.max(ov().spend.usualMonthly, 1_000_000) ? debtRaw : 0) as Money;
   const word = HORIZONS.find(([m]) => m === k)?.[2] ?? `${k} мес.`;
   root.append(
     horizonSeg(k),
@@ -223,7 +225,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
           const pct = partial !== null && partial > 0 && g.targetMin > 0 ? Math.floor((partial * 100) / g.targetMin) : null;
           const value = pct !== null && pct >= 1 ? `${pct} %` : when(date);
           const drawn = sim.drawnFrom[g.id];
-          const base2 = pct !== null && pct >= 1 ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
+          const base2 = pct !== null && pct >= 1 ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthTo(lastMonth!)}` : subText;
           // из цели придётся взять при нехватке — сказать на строке (D109)
           const sub2 = drawn ? [base2, `с ${monthGen(drawn.from)} из неё уйдёт ${fmtShort(drawn.total)}`].filter(Boolean).join(' · ') : base2;
           return row({ title: g.title, sub: sub2, value, href: sheetHref('fc-goal', g.id) });
@@ -237,6 +239,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     root.append(rows(row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') })));
   }
   root.append(
+    rows(row({ title: 'Из А в Б', sub: 'скажи, к какому сроку что нужно, — посчитаю, что для этого изменить', href: sheetHref('a-to-b') })),
     rows(row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что даст, если там тратить меньше', href: sheetHref('save-where') })),
     sub('Планирую…'),
     h('p', { class: 'one-line' }, 'Что изменится, если… Выбери событие — посчитаю, в план попадёт только по кнопке.'),
@@ -474,8 +477,105 @@ defineSheet('save-cat', (catId) => {
   };
 });
 
-function monthKeyNext(t: string): string {
+function monthKeyNext(t: string, ahead = 0): string {
   const [y, m] = t.slice(0, 7).split('-').map(Number) as [number, number];
-  const n = y * 12 + m;
+  const n = y * 12 + m + ahead;
   return `${Math.floor(n / 12)}-${String((n % 12) + 1).padStart(2, '0')}`;
 }
+
+
+// ───────────────────────── «Из А в Б» (D117) ─────────────────────────
+
+let routeGoal: string | null = null;
+let routeBy: string | null = null;
+
+defineSheet('a-to-b', () => {
+  const st = getState();
+  const goals = listOrder(ov().goals).filter((g) => g.status === 'active' && !g.folder);
+  if (!goals.length) return { title: 'Из А в Б', body: h('p', { class: 'muted' }, 'Сначала заведи цель на «Целях» — например, подушку.') };
+  const t = today();
+  const goal = goals.find((g) => g.id === routeGoal) ?? goals[0]!;
+  const months: string[] = [];
+  for (let i = 1; i <= 36; i++) months.push(monthKeyNext(t, i - 1));
+  const by = (routeBy && months.includes(routeBy) ? routeBy : goal.deadline && months.includes(goal.deadline.slice(0, 7)) ? goal.deadline.slice(0, 7) : months[11]!) as MonthKey;
+  const nm = (g: (typeof goals)[number]) => (g.role === 'safety' && g.parentId === undefined ? 'Подушка' : g.title);
+  const selGoal = h('select', { 'aria-label': 'Цель' }, goals.map((g) => h('option', { value: g.id, selected: g.id === goal.id ? true : undefined }, nm(g)))) as HTMLSelectElement;
+  const selBy = h('select', { 'aria-label': 'К какому месяцу' }, months.map((m) => h('option', { value: m, selected: m === by ? true : undefined }, monthWord(m as MonthKey)))) as HTMLSelectElement;
+  selGoal.addEventListener('change', () => ((routeGoal = selGoal.value), (routeBy = null), refresh()));
+  selBy.addEventListener('change', () => ((routeBy = selBy.value), refresh()));
+  const r = planToGoal(st, t, goal.id, by);
+  const out: (HTMLElement | null)[] = [];
+  if (r) {
+    const f = r.levers.freeSavings;
+    out.push(
+      r.onTrack
+        ? h('div', { class: 'advice' }, h('strong', null, 'Успеваешь'), h('p', null, `К ${monthTo(by)} по прогнозу будет ${fmt(r.progressAtBy)} из ${fmt(r.target)}${r.reachMonth ? `, набирается к ${monthTo(r.reachMonth)}` : ''}. Менять ничего не нужно.`))
+        : h(
+            'div',
+            { class: 'warnline stack tight' },
+            h('strong', null, 'Не успеваешь'),
+            h('p', null, `К ${monthTo(by)} по прогнозу будет ${fmt(r.progressAtBy)} из ${fmt(r.target)} — не хватает ${fmt(r.missing)}.`),
+            h('p', null, r.reachMonth ? `Как сейчас — к ${monthTo(r.reachMonth)}${r.lateMonths ? ` (позже на ${nWord(r.lateMonths, 'месяц', 'месяца', 'месяцев')})` : ''}.` : 'Как сейчас — не набирается за срок прогноза.'),
+          ),
+    );
+    if (!r.onTrack) {
+      {
+        out.push(sub('Что можно сделать'));
+        const lv = r.levers;
+        if (lv.perMonth !== null) {
+          const per = lv.perMonth as Money;
+          const share = lv.perMonthShareOfSpend !== null ? ` (${Math.round(lv.perMonthShareOfSpend * 100)} % обычных трат)` : '';
+          out.push(
+            h(
+              'div',
+              { class: 'card stack tight' },
+              h('strong', null, `Тратить меньше или получать больше — на ≈ ${fmt(per)} в месяц`),
+              h('p', { class: 'muted' }, `Это ${share ? share.trim() : 'сумма'} со следующего месяца. Для денежного потока всё равно: меньше потратить или больше получить.`),
+              h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents, cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, per, `К «${r.title}» к ${monthTo(by)}`)] } }), `В плане: на ${fmt(per)} в месяц больше, чтобы успеть к «${r.title}»`) }, 'Добавить в план'),
+            ),
+          );
+        } else {
+          out.push(h('div', { class: 'card' }, h('strong', null, 'Тратить меньше — не поможет'), h('p', { class: 'muted' }, 'Даже без обычных трат к этому сроку не набрать. Выбери срок позже или другой рычаг.')));
+        }
+        if (lv.reorder) {
+          const ro = lv.reorder;
+          out.push(
+            h(
+              'div',
+              { class: 'card stack tight' },
+              h('strong', null, `Поставить «${r.title}» первой в списке целей`),
+              h('p', null, ro.month ? `Тогда она наберётся к ${monthTo(ro.month)}${ro.reaches ? ' — успеваешь' : ' — всё равно позже срока'}.` : 'Тогда она всё равно не набирается за срок прогноза.'),
+              ro.shifts.length ? h('div', { class: 'stack tight' }, h('span', { class: 'muted' }, 'Что получат остальные:'), ...shiftLines(ro.shifts)) : h('p', { class: 'muted' }, 'Другие цели не сдвинутся.'),
+              h('button', { class: 'btn wide', type: 'button', onclick: () => {
+                const ids = [goal.id, ...goals.filter((g) => g.id !== goal.id).map((g) => g.id)];
+                void act((x) => ({ ...x, goals: reorderGoals(x.goals, ids) }), `«${r.title}» — первая в списке`);
+              } }, 'Поставить первой'),
+            ),
+          );
+        }
+        if (f.available > 0) {
+          out.push(
+            h(
+              'a',
+              { class: 'card stack tight', href: sheetHref('distribute'), style: 'color:inherit;text-decoration:none' },
+              h('strong', null, `В копилках лежит ${fmt(f.available)}, ни за чем не закреплено`),
+              h('p', null, `Это закрывает ${fmt(f.covers)} из недостающих ${fmt(r.missing)}. Распределить по порядку списка ›`),
+            ),
+          );
+        }
+        if (r.reachMonth) out.push(h('div', { class: 'card' }, h('strong', null, `Или сдвинуть срок на ${monthWord(r.reachMonth)}`), h('p', { class: 'muted' }, 'Как сейчас, без изменений, цель набирается к этому месяцу.')));
+      }
+    }
+  }
+  return {
+    title: 'Из А в Б',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, 'Выбери цель и месяц, к которому она должна быть набрана, — посчитаю, чего не хватает и чем это можно закрыть. Ничего не меняется, пока не нажмёшь кнопку.'),
+      field('Цель', selGoal),
+      field('К какому месяцу', selBy),
+      ...(r ? out.filter(Boolean) as HTMLElement[] : [h('p', { class: 'muted' }, 'Для расчёта нужны загруженные данные и месяц в будущем.')]),
+    ),
+  };
+});

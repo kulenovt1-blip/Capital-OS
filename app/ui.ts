@@ -293,6 +293,12 @@ export function monthWord(key: string): string {
   return `${M[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
 }
 
+/** «май 2027» → «маю 2027» (для «к …»): к маю 2027, к январю 2027. */
+export function monthTo(key: string): string {
+  const M = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню', 'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю'];
+  return `${M[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+}
+
 /** «май 2027» → «мая 2027» (для «до …»). */
 export function monthGen(key: string): string {
   const M = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];

@@ -7,7 +7,7 @@ import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, stageNow } from '../ctx';
 import { attentionItems } from '../attention';
-import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
+import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
 import { defineSheet, go, refresh, sheetHref } from '../main';
 import { helpSeen, markHelpSeen } from './help';
@@ -170,7 +170,7 @@ defineSheet('stage', () => {
       { class: 'stack' },
       h('div', { class: 'advice stack tight' }, h('strong', null, `${s.stage} из 5 · ${s.title}`), h('p', null, s.portrait)),
       s.next
-        ? h('div', { class: 'stack tight' }, sub(`Следующий шаг: ${s.next.toTitle}`), h('p', null, s.next.text), s.next.by ? h('p', null, h('strong', null, `При нынешнем темпе — к ${monthGen(s.next.by)}.`)) : s.next.missing > 0 ? h('p', { class: 'muted' }, 'При нынешних доходах и тратах этот запас не набирается.') : null)
+        ? h('div', { class: 'stack tight' }, sub(`Следующий шаг: ${s.next.toTitle}`), h('p', null, s.next.text), s.next.by ? h('p', null, h('strong', null, `При нынешнем темпе — к ${monthTo(s.next.by)}.`)) : s.next.missing > 0 ? h('p', { class: 'muted' }, 'При нынешних доходах и тратах этот запас не набирается.') : null)
         : h('p', null, 'Это верхняя ступень. Дальше — твои цели.'),
       s.next && s.next.toStage <= 5 ? h('a', { class: 'btn wide', href: sheetHref('save-where') }, 'Где можно сэкономить ›') : null,
       sub('На чём это основано'),

@@ -12,7 +12,7 @@ import {
 import { field, h } from '../dom';
 import { act, getState, today } from '../store';
 import { ov } from '../ctx';
-import { errorsBox, fmt, fmtShort, monthGen, monthWord, moneyInput, newId, nWord, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
+import { errorsBox, fmt, fmtShort, monthGen, monthTo, monthWord, moneyInput, newId, nWord, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 
 type Kind = 'job' | 'study' | 'loss' | 'change' | 'cut' | 'move' | 'buy' | 'inst' | 'payoff';
@@ -209,7 +209,7 @@ function goalLines(res: WhatIfResult): HTMLElement[] {
     const name = g.role === 'safety' && g.parentId === undefined ? 'Подушка' : g.title;
     let text: string;
     if (!b) text = `не накопится за ${nWord(horizon, 'год', 'года', 'лет')}${a ? ` (без этого — ${monthWord(a)})` : ''}`;
-    else if (!a) text = `накопится к ${monthGen(b)} (раньше не успевала)`;
+    else if (!a) text = `накопится к ${monthTo(b)} (раньше не успевала)`;
     else {
       const m = (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
       text = `${m > 0 ? 'позже' : 'раньше'} на ${nWord(Math.abs(m), 'месяц', 'месяца', 'месяцев')}: ${monthWord(b)} вместо ${monthGen(a)}`;

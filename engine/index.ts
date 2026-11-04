@@ -26,3 +26,4 @@ export * from './simple';
 export * from './sanity';
 export * from './stage';
 export * from './saving';
+export * from './route';
