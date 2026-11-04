@@ -22,6 +22,7 @@ import { createGoal, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
+import { personStage } from '../../engine/stage';
 import { applyRepeatAnswer, cutEvent, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
@@ -419,5 +420,38 @@ describe('предпросмотр «что будет, если…» (D114)', (
     const s = profile();
     const long = { ...s, obligations: [makeInstallment({ id: 'ph2', title: 'Долгая', owner: 'self', remaining: tenge(900_000), remainingAsOf: TODAY, payment: tenge(25_000), firstDate: '2026-11-17' })] };
     expect(debtAfterYear(long, TODAY)).toBeGreaterThan(0);
+  });
+});
+
+describe('«Твой этап» (D115)', () => {
+  const noSavings = (st: AppState): AppState => ({ ...st, settings: { ...st.settings, accounts: st.settings.accounts.map((x) => (x.accountId === 'save' ? { ...x, excluded: true, reviewed: true } : x)) } });
+  const extraCost = (st: AppState, amount: number): AppState => ({ ...st, settings: { ...st.settings, plannedEvents: [...st.settings.plannedEvents, { id: 'x', kind: 'recurring_change', date: '2026-11-05', title: 'Траты', amount: tenge(amount) }] } });
+  it('ступени идут по тому, на сколько месяцев хватит денег без дохода, и по тому, остаётся ли откладывать', () => {
+    expect(personStage(profile(), TODAY)!).toMatchObject({ stage: 5, coverMonths: 14 });
+    expect(personStage(extraCost(profile(), 15_000), TODAY)!.stage).toBe(4);
+    // подушка есть, а откладывать нечего (доходы = траты) — третья ступень, следующий шаг про это
+    const flat = personStage(extraCost(profile(), 20_000), TODAY)!;
+    expect(flat.stage).toBe(3);
+    expect(flat.next!.toStage).toBe(4);
+    expect(flat.next!.text).toContain('сэкономить');
+  });
+
+  it('денег почти нет: первая ступень, следующий шаг — сколько не хватает до месяца без дохода и когда при нынешнем темпе', () => {
+    const r = personStage(noSavings(profile()), TODAY)!;
+    expect(r.stage).toBe(1);
+    expect(r.coverMonths).toBe(0);
+    expect(r.next).toMatchObject({ toStage: 2, missing: tenge(35_000), by: '2027-01' });
+  });
+
+  it('считается по деньгам сейчас: те же доходы и траты, но другие накопления — другой этап', () => {
+    expect(personStage(profile(), TODAY)!.stage).not.toBe(personStage(noSavings(profile()), TODAY)!.stage);
+  });
+
+  it('без данных этапа нет; состояние не меняется', () => {
+    expect(personStage(emptyState(), TODAY)).toBeNull();
+    const s = profile();
+    const before = JSON.stringify(s);
+    personStage(s, TODAY);
+    expect(JSON.stringify(s)).toBe(before);
   });
 });
