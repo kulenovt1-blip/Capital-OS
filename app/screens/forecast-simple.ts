@@ -93,10 +93,43 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
+  // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
+  const found = sanityCheck(st, today()).findings;
+  const drops = found.filter((f) => f.id === 'income_drop_flat_spend' && f.level === 'fail' && f.ref);
+  for (const f of drops) {
+    const from = `${f.months![0]}-01`;
+    root.append(
+      h(
+        'section',
+        { class: 'warnline stack', 'aria-label': 'Доход уменьшится' },
+        h('strong', null, f.text),
+        h('div', { class: 'chips wrap' },
+          h('a', { class: 'chip', href: sheetHref('plan', `cut@${from}`) }, 'Урежу траты'),
+          h('a', { class: 'chip', href: sheetHref('plan', `job@${from}`) }, 'Будет другой доход'),
+          h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndsAnswered: [...new Set([...(s.settings.incomeEndsAnswered ?? []), f.ref!])] } }), 'Записано: ничего не изменится') }, 'Ничего не изменится'),
+        ),
+      ),
+    );
+  }
+  const infl = found.find((f) => f.id === 'one_sided_inflation' && f.level === 'fail' && f.ref);
+  if (infl) {
+    const ids = new Set(infl.ref!.split(','));
+    const setIdx = (id: string, v: boolean) => void act((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === id ? { ...x, indexed: v } : x)) } }), v ? 'Доход будет расти вместе с ценами' : 'Доход не растёт');
+    root.append(
+      h(
+        'section',
+        { class: 'warnline stack', 'aria-label': 'Рост доходов' },
+        h('strong', null, `Траты в прогнозе дорожают на ${(st.settings.inflationBp / 100).toString().replace('.', ',')} % в год. Эти доходы повышают каждый год?`),
+        ...st.settings.incomeSchedule.filter((x) => ids.has(x.id)).map((x) =>
+          h('div', { class: 'stack' }, h('span', null, `${x.title} · ${fmt(x.amount)}`), h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет'))),
+        ),
+      ),
+    );
+  }
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch', 'oneoff_averaged'];
-  const sane = sanityCheck(st, today())
-    .findings.filter((f) => ORDER.includes(f.id))
+  const sane = found
+    .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl)
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
     const top = sane.slice(0, 3);
@@ -130,8 +163,8 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
           // не набирается за прогноз — сколько наберётся, а не «позже …» (D107)
           const partial = date === null && lastMonth ? (lastProgress[g.id] ?? 0) : null;
           const pct = partial !== null && partial > 0 && g.targetMin > 0 ? Math.floor((partial * 100) / g.targetMin) : null;
-          const value = pct !== null ? `${pct} %` : when(date);
-          const sub2 = pct !== null ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
+          const value = pct !== null && pct >= 1 ? `${pct} %` : when(date);
+          const sub2 = pct !== null && pct >= 1 ? `наберётся ${fmtShort(partial as Money)} из ${fmtShort(g.targetMin)} к ${monthGen(lastMonth!)}` : subText;
           return row({ title: g.title, sub: sub2, value, href: sheetHref('fc-goal', g.id) });
         }),
       ),

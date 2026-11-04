@@ -10,7 +10,7 @@
  * Чистая функция: ничего не меняет, расчёты не трогает. Используется в tests/sanity и scripts/sanity-check.ts.
  */
 import { add, formatKZT, mulDiv, pos, sub, sum, ZERO, type Money } from './money';
-import { formatDateRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
+import { addDays, formatDateRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
 import { monthlyFlows } from './ledger';
 import { classRegistry } from './classes';
 import { flattenTree } from './goals';
@@ -27,6 +27,8 @@ export interface SanityFinding {
   text: string;
   /** Месяцы прогноза, к которым относится находка (если есть). */
   months?: MonthKey[];
+  /** К чему относится: id дохода (income_drop_flat_spend, one_sided_inflation). */
+  ref?: string;
 }
 
 export type SanityId =
@@ -86,7 +88,8 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
   if (cushion && cushion.goal.targetMin > 0 && cushion.progress < cushion.goal.targetMin && o.spend.onHand >= cushion.goal.targetMin) {
     out.push({
       id: 'cushion_ignores_money',
-      level: 'fail',
+      // порядок целей — решение человека (04.11): деньги остаются за выбранной целью; это не ошибка модели, но человек должен видеть
+      level: 'warn',
       text: `Подушка: ${tg(cushion.progress)} из ${tg(cushion.goal.targetMin)}, хотя на счетах ${tg(o.spend.onHand)}. Приложение считает подушкой только деньги, отложенные именно на неё — деньги других целей не засчитываются`,
     });
   }
@@ -108,27 +111,36 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
     });
   }
 
-  // 4. Доход заметно падает, траты в прогнозе прежние
-  const inc0 = full[0]?.income ?? ZERO;
-  const drop = inc0 > 0 ? full.find((m) => m.income < mulDiv(inc0, Math.round((1 - SANITY.incomeDrop) * 100), 100)) : undefined;
-  const spendAdjusted = input.events.some((e) => e.kind === 'recurring_change' && e.amount < 0);
-  if (drop && !spendAdjusted) {
-    out.push({
-      id: 'income_drop_flat_spend',
-      level: 'fail',
-      months: [drop.month],
-      text: `С ${mo(drop.month)} доход падает с ${tg(inc0)} до ${tg(drop.income)} в месяц, а траты в прогнозе прежние. Если будешь тратить меньше — добавь это в «Планирую…»`,
-    });
+  // 4. Доход с датой окончания заметно уменьшает доход, а что изменится — не спрошено (D108)
+  const horizonEnd = `${months[months.length - 1]?.month ?? today.slice(0, 7)}-31`;
+  const totalIncome = sum(state.settings.incomeSchedule.filter((x) => (!x.start || x.start <= today) && (!x.end || x.end > today)).map((x) => x.amount));
+  const answered = new Set(state.settings.incomeEndsAnswered ?? []);
+  for (const x of state.settings.incomeSchedule) {
+    if (!x.end || x.end <= today || x.end > horizonEnd || totalIncome <= 0) continue;
+    if (x.amount < mulDiv(totalIncome, Math.round(SANITY.incomeDrop * 100), 100)) continue;
+    const from = addDays(x.end, -62);
+    const planned = input.events.some((e) => e.date >= from && ((e.kind === 'recurring_change' && e.amount < 0) || e.kind === 'income_start' || e.kind === 'income_change'));
+    if (planned) continue;
+    // первый месяц без этого дохода: если последняя выплата успела прийти в месяце окончания — следующий месяц
+    const endMonth = Number(x.end.slice(8, 10)) >= x.dayOfMonth ? monthKey(addDays(`${x.end.slice(0, 7)}-28`, 7)) : monthKey(x.end);
+    if (answered.has(x.id)) {
+      out.push({ id: 'income_drop_flat_spend', level: 'warn', months: [endMonth], ref: x.id, text: `С ${mo(endMonth)} «${x.title}» закончится: доход меньше на ${tg(x.amount)}. Ты указал, что ничего не изменится — траты в прогнозе прежние` });
+    } else {
+      out.push({ id: 'income_drop_flat_spend', level: 'fail', months: [endMonth], ref: x.id, text: `С ${mo(endMonth)} «${x.title}» закончится: доход меньше на ${tg(x.amount)} в месяц, а траты в прогнозе прежние. Что изменится?` });
+    }
   }
 
-  // 5. Траты дорожают, доход — нет
-  const growing = input.expenses.some((e) => e.growthBp > 0);
-  if (growing && input.incomes.length) {
-    out.push({
-      id: 'one_sided_inflation',
-      level: 'fail',
-      text: `Траты в прогнозе дорожают на ${(state.settings.inflationBp / 100).toString().replace('.', ',')} % в год, а доходы не растут — поэтому остаток месяца с годами тает`,
-    });
+  // 5. Траты дорожают, а про рост доходов не спрошено (D108)
+  if (input.expenses.some((e) => e.growthBp > 0) && state.settings.incomeSchedule.length) {
+    const infl = `${(state.settings.inflationBp / 100).toString().replace('.', ',')} %`;
+    // доход, который закончится в течение года, повышение не застанет — про него не спрашиваем
+    const yearAhead = addDays(today, 365);
+    const unasked = state.settings.incomeSchedule.filter((x) => x.indexed === undefined && (!x.end || x.end > yearAhead));
+    if (unasked.length) {
+      out.push({ id: 'one_sided_inflation', level: 'fail', ref: unasked.map((x) => x.id).join(','), text: `Траты в прогнозе дорожают на ${infl} в год, а доходы не растут: не указано, повышают ли их (${unasked.map((x) => `«${x.title}»`).join(', ')})` });
+    } else if (state.settings.incomeSchedule.every((x) => x.indexed !== true)) {
+      out.push({ id: 'one_sided_inflation', level: 'warn', text: `Траты в прогнозе дорожают на ${infl} в год, доходы не растут (так ты указал) — остаток месяца с годами тает` });
+    }
   }
 
   // 6. Месяцы, когда траты больше дохода (человек должен это видеть)

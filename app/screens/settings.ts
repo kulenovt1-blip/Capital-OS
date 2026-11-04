@@ -245,6 +245,11 @@ defineSheet('income-item', (id) => {
   };
   kindHint.textContent = hintOf(kindSel.value);
   kindSel.addEventListener('change', () => (kindHint.textContent = hintOf(kindSel.value)));
+  // повышают ли каждый год (D108): два ответа; не спрошено — не растёт, пока не ответишь
+  let indexed: 'yes' | 'no' | null = x.indexed === undefined ? null : x.indexed ? 'yes' : 'no';
+  const idxBox = h('div');
+  const drawIdx = () => idxBox.replaceChildren(h('span', { class: 'field-label' }, 'Повышают каждый год вместе с ценами?'), seg([['yes', 'Да'], ['no', 'Нет']] as const, indexed ?? ('' as 'yes'), (v) => ((indexed = v), drawIdx()), 'Повышают каждый год'));
+  drawIdx();
   const form = h(
     'form',
     { class: 'stack', id: 'income-item-form' },
@@ -252,6 +257,7 @@ defineSheet('income-item', (id) => {
     h('div', { class: 'grid-form' }, field('Какого числа', h('input', { name: 'day', type: 'number', min: 1, max: 31, inputmode: 'numeric', value: x.dayOfMonth })), field('Сколько в месяц, ₸', moneyInput('amount', x.amount))),
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Вид', info('incomeKind')), kindSel, kindHint),
     h('div', { class: 'grid-form' }, field('С даты', h('input', { name: 'start', type: 'date', value: x.start ?? '' })), field('По дату', h('input', { name: 'end', type: 'date', value: x.end ?? '' }))),
+    idxBox,
     err,
   );
   form.addEventListener('submit', async (e) => {
@@ -264,8 +270,8 @@ defineSheet('income-item', (id) => {
     if (amount === null || amount <= 0) errs.push('Сумма должна быть больше нуля');
     const start = readStr(form, 'start');
     const end = readStr(form, 'end');
-    const { start: _s, end: _e, ...base } = x;
-    const item = { ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}) };
+    const { start: _s, end: _e, indexed: _i, ...base } = x;
+    const item = { ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}) };
     if (!errs.length) errs.push(...validateIncomeItem(item, reg));
     err.replaceChildren(errorsBox(errs) ?? '');
     if (errs.length) return;

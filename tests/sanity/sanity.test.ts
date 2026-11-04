@@ -29,9 +29,12 @@ const TODAY = '2026-11-04';
 
 /**
  * Известные ошибки модели (аудит №4, claude/audit-4-model-sanity.md). Исправил — убери строку.
- * К1 cushion_ignores_money · К4 labels_exceed_money · С1 expense_mismatch · К2 income_drop_flat_spend · К3 one_sided_inflation
+ * К4 labels_exceed_money — метки в прогнозе не уменьшаются при нехватке денег; С1 expense_mismatch — два разных числа трат.
+ * (К1 «подушка не видит денег» — не ошибка: порядок целей решает человек, D108; теперь warn.)
  */
-const KNOWN_DEFECTS: SanityId[] = ['cushion_ignores_money', 'expense_mismatch', 'income_drop_flat_spend', 'labels_exceed_money', 'one_sided_inflation'];
+const KNOWN_DEFECTS: SanityId[] = ['expense_mismatch', 'labels_exceed_money'];
+/** Вопросы, на которые человек ещё не ответил (D108): пока нет ответа — вывод держится на допущении. */
+const UNANSWERED: SanityId[] = ['income_drop_flat_spend', 'one_sided_inflation'];
 
 function months(from: string, to: string): string[] {
   const out: string[] = [];
@@ -125,21 +128,59 @@ function profile(o: ProfileOpts = {}): AppState {
   };
 }
 
+/** Человек ответил на вопросы: пособие повышают, после стипендии «ничего не изменится». */
+function answered(s: AppState): AppState {
+  return { ...s, settings: { ...s.settings, incomeEndsAnswered: ['stip'], incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === 'ben' ? { ...x, indexed: true } : x)) } };
+}
+
 describe('здравый смысл: профиль «как у живого человека»', () => {
   const found = sanityCheck(profile(), TODAY).findings;
   const ids = new Set(found.map((f) => f.id));
 
-  it('храповик: ошибки модели — ровно известные (новая — регресс; исчезла — убери из KNOWN_DEFECTS)', () => {
-    expect(sanityFails(profile(), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
+  it('храповик: ошибки — ровно известные дефекты + неотвеченные вопросы (новая — регресс; исчезла — убери из списка)', () => {
+    expect(sanityFails(profile(), TODAY)).toEqual([...KNOWN_DEFECTS, ...UNANSWERED].sort());
   });
 
-  it('подушка, которой «нет» при деньгах на счетах, — замечена (К1)', () => {
-    expect(ids.has('cushion_ignores_money')).toBe(true);
+  it('храповик после ответов: остаются только известные дефекты модели', () => {
+    expect(sanityFails(answered(profile()), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
   });
 
-  it('падение дохода при прежних тратах — замечено (К2)', () => {
+  it('подушка, которой «нет» при деньгах на счетах, — видна как предупреждение: порядок целей решает человек', () => {
+    expect(found.find((x) => x.id === 'cushion_ignores_money')?.level).toBe('warn');
+  });
+
+  it('конец стипендии: вопрос «что изменится?» с первым месяцем без неё и id дохода', () => {
     const f = found.find((x) => x.id === 'income_drop_flat_spend');
+    expect(f?.level).toBe('fail');
     expect(f?.months?.[0]).toBe('2027-07');
+    expect(f?.ref).toBe('stip');
+  });
+
+  it('«ничего не изменится» — уже ответ: предупреждение, а не ошибка', () => {
+    const s = profile();
+    const r = sanityCheck({ ...s, settings: { ...s.settings, incomeEndsAnswered: ['stip'] } }, TODAY).findings;
+    expect(r.find((x) => x.id === 'income_drop_flat_spend')?.level).toBe('warn');
+  });
+
+  it('«урежу траты» или «другой доход» в плане — вопроса больше нет', () => {
+    const s = profile();
+    const cut = { id: 'ev1', title: 'Меньше трат', date: '2027-07-01', kind: 'recurring_change' as const, amount: tenge(-20_000) };
+    const job = { id: 'ev2', title: 'Работа', date: '2027-07-05', kind: 'income_start' as const, amount: tenge(150_000), dayOfMonth: 5, incomeKind: 'work' as const };
+    for (const ev of [cut, job]) {
+      const r = sanityCheck({ ...s, settings: { ...s.settings, plannedEvents: [ev] } }, TODAY).findings;
+      expect(r.some((x) => x.id === 'income_drop_flat_spend')).toBe(false);
+    }
+  });
+
+  it('доход, который повышают, в прогнозе растёт раз в год на инфляцию; «нет» — не растёт', () => {
+    const s = answered(profile());
+    const sim = sanityCheck(s, TODAY).ctx!.sim;
+    // пособие 40 000 повышают (+10 %) через 12 месяцев от сегодня — в тот же месяц, когда дорожают траты; стипендии уже нет
+    expect(sim.months.find((m) => m.month === '2027-10')!.income).toBe(tenge(40_000));
+    expect(sim.months.find((m) => m.month === '2027-11')!.income).toBe(tenge(44_000));
+    const no = { ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((x) => ({ ...x, indexed: false })) } };
+    expect(sanityCheck(no, TODAY).ctx!.sim.months.find((m) => m.month === '2027-11')!.income).toBe(tenge(40_000));
+    expect(sanityCheck(no, TODAY).findings.find((x) => x.id === 'one_sided_inflation')?.level).toBe('warn');
   });
 
   it('месяцы, когда траты больше дохода, — найдены и названы', () => {
