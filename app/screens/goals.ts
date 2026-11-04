@@ -12,7 +12,7 @@ import { act, getState, today, update } from '../store';
 import { chip, errorsBox, fmt, fmtDate, info, monthWord, toggle, moneyInput, newId, pct, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, openSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
-import { ov, verdicts } from '../ctx';
+import { forecastNow, ov, verdicts } from '../ctx';
 
 const FLEX: Record<Flexibility, string> = { fixed: 'жёсткий', flexible: 'гибкий', open: 'без срока' };
 
@@ -331,6 +331,8 @@ function cushionCard(n: GoalNode | undefined): HTMLElement {
 }
 
 let reordering = false;
+/** Даты целей на момент, когда включили «Порядок» (D114): показываем, что сдвинулось от перестановок. */
+let orderStart: Record<string, string | null> | null = null;
 
 async function move(ids: string[], id: string, dir: -1 | 1): Promise<void> {
   const i = ids.indexOf(id);
@@ -406,7 +408,8 @@ export function renderGoals(): HTMLElement {
   const ids = list.map((n) => n.goal.id);
   if (list.length) {
     append(root, [
-      sub('Цели', list.length > 1 ? h('button', { class: `btn${reordering ? ' primary' : ''}`, type: 'button', onclick: () => ((reordering = !reordering), refresh()) }, reordering ? 'Готово' : '↑↓ Порядок') : null),
+      sub('Цели', list.length > 1 ? h('button', { class: `btn${reordering ? ' primary' : ''}`, type: 'button', onclick: () => ((reordering = !reordering), (orderStart = reordering ? { ...forecastNow().goalDates } : null), refresh()) }, reordering ? 'Готово' : '↑↓ Порядок') : null),
+      reordering && orderStart ? orderShift(list.map((n) => n.goal)) : null,
       h('p', { class: 'one-line' }, reordering ? 'Двигай стрелками. Кто выше — получает деньги раньше, и подушка тоже.' : 'Кто выше — получает деньги раньше. Порядок можно менять.'),
       h(
         'div',
@@ -713,3 +716,18 @@ defineSheet('goal-history', (id) => {
   ].sort((a, b) => (a.date < b.date ? 1 : -1));
   return { title: `История «${g.title}»`, body: rows(items.map((i) => row({ title: i.title, sub: [fmtDate(i.date), i.sub].filter(Boolean).join(' · ') }))) };
 });
+
+
+/** «Резерв: май 2028 → март 2027» — как перестановка изменила даты (прогноз пересчитывается на каждый шаг). */
+function orderShift(goals: readonly { id: string; title: string; role?: string; parentId?: string }[]): HTMLElement | null {
+  const now = forecastNow().goalDates;
+  const lines: HTMLElement[] = [];
+  for (const g of goals) {
+    if (!(g.id in now) || !orderStart || !(g.id in orderStart)) continue;
+    const a = orderStart[g.id] ?? null;
+    const b = now[g.id] ?? null;
+    if (a === b) continue;
+    lines.push(h('div', null, `${g.title}: ${a ? monthWord(a as never) : 'не набирается'} → ${b ? monthWord(b as never) : 'не набирается'}`));
+  }
+  return h('div', { class: 'advice stack tight', 'aria-live': 'polite' }, h('strong', null, lines.length ? 'Что сдвинулось от перестановки' : 'Пока всё как было'), ...lines.slice(0, 5));
+}

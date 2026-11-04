@@ -22,7 +22,7 @@ import { createGoal, type Goal } from '../../engine/goals';
 import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
-import { applyRepeatAnswer, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { applyRepeatAnswer, cutEvent, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
 import type { OpClass } from '../../engine/classify';
@@ -384,5 +384,40 @@ describe('обычные траты по месяцам без зарплаты 
 
   it('Обзор и прогноз считают обычные траты одним числом в обоих режимах', () => {
     for (const m of ['last', 'no_work'] as const) expect(sanityFails(answered(mode(profile(), m)), TODAY)).toEqual([...KNOWN_DEFECTS].sort());
+  });
+});
+
+describe('предпросмотр «что будет, если…» (D114)', () => {
+  it('«урежу траты»: капитал растёт, состояние не меняется, нулевая сумма = как сейчас', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    const none = previewEvent(s, TODAY, []);
+    expect(none.capital(12).with).toBe(none.capital(12).without);
+    const cut = previewEvent(s, TODAY, [cutEvent('p', '2026-12-01', tenge(10_000))]);
+    expect(cut.capital(12).with!).toBeGreaterThan(cut.capital(12).without!);
+    expect(JSON.stringify(s)).toBe(before);
+  });
+
+  it('предпросмотр совпадает с тем, что получится после добавления события в план', () => {
+    const s = profile();
+    const ev = cutEvent('p', '2026-12-01', tenge(15_000));
+    const pv = previewEvent(s, TODAY, [ev]);
+    const planned = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } };
+    expect(pv.capital(12).with).toBe(capitalAt(baseForecast(planned, TODAY, 12), 12));
+  });
+
+  it('предпросмотр ответа про повышение дохода: «да» не хуже «нет» и совпадает с расчётом после ответа', () => {
+    const s = profile();
+    const pv = previewIndexed(s, TODAY, 'ben', 36);
+    expect(pv.yes!).toBeGreaterThan(pv.no!);
+    const yes = { ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === 'ben' ? { ...x, indexed: true } : x)) } };
+    expect(pv.yes).toBe(capitalAt(baseForecast(yes, TODAY, 36), 36));
+  });
+
+  it('долг дольше года: строка «ещё должен» только тогда', () => {
+    expect(debtAfterYear(profile(), TODAY)).toBe(0);
+    const s = profile();
+    const long = { ...s, obligations: [makeInstallment({ id: 'ph2', title: 'Долгая', owner: 'self', remaining: tenge(900_000), remainingAsOf: TODAY, payment: tenge(25_000), firstDate: '2026-11-17' })] };
+    expect(debtAfterYear(long, TODAY)).toBeGreaterThan(0);
   });
 });

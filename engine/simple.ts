@@ -693,3 +693,63 @@ export function previewBaselineMode(state: AppState, today: IsoDate, k = 12): { 
     capitalNoWork: capitalAt(baseForecast(alt, today, Math.max(k, 12)), k),
   };
 }
+
+// ───────────────────────── предпросмотр: «что будет, если…» до нажатия кнопки (D114) ─────────────────────────
+
+export interface GoalShift {
+  goalId: string;
+  title: string;
+  from: MonthKey | null;
+  to: MonthKey | null;
+  /** Сдвиг в месяцах (+ позже, − раньше); null — одна из дат не определена. */
+  months: number | null;
+}
+
+/** Цели, у которых дата изменилась между двумя прогонами. */
+export function goalShifts(state: AppState, today: IsoDate, a: SimResult, b: SimResult): GoalShift[] {
+  const o = buildOverview(state, today);
+  const out: GoalShift[] = [];
+  for (const g of listOrder(o.goals)) {
+    if (g.status !== 'active' || g.folder || !(g.id in a.goalDates)) continue;
+    const from = a.goalDates[g.id] ?? null;
+    const to = b.goalDates[g.id] ?? null;
+    if (from === to) continue;
+    const months = from && to ? (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7)) : null;
+    out.push({ goalId: g.id, title: g.role === 'safety' && g.parentId === undefined ? 'Подушка' : g.title, from, to, months });
+  }
+  return out;
+}
+
+export interface EventPreview {
+  base: SimResult;
+  with: SimResult;
+  /** Капитал через k месяцев: без события и с ним. */
+  capital: (k: number) => { without: Money | null; with: Money | null };
+  shifts: GoalShift[];
+}
+
+/** Прогноз «как сейчас» и с событием (например, «Урежу траты») — для предпросмотра, состояние не меняется. */
+export function previewEvent(state: AppState, today: IsoDate, events: readonly import('./simulate').LifeEvent[], months = 36): EventPreview {
+  const { input } = buildSimInput(state, today);
+  const base = simulate({ ...input, horizonMonths: months });
+  const w = simulate({ ...input, events: [...input.events, ...events], horizonMonths: months });
+  return { base, with: w, capital: (k) => ({ without: capitalAt(base, k), with: capitalAt(w, k) }), shifts: goalShifts(state, today, base, w) };
+}
+
+/** Событие «урежу траты на amount в месяц с даты from» — то же, что собирает форма «Планирую… → Урежу траты». */
+export function cutEvent(id: string, from: IsoDate, amount: Money): import('./simulate').LifeEvent {
+  return { id, kind: 'recurring_change', date: from, title: 'Меньше трат', amount: -amount as Money };
+}
+
+/** Что будет с доходом, если ответить «повышают» и «не повышают» (D108): капитал через k месяцев при каждом ответе. */
+export function previewIndexed(state: AppState, today: IsoDate, incomeId: string, k = 36): { yes: Money | null; no: Money | null } {
+  const set = (v: boolean): AppState => ({ ...state, settings: { ...state.settings, incomeSchedule: state.settings.incomeSchedule.map((x) => (x.id === incomeId ? { ...x, indexed: v } : x)) } });
+  const run = (s: AppState) => capitalAt(baseForecast(s, today, Math.max(k, 12)), k);
+  return { yes: run(set(true)), no: run(set(false)) };
+}
+
+/** Долг останется и через год? Тогда «через год» в прогнозе меньше, чем будет на счетах (D114, С6): сколько ещё должен. */
+export function debtAfterYear(state: AppState, today: IsoDate): Money {
+  const sim = baseForecast(state, today, 13);
+  return sim.months[12]?.liabilities ?? ZERO;
+}

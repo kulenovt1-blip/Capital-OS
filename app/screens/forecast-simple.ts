@@ -3,11 +3,11 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { applyRepeatAnswer, buildSimInput, previewBaselineMode, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { applyRepeatAnswer, buildSimInput, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
-import { attention, fmt, fmtDay, fmtShort, monthGen, monthWord, nWord, row, rows, seg, stickyBar, sub } from '../ui';
+import { attention, fmt, fmtDay, fmtShort, monthGen, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { warningItems } from './forecast';
@@ -103,6 +103,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const cap = capitalAt(sim, k);
   const rw = runwayNow();
   const rwText = rw === null ? 'Если доход пропадёт — денег хватит больше чем на 5 лет.' : rw.months <= 0 ? `Если доход пропадёт — денег не хватит уже в этом месяце.` : `Если доход пропадёт — денег хватит на ${nWord(rw.months, 'месяц', 'месяца', 'месяцев')} (до ${monthGen(rw.until.slice(0, 7))}).`;
+  const debtLeft = debtAfterYear(st, today());
   const word = HORIZONS.find(([m]) => m === k)?.[2] ?? `${k} мес.`;
   root.append(
     horizonSeg(k),
@@ -112,8 +113,8 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       h('div', { class: 'label' }, `Через ${word} у тебя будет`),
       h('div', { class: `value${(cap ?? 0) < 0 ? ' neg' : ''}` }, cap === null ? '—' : fmtShort(cap)),
       h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас. Дальше года — добавь свои планы в «Планирую…»'),
-      // та же база, что у числа выше: капитал за вычетом долгов (D111) — иначе его не с чем сравнить на «Обзоре»
-      capitalAt(sim, 0) === null ? null : h('div', { class: 'subline' }, `Сейчас: ${fmtShort(capitalAt(sim, 0) as Money)} (деньги и вклады за вычетом долгов — это не то же, что «На руках» на «Обзоре»)`),
+      // долг дольше года: «через год» — за вычетом долга, и это нужно сказать, иначе сравнивают с «На руках» (D114, С6)
+      debtLeft > 0 ? h('div', { class: 'subline' }, `Это за вычетом долга: через год ты ещё должен ${fmtShort(debtLeft)}, на счетах будет примерно ${fmtShort(((cap ?? 0) + debtLeft) as Money)}.`) : null,
       h('div', { class: 'subline' }, rwText),
       spendParts(),
     ),
@@ -123,21 +124,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
   const found = sanityCheck(st, today()).findings;
   const drops = found.filter((f) => f.id === 'income_drop_flat_spend' && f.level === 'fail' && f.ref);
-  for (const f of drops) {
-    const from = `${f.months![0]}-01`;
-    root.append(
-      h(
-        'section',
-        { class: 'warnline stack', 'aria-label': 'Доход уменьшится' },
-        h('strong', null, f.text),
-        h('div', { class: 'chips wrap' },
-          h('a', { class: 'chip', href: sheetHref('plan', `cut@${from}`) }, 'Урежу траты'),
-          h('a', { class: 'chip', href: sheetHref('plan', `job@${from}`) }, 'Будет другой доход'),
-          h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndsAnswered: [...new Set([...(s.settings.incomeEndsAnswered ?? []), f.ref!])] } }), 'Записано: ничего не изменится') }, 'Ничего не изменится'),
-        ),
-      ),
-    );
-  }
+  for (const f of drops) root.append(dropCard(f.text, f.months![0]!, f.ref!));
   const infl = found.find((f) => f.id === 'one_sided_inflation' && f.level === 'fail' && f.ref);
   if (infl) {
     const ids = new Set(infl.ref!.split(','));
@@ -148,7 +135,16 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
         { class: 'warnline stack', 'aria-label': 'Рост доходов' },
         h('strong', null, `Траты в прогнозе дорожают на ${(st.settings.inflationBp / 100).toString().replace('.', ',')} % в год. Эти доходы повышают каждый год?`),
         ...st.settings.incomeSchedule.filter((x) => ids.has(x.id)).map((x) =>
-          h('div', { class: 'stack' }, h('span', null, `${x.title} · ${fmt(x.amount)}`), h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет'))),
+          (() => {
+            const pv = previewIndexed(st, today(), x.id, 36);
+            return h(
+              'div',
+              { class: 'stack' },
+              h('span', null, `${x.title} · ${fmt(x.amount)}`),
+              pv.yes !== null && pv.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если повышают — ${fmtShort(pv.yes)}, если нет — ${fmtShort(pv.no)}.`) : null,
+              h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет')),
+            );
+          })(),
         ),
       ),
     );
@@ -344,3 +340,61 @@ defineSheet('oneoff-q', (catId) => {
     ),
   };
 });
+
+
+const monthsText = (m: number): string => `${m > 0 ? 'позже' : 'раньше'} на ${nWord(Math.abs(m), 'месяц', 'месяца', 'месяцев')}`;
+
+/** Строки «цель: было → стало» для предпросмотра. */
+function shiftLines(shifts: ReturnType<typeof previewEvent>['shifts']): HTMLElement[] {
+  return shifts.slice(0, 4).map((x) => {
+    const from = x.from ? monthWord(x.from) : 'не набирается';
+    const to = x.to ? monthWord(x.to) : 'не набирается';
+    return h('div', null, `${x.title}: ${from} → ${to}${x.months !== null ? ` (${monthsText(x.months)})` : ''}`);
+  });
+}
+
+/**
+ * «Что изменится?» при конце дохода (D108) с предпросмотром (D114): ползунок «Урежу траты» — тянешь, и сразу видно,
+ * как меняются капитал через год и даты целей. «Применить» кладёт событие в план, «Ничего не изменится» — ответ без события.
+ */
+function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement {
+  const st = getState();
+  const from = `${endMonth}-01`;
+  // ползунок в тенге, деньги движка — в тиынах (×100); потолок — половина обычных месячных трат
+  const maxTenge = Math.max(10_000, Math.round(ov().spend.usualMonthly / 100 / 2 / 1000) * 1000);
+  const slider = h('input', { type: 'range', min: '0', max: String(maxTenge), step: '1000', value: '0', 'aria-label': 'На сколько урезать траты в месяц, ₸' }) as HTMLInputElement;
+  const out = h('div', { class: 'stack tight' });
+  const apply = h('button', { class: 'btn wide primary', type: 'button', disabled: true }, 'Урежу траты');
+  let amount = 0;
+  const draw = () => {
+    amount = Number(slider.value) * 100;
+    const pv = previewEvent(st, today(), amount > 0 ? [cutEvent('preview', from, amount as Money)] : []);
+    const c = pv.capital(12);
+    const lines: (HTMLElement | null)[] = [
+      h('div', null, amount > 0 ? `Урежу на ${fmt(amount as Money)} в месяц с ${monthGen(endMonth)}` : 'Если ничего не менять'),
+      c.with !== null ? h('div', null, h('strong', null, `Через год: ${fmtShort(c.with)}`), amount > 0 && c.without !== null ? ` (без этого — ${fmtShort(c.without)})` : '') : null,
+      ...(amount > 0 ? (pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]) : []),
+    ];
+    out.replaceChildren(...(lines.filter(Boolean) as HTMLElement[]));
+    apply.disabled = amount <= 0;
+  };
+  slider.addEventListener('input', draw);
+  apply.addEventListener('click', () => {
+    if (amount <= 0) return;
+    const ev = cutEvent(newId('ev'), from, amount as Money);
+    void act((s) => ({ ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } }), `Урезаю на ${fmt(amount as Money)} с ${monthGen(endMonth)} — в плане, прогноз пересчитан`);
+  });
+  draw();
+  return h(
+    'section',
+    { class: 'warnline stack', 'aria-label': 'Доход уменьшится' },
+    h('strong', null, text),
+    slider,
+    out,
+    apply,
+    h('div', { class: 'chips wrap' },
+      h('a', { class: 'chip', href: sheetHref('plan', `job@${from}`) }, 'Будет другой доход'),
+      h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndsAnswered: [...new Set([...(s.settings.incomeEndsAnswered ?? []), incomeId])] } }), 'Записано: ничего не изменится') }, 'Ничего не изменится'),
+    ),
+  );
+}
