@@ -87,12 +87,13 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
 
   // 1. Подушка не видит денег, которые уже есть
   const cushion = flattenTree(o.goalTree).find((n) => n.goal.role === 'safety' && n.goal.parentId === undefined && n.goal.status === 'active');
-  if (cushion && cushion.goal.targetMin > 0 && cushion.progress < cushion.goal.targetMin && o.spend.onHand >= cushion.goal.targetMin) {
+  if (cushion && cushion.goal.targetMin > 0 && cushion.progress < cushion.goal.targetMin && o.spend.onHand >= cushion.goal.targetMin && !(state.settings.sanityAnswered ?? []).includes('cushion_ignores_money')) {
     out.push({
       id: 'cushion_ignores_money',
-      // порядок целей — решение человека (04.11): деньги остаются за выбранной целью; это не ошибка модели, но человек должен видеть
+      // порядок целей — решение человека (04.11): деньги остаются за выбранной целью; это не ошибка модели, но человек должен видеть.
+      // Порядок целей метки денег не меняет, поэтому плашку убирают два действия: перенести деньги в подушку или сказать «так задумано» (D122)
       level: 'warn',
-      text: `Подушка: ${tg(cushion.progress)} из ${tg(cushion.goal.targetMin)}, хотя на счетах ${tg(o.spend.onHand)}: деньги других целей подушке не засчитываются`,
+      text: `Подушка: ${tg(cushion.progress)} из ${tg(cushion.goal.targetMin)}, хотя на счетах ${tg(o.spend.onHand)}: эти деньги не закреплены за подушкой`,
     });
   }
 

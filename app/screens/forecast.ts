@@ -8,17 +8,26 @@ import {
 } from '../../engine/index';
 import { bandChart } from '../chart';
 import { h } from '../dom';
-import { getState, today } from '../store';
+import { getState, today, update } from '../store';
 import { ov } from '../ctx';
 import { attention, fmt, fmtShort, info, row, rows, seg, sub, type AttentionItem } from '../ui';
-import { defineSheet, refresh, sheetHref } from '../main';
+import { defineSheet, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 
-/** Только полгода и год (D100, D102): дальше «так же, как сейчас» почти не бывает — для этого «Планирую…». */
-const PERIODS = [['6', '6 мес'], ['12', '1 год']] as const;
-const PERIOD_WORDS: Record<string, string> = { '6': 'через 6 мес.', '12': 'через год', '24': 'через 2 года', '36': 'через 3 года' };
-let period: (typeof PERIODS)[number][0] = '12';
-
+/**
+ * Сроки прогноза (D120, D122): 1–5 мес. проверяются жизнью («через 3 месяца» можно сверить, «через год» нет), полгода и год — как было.
+ * Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…».
+ * Один набор и один выбор срока (`settings.forecastViewMonths`) на «Прогнозе» и на «Хуже или лучше».
+ */
+export const HORIZONS: [number, string, string][] = [
+  [1, '1', 'месяц'],
+  [2, '2', '2 месяца'],
+  [3, '3', '3 месяца'],
+  [4, '4', '4 месяца'],
+  [5, '5', '5 месяцев'],
+  [6, '6', 'полгода'],
+  [12, 'год', 'год'],
+];
 
 /** Названия сценариев одинаково везде (D102): «Хуже / Так же / Лучше» — три сравнения с тем, что сейчас. */
 export function scenarioWord(sc: Pick<Scenario, 'id' | 'name'>): string {
@@ -189,12 +198,14 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   const tr = trio(rs);
   if (!tr) return root;
   const maxM = st.settings.simulationMonths;
-  const avail = PERIODS.filter(([k]) => Number(k) <= maxM);
-  if (!avail.some(([k]) => k === period)) period = avail[avail.length - 1]?.[0] ?? '12';
-  const k = Number(period);
+  const avail = HORIZONS.filter(([m]) => m <= maxM);
+  const k = avail.some(([m]) => m === (st.settings.forecastViewMonths ?? 12)) ? (st.settings.forecastViewMonths ?? 12) : (avail[avail.length - 1]?.[0] ?? 12);
+  const word = HORIZONS.find(([m]) => m === k)?.[2] ?? `${k} мес.`;
 
-  root.append(seg(avail, period, (v) => ((period = v), refresh()), 'Срок прогноза'));
-  const cap = (r: SimResult) => r.capitalAfter[k] ?? r.months[Math.min(k, r.months.length - 1)]?.capital ?? null;
+  root.append(seg(avail.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза'));
+  // `capitalAfter` есть только для 6/12/24/36 мес.; короткие сроки берём из помесячного ряда
+  const capAt = (r: SimResult, m: number): Money | null => r.months[Math.min(m, r.months.length - 1)]?.capital ?? null;
+  const cap = (r: SimResult) => capAt(r, k);
   const lo = cap(tr.worse);
   const hi = cap(tr.better);
   const betterSame = sameAs(tr.better, tr.base);
@@ -204,8 +215,8 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   root.append(
     h(
       'section',
-      { class: 'hero', 'aria-label': `Капитал ${PERIOD_WORDS[period]}` },
-      h('div', { class: 'label' }, h('span', null, `Всего у тебя будет ${PERIOD_WORDS[period]}`, info('net'))),
+      { class: 'hero', 'aria-label': `Капитал через ${word}` },
+      h('div', { class: 'label' }, h('span', null, `Всего у тебя будет через ${word}`, info('net'))),
       h('div', { class: `value${(cap(tr.base) ?? 0) < 0 ? ' neg' : ''}` }, cap(tr.base) === null ? '—' : fmtShort(cap(tr.base)!)),
       h('div', { class: 'subline' }, 'если всё пойдёт так же, как сейчас', alt ? ` · ${alt}` : ''),
       h('a', { class: 'link', href: sheetHref('fc-scenarios') }, 'Что значит «хуже» и «лучше» ›'),
@@ -216,10 +227,10 @@ export function renderForecast(_rerender: () => void): HTMLElement {
   const months = tr.base.months.slice(0, n).map((m) => m.month);
   const vals = (r: SimResult) => r.months.slice(0, n).map((m) => m.capital);
   const width = Math.min(720, Math.min(960, document.documentElement.clientWidth) - 40);
-  root.append(h('div', { class: 'card' }, bandChart(months, vals(tr.base), vals(tr.worse), vals(tr.better), `Капитал на конец месяца, ${PERIODS.find(([p]) => p === period)![1]}`, width)));
+  root.append(h('div', { class: 'card' }, bandChart(months, vals(tr.base), vals(tr.worse), vals(tr.better), `Капитал на конец месяца, ${k < 12 ? `${k} мес.` : '1 год'}`, width)));
 
   // таблица: 4 колонки и на телефоне
-  const horizons = [6, 12].filter((m) => m <= maxM);
+  const horizons = avail.map(([m]) => m);
   root.append(
     h(
       'table',
@@ -234,9 +245,9 @@ export function renderForecast(_rerender: () => void): HTMLElement {
             'tr',
             { class: m === k ? 'on' : '' },
             h('th', { scope: 'row' }, m < 12 ? `${m} мес` : m === 12 ? '1 год' : `${m / 12} года`),
-            worseSame ? null : h('td', null, short(tr.worse.capitalAfter[m])),
-            h('td', null, h('strong', null, short(tr.base.capitalAfter[m]))),
-            betterSame ? null : h('td', null, short(tr.better.capitalAfter[m])),
+            worseSame ? null : h('td', null, short(capAt(tr.worse, m))),
+            h('td', null, h('strong', null, short(capAt(tr.base, m)))),
+            betterSame ? null : h('td', null, short(capAt(tr.better, m))),
           ),
         ),
       ),
