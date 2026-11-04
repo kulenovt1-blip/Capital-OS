@@ -13,9 +13,14 @@ import { explainLink, registerExplain } from '../explain';
 import { warningItems } from './forecast';
 import { KINDS, PLAN_CHIPS, eventLine } from './plan';
 
-/** Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…». */
+/** Короткие сроки (1–5 мес., D120) нужны, чтобы сверить прогноз с жизнью: «через 3 месяца» проверяется, «через год» — нет. Дальше года главное число не показывается (D100): через 2–5 лет жизнь почти наверняка другая — для этого «Планирую…». */
 const HORIZONS: [number, string, string][] = [
-  [6, 'полгода', 'полгода'],
+  [1, '1', 'месяц'],
+  [2, '2', '2 месяца'],
+  [3, '3', '3 месяца'],
+  [4, '4', '4 месяца'],
+  [5, '5', '5 месяцев'],
+  [6, '6', 'полгода'],
   [12, 'год', 'год'],
 ];
 
@@ -256,17 +261,30 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income') && !asked.shown.has(f))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
-    const top = sane.slice(0, 3);
-    const rest = sane.slice(3);
-    root.append(
-      h(
-        'section',
-        { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
-        h('strong', null, 'Проверь, прежде чем верить прогнозу'),
-        ...top.map((f) => h('div', null, f.text)),
-        rest.length ? h('details', null, h('summary', null, `ещё ${rest.length}`), h('div', { class: 'stack' }, ...rest.map((f) => h('div', null, f.text)))) : null,
-      ),
-    );
+    // у каждой находки — действие; без действия это не плашка, а справка (D120: «висит и ничего не предлагает» — раздражает)
+    const action = (f: SanityFinding): { label: string; href: string } | null => {
+      if (f.id === 'negative_months' && f.months?.[0]) {
+        const d = `${f.months[0]}-01`;
+        return { label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) };
+      }
+      if (f.id === 'cushion_ignores_money') return { label: 'Порядок целей', href: '#/goals' };
+      if (f.id === 'goal_drawn') return { label: 'Выбрать, из чего брать', href: sheetHref('fc-draw', '') };
+      return null;
+    };
+    const acts = sane.map((f) => [f, action(f)] as const);
+    const todo = acts.filter(([, a]) => a);
+    const info = acts.filter(([, a]) => !a);
+    if (todo.length) {
+      root.append(
+        h(
+          'section',
+          { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
+          h('strong', null, 'Проверь, прежде чем верить прогнозу'),
+          ...todo.map(([f, a]) => h('div', { class: 'stack tight' }, h('div', null, f.text), h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: a!.href }, a!.label)))),
+        ),
+      );
+    }
+    if (info.length) root.append(h('details', { class: 'fold' }, h('summary', null, `Что ещё стоит знать (${info.length})`), h('div', { class: 'stack' }, ...info.map(([f]) => h('p', { class: 'muted' }, f.text)))));
   }
 
   const vd = verdicts();

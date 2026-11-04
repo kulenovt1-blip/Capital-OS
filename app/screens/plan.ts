@@ -39,6 +39,7 @@ export const KINDS: Record<Kind, KindDef> = {
 export const PLAN_CHIPS: Kind[] = ['job', 'study', 'cut', 'move', 'buy', 'inst', 'loss', 'payoff', 'change'];
 
 let draft: { kind: Kind; event: LifeEvent; result: WhatIfResult } | null = null;
+let appliedPreset: string | null = null;
 let draftKind: Kind | null = null;
 /** Что введено в форму — чтобы после «Посчитать» поля не очищались. */
 let typed: Record<string, string> = {};
@@ -254,12 +255,14 @@ defineSheet('plan', (raw) => {
       body: rows((Object.keys(KINDS) as Kind[]).map((k) => row({ title: KINDS[k].label, sub: KINDS[k].hint, href: sheetHref('plan', k) }))),
     };
   }
-  if (draftKind !== kind || (preset && typed.date !== preset)) {
+  // подставленная дата применяется один раз; если человек потом поменял дату и нажал «Посчитать», результат не стираем (D120)
+  if (draftKind !== kind || (preset && appliedPreset !== preset)) {
     draft = null;
     draftKind = kind;
     typed = preset ? { date: preset } : {};
     typedDirection = 'more';
   }
+  appliedPreset = preset ?? null;
   const f = kindForm(kind);
   if ('empty' in f) return { title: KINDS[kind].label, body: f.empty };
   f.form.addEventListener('submit', (e) => {
