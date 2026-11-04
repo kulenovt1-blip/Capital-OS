@@ -283,6 +283,25 @@ describe('«Отложил» → перевод на копилку', () => {
     expect(rem.map((x) => [x.accountId, x.amount])).toEqual([['acc-kaspi', tenge(10_000)]]);
   });
 
+  it('переводы на две копилки: метки идут на ту копилку, куда ушли деньги (D106)', () => {
+    const base = state();
+    const withKinds = { ...base, settings: { ...base.settings, accounts: base.settings.accounts.map((a) => (a.accountId === 'acc-cash' ? { ...a, kind: 'savings' as const } : a)) } };
+    const tr = (id: string, date: string, to: string, amount: number) => ({ kind: 'transfer' as const, id, date, fromAccountId: 'acc-kaspi', toAccountId: to, fromAmount: tenge(amount), toAmount: tenge(amount), comment: '' });
+    const s: AppState = {
+      ...withKinds,
+      imported: { ...withKinds.imported!, operations: [...withKinds.imported!.operations, tr('tr-a', '2026-10-24', 'acc-halyk', 20_000), tr('tr-b', '2026-10-25', 'acc-cash', 30_000)] },
+      fundings: [pending('p1', 'trip', 30_000), pending('p2', 'books', 20_000)],
+    };
+    expect(s.imported!.accounts.some((a) => a.id === 'acc-cash')).toBe(true);
+    const r = settleSetAsides(s, TODAY);
+    expect(r.moved).toBe(tenge(50_000));
+    const net = (acc: string, gid: string) => r.state.fundings.filter((f) => f.accountId === acc && f.goalId === gid).reduce((a, f) => a + f.amount, 0);
+    // первые 20 000 из «Поездки» — на Halyk, остальные 10 000 «Поездки» и 20 000 «Книг» — на второй счёт
+    expect([net('acc-halyk', 'trip'), net('acc-cash', 'trip'), net('acc-halyk', 'books'), net('acc-cash', 'books'), net('acc-kaspi', 'trip'), net('acc-kaspi', 'books')]).toEqual([tenge(20_000), tenge(10_000), 0, tenge(20_000), 0, 0]);
+    expect(new Set(r.state.fundings.map((f) => f.id)).size).toBe(r.state.fundings.length);
+    expect(settleSetAsides(r.state, TODAY).moved).toBe(0);
+  });
+
   it('перевода нет — напоминание; бэкап не новее даты «Отложил» — ещё рано', () => {
     const s = { ...state(), fundings: [pending('p1', 'trip', 20_000)] };
     expect(setAsideReminders(s, buildOverview(s, TODAY)).map((x) => x.amount)).toEqual([tenge(20_000)]);
