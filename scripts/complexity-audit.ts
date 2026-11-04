@@ -44,11 +44,15 @@ const EXTRA = [
 ];
 const JARGON = [...new Map([...Object.values(HELP).map((h: { title: string }) => h.title), ...EXTRA].map((t) => [t.toLowerCase(), t])).values()];
 
-/** Состояние → экраны. «empty» — первый запуск, «imported» — сразу после импорта, «configured» — всё настроено. */
+/**
+ * Состояние → экраны. «empty» — первый запуск, «imported» — сразу после импорта, «configured» — всё настроено.
+ * Простой слой (D96–D105): start*, baskets («Раскладка трат»), income («Пришли деньги»), forecast (простой прогноз),
+ * cushion/distribute (цели). Старые экраны (income-result, setup*, markup, adv-*) оставлены — они ещё доступны в подробном слое.
+ */
 const PLAN: [string, string[]][] = [
-  ['empty', ['overview', 'goals', 'income', 'forecast', 'more', 'import']],
-  ['imported', ['overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'goals', 'forecast']],
-  ['configured', ['overview', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'plan-job', 'plan-payoff',
+  ['empty', ['overview', 'start', 'goals', 'income', 'forecast', 'more', 'import']],
+  ['imported', ['overview', 'start', 'start-savings', 'start-goals', 'baskets', 'basket-sheet', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'goals', 'income', 'forecast']],
+  ['configured', ['overview', 'explain-overview', 'goals', 'cushion', 'distribute', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'baskets', 'basket-sheet', 'income', 'income-result', 'forecast', 'explain-forecast', 'plan-job', 'plan-payoff',
     'more', 'markup', 'accounts', 'account-sheet', 'incomes', 'income-kinds', 'debts', 'backup', 'rare', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios']],
 ];
 
