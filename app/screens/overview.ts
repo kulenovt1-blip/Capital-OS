@@ -159,39 +159,13 @@ function cushionRow(o: Overview): HTMLElement | null {
   );
 }
 
-/** «Твой этап» — одной строкой: на какой ступени и что дальше (D115). */
+/** «Твой этап» — одной строкой: на какой ступени и на чём это основано (D123). Лесенка и арифметика — в листе `stage-info`. */
 function stageRow(): HTMLElement | null {
   const s = stageNow();
   if (!s) return null;
-  return rows(row({ title: `Твой этап: ${s.title}`, sub: s.coverMonths === null ? 'без дохода денег хватит больше чем на 5 лет' : `без дохода денег хватит на ${nWord(s.coverMonths, 'месяц', 'месяца', 'месяцев')}`, value: h('span', { class: 'muted' }, `${s.stage} из 5`), href: sheetHref('stage') }));
+  const cover = s.coverMonths.toString().replace('.', ',');
+  return rows(row({ title: `Этап ${s.stage} из 5 · ${s.title}`, sub: `без дохода денег хватит на ${cover} мес.`, href: sheetHref('stage-info') }));
 }
-
-defineSheet('stage', () => {
-  const s = stageNow();
-  if (!s) return null;
-  const pct = (x: number) => `${Math.round(x * 100)} %`;
-  return {
-    title: 'Твой этап',
-    body: h(
-      'div',
-      { class: 'stack' },
-      h('div', { class: 'advice stack tight' }, h('strong', null, `${s.stage} из 5 · ${s.title}`), h('p', null, s.portrait)),
-      s.next
-        ? h('div', { class: 'stack tight' }, sub(`Следующий шаг: ${s.next.toTitle}`), h('p', null, s.next.text), s.next.by ? h('p', null, h('strong', null, `При нынешнем темпе — к ${monthTo(s.next.by)}.`)) : s.next.missing > 0 ? h('p', { class: 'muted' }, 'При нынешних доходах и тратах этот запас не набирается.') : null)
-        : h('p', null, 'Это верхняя ступень. Дальше — твои цели.'),
-      s.next && s.next.toStage <= 5 ? h('a', { class: 'btn wide', href: sheetHref('save-where') }, 'Где можно сэкономить ›') : null,
-      sub('На чём это основано'),
-      rows(
-        row({ title: 'Деньги, которые можно снять сразу', value: fmt(s.liquid) }),
-        row({ title: 'В обычный месяц уходит', sub: 'траты и платежи по долгам', value: fmt(s.needMonthly) }),
-        row({ title: 'Хватит без дохода', value: s.coverMonths === null ? 'больше 5 лет' : nWord(s.coverMonths, 'месяц', 'месяца', 'месяцев') }),
-        row({ title: 'Остаётся в месяц', sub: 'в среднем за ближайшие полгода', value: s.surplusMonthly >= 0 ? fmtShort(s.surplusMonthly) : h('span', { class: 'neg' }, `−${fmtShort((-s.surplusMonthly) as Money)}`) }),
-        s.debtShare !== null ? row({ title: 'Доля дохода на долги и рассрочки', value: pct(s.debtShare) }) : null,
-      ),
-      h('p', { class: 'muted' }, 'Считается по тому, что есть в бэкапе: деньги сейчас и обычные траты, а не только «доходы минус расходы». Наличные и долги знакомым, которых нет в MoneyManager, не видны — если они есть, этап может быть другим. Не баллы и не сравнение с другими: это просто где ты и что дальше.'),
-    ),
-  };
-});
 
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
 function newIncomeLine(): HTMLElement | null {

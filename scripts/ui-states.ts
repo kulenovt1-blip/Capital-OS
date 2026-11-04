@@ -89,7 +89,7 @@ export const SCREENS: [string, string][] = [
   ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],
-  ['stage', '#/overview~stage'], ['save-where', '#/forecast~save-where'], ['save-cat', '#/forecast~save-cat/cat-food'], ['a-to-b', '#/forecast~a-to-b'], ['to-date', '#/forecast~to-date'], ['cushion-fill', '#/goals~cushion-fill'],
+  ['stage-info', '#/overview~stage-info'], ['save-where', '#/forecast~save-where'], ['save-cat', '#/forecast~save-cat/cat-food'], ['a-to-b', '#/forecast~a-to-b'], ['to-date', '#/forecast~to-date'], ['cushion-fill', '#/goals~cushion-fill'],
   ['plan-job', '#/forecast~plan/job'], ['plan-payoff', '#/forecast~plan/payoff'], ['plan-study', '#/forecast~plan/study'], ['plan-inst', '#/forecast~plan/inst'], ['plan-inst-result', '#/forecast~plan/inst'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
 ];
 export async function put(page, json: string): Promise<void> {
