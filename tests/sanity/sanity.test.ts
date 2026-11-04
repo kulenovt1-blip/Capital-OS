@@ -23,6 +23,7 @@ import { makeInstallment } from '../../engine/obligations';
 import { tenge } from '../../engine/money';
 import { sanityCheck, sanityFails, type SanityId } from '../../engine/sanity';
 import { personStage } from '../../engine/stage';
+import { savingOptions } from '../../engine/saving';
 import { applyRepeatAnswer, cutEvent, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
@@ -453,5 +454,44 @@ describe('«Твой этап» (D115)', () => {
     const before = JSON.stringify(s);
     personStage(s, TODAY);
     expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe('«Где можно сэкономить» (D116)', () => {
+  const r = () => savingOptions(profile(), TODAY)!;
+
+  it('категории по размеру: еда, развлечения, подарки, одежда; рассрочки и доходы не входят', () => {
+    const o = r();
+    expect(o.options.map((x) => x.title)).toEqual(['Продукты', 'Развлечения', 'Подарки', 'Одежда']);
+    expect(o.options[0]!.share).toBeGreaterThan(o.options[1]!.share);
+    expect(o.options.map((x) => x.title)).not.toContain('Телефон');
+    // сумма категорий в месяц = то, что в среднем ушло за 6 полных месяцев
+    expect(o.months).toBe(6);
+  });
+
+  it('цена урезания: 20 % категории в месяц, капитал через год растёт ровно на 12 таких месяцев (без инфляции и сдвигов — не меньше)', () => {
+    const food = r().options.find((x) => x.categoryId === 'food')!;
+    expect(food.cut!.perMonth).toBe(Math.round(food.monthly * 0.2));
+    expect(food.cut!.capitalGain12).toBeGreaterThan(0);
+    // даты целей — только те, что сдвинулись
+    for (const sh of food.cut!.shifts) expect(sh.from).not.toBe(sh.to);
+  });
+
+  it('динамика за полгода: стабильная категория — 0 %, пропавшая — минус сто, мало истории — нет числа', () => {
+    expect(r().options.find((x) => x.categoryId === 'food')!.trendPct).toBe(0);
+    expect(r().options.find((x) => x.categoryId === 'gifts')!.trendPct).toBe(-100);
+    const short = savingOptions(profile({ from: '2026-09' }), TODAY)!;
+    for (const x of short.options) expect(x.trendPct).toBeNull();
+  });
+
+  it('предпросмотр урезания совпадает с событием в плане; состояние не меняется; без данных — нет отчёта', () => {
+    const s = profile();
+    const before = JSON.stringify(s);
+    const food = savingOptions(s, TODAY)!.options[0]!;
+    expect(JSON.stringify(s)).toBe(before);
+    const ev = cutEvent('x', '2026-12-01', food.cut!.perMonth);
+    const planned = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } };
+    expect(food.cut!.capitalGain12).toBe(capitalAt(baseForecast(planned, TODAY, 12), 12)! - capitalAt(baseForecast(s, TODAY, 12), 12)!);
+    expect(savingOptions(emptyState(), TODAY)).toBeNull();
   });
 });

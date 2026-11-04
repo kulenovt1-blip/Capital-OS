@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { applyRepeatAnswer, buildSimInput, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { SAVING_CUT_PCT, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, debtAfterYear, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, ov, runwayNow, verdicts } from '../ctx';
@@ -237,6 +237,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     root.append(rows(row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') })));
   }
   root.append(
+    rows(row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что даст, если там тратить меньше', href: sheetHref('save-where') })),
     sub('Планирую…'),
     h('p', { class: 'one-line' }, 'Что изменится, если… Выбери событие — посчитаю, в план попадёт только по кнопке.'),
     h('div', { class: 'chips wrap' }, [...PLAN_CHIPS.map((k) => h('a', { class: 'chip', href: sheetHref('plan', k) }, KINDS[k].label)), h('a', { class: 'chip', href: sheetHref('plan', 'own') }, 'Другое…')]),
@@ -397,4 +398,84 @@ function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement
       h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndsAnswered: [...new Set([...(s.settings.incomeEndsAnswered ?? []), incomeId])] } }), 'Записано: ничего не изменится') }, 'Ничего не изменится'),
     ),
   );
+}
+
+
+/** «Где можно сэкономить» (D116): категории по размеру и динамике, у каждой — цена урезания в целях. */
+defineSheet('save-where', () => {
+  const r = savingOptions(getState(), today());
+  if (!r) return { title: 'Где можно сэкономить', body: h('p', { class: 'muted' }, 'Нужны траты за полный месяц — загрузи бэкап.') };
+  const trend = (x: number | null) => (x === null ? '' : x === 0 ? ' · без изменений за полгода' : ` · за полгода ${x > 0 ? '+' : '−'}${Math.abs(x)} %`);
+  return {
+    title: 'Где можно сэкономить',
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, `В среднем за ${nWord(r.months, 'месяц', 'месяца', 'месяцев')} уходит ${fmt(r.total)} в месяц на траты (без рассрочек). Вот на чём больше всего — и что даст, если тратить меньше. Это варианты, выбираешь ты.`),
+      rows(
+        r.options.map((x) =>
+          row({
+            title: x.title,
+            sub: `${fmt(x.monthly)} в месяц · ${Math.round(x.share * 100)} % трат${trend(x.trendPct)}`,
+            value: x.cut ? h('span', { class: 'good' }, `−${SAVING_CUT_PCT} % → +${fmtShort(x.cut.capitalGain12)}`) : undefined,
+            href: sheetHref('save-cat', x.categoryId),
+          }),
+        ),
+      ),
+      h('p', { class: 'muted' }, `Справа — сколько прибавится к капиталу за год, если на этой статье тратить на ${SAVING_CUT_PCT} % меньше. Нажми на статью, чтобы подвигать ползунок.`),
+    ),
+  };
+});
+
+defineSheet('save-cat', (catId) => {
+  const st = getState();
+  const r = savingOptions(st, today());
+  const x = r?.options.find((o) => o.categoryId === catId);
+  if (!x) return null;
+  const from = `${monthKeyNext(today())}-01`;
+  const slider = h('input', { type: 'range', min: '0', max: String(Math.max(1000, Math.round((x.monthly / 100) / 2 / 1000) * 1000)), step: '500', value: String(Math.round(x.monthly / 100 / 5 / 500) * 500), 'aria-label': 'На сколько тратить меньше в месяц, ₸' }) as HTMLInputElement;
+  const out = h('div', { class: 'stack tight' });
+  const apply = h('button', { class: 'btn wide primary', type: 'button' }, 'Добавить в план');
+  let amount = 0;
+  const draw = () => {
+    amount = Number(slider.value) * 100;
+    if (amount <= 0) {
+      out.replaceChildren(h('div', { class: 'muted' }, 'Подвинь ползунок — увидишь, что изменится.'));
+      apply.disabled = true;
+      return;
+    }
+    const pv = previewEvent(st, today(), [cutEvent('preview', from as never, amount as Money)]);
+    const c = pv.capital(12);
+    out.replaceChildren(
+      h('div', null, h('strong', null, `Тратить на ${fmt(amount as Money)} меньше в месяц`), ` (${Math.round((amount / x.monthly) * 100)} % статьи)`),
+      ...(c.with !== null && c.without !== null ? [h('div', null, `Через год: ${fmtShort(c.with)} вместо ${fmtShort(c.without)}`)] : []),
+      ...(pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]),
+    );
+    apply.disabled = false;
+  };
+  slider.addEventListener('input', draw);
+  apply.addEventListener('click', () => {
+    if (amount <= 0) return;
+    const ev = cutEvent(newId('ev'), from as never, amount as Money, `Меньше: ${x.title}`);
+    void act((s) => ({ ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } }), `«${x.title}»: тратить на ${fmt(amount as Money)} меньше — в плане, прогноз пересчитан`).then(() => closeSheet());
+  });
+  draw();
+  return {
+    title: x.title,
+    body: h(
+      'div',
+      { class: 'stack' },
+      h('p', null, `Сейчас ${fmt(x.monthly)} в месяц, ${Math.round(x.share * 100)} % трат.`),
+      slider,
+      out,
+      apply,
+      h('p', { class: 'muted' }, 'В план попадёт как «Меньше: …» с первого числа следующего месяца; убрать можно на «Прогнозе» в разделе «В плане».'),
+    ),
+  };
+});
+
+function monthKeyNext(t: string): string {
+  const [y, m] = t.slice(0, 7).split('-').map(Number) as [number, number];
+  const n = y * 12 + m;
+  return `${Math.floor(n / 12)}-${String((n % 12) + 1).padStart(2, '0')}`;
 }

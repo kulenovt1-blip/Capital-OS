@@ -172,6 +172,7 @@ defineSheet('stage', () => {
       s.next
         ? h('div', { class: 'stack tight' }, sub(`Следующий шаг: ${s.next.toTitle}`), h('p', null, s.next.text), s.next.by ? h('p', null, h('strong', null, `При нынешнем темпе — к ${monthGen(s.next.by)}.`)) : s.next.missing > 0 ? h('p', { class: 'muted' }, 'При нынешних доходах и тратах этот запас не набирается.') : null)
         : h('p', null, 'Это верхняя ступень. Дальше — твои цели.'),
+      s.next && s.next.toStage <= 5 ? h('a', { class: 'btn wide', href: sheetHref('save-where') }, 'Где можно сэкономить ›') : null,
       sub('На чём это основано'),
       rows(
         row({ title: 'Деньги, которые можно снять сразу', value: fmt(s.liquid) }),

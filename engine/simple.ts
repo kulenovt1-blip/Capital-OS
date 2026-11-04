@@ -737,8 +737,8 @@ export function previewEvent(state: AppState, today: IsoDate, events: readonly i
 }
 
 /** Событие «урежу траты на amount в месяц с даты from» — то же, что собирает форма «Планирую… → Урежу траты». */
-export function cutEvent(id: string, from: IsoDate, amount: Money): import('./simulate').LifeEvent {
-  return { id, kind: 'recurring_change', date: from, title: 'Меньше трат', amount: -amount as Money };
+export function cutEvent(id: string, from: IsoDate, amount: Money, title = 'Меньше трат'): import('./simulate').LifeEvent {
+  return { id, kind: 'recurring_change', date: from, title, amount: -amount as Money };
 }
 
 /** Что будет с доходом, если ответить «повышают» и «не повышают» (D108): капитал через k месяцев при каждом ответе. */
