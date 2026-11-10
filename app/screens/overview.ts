@@ -150,15 +150,6 @@ function cushionRow(o: Overview): HTMLElement | null {
   );
 }
 
-/** Запас в месяцах — одной строкой: на сколько хватит денег без дохода и на чём это основано (D123, D143). Арифметика — в листе `reserve-info`. */
-function reserveRow(): HTMLElement | null {
-  const s = reserveCtx();
-  if (!s) return null;
-  if (ov().capital.unrated.length) return null; // счёт не в тенге без курса: запас был бы неверным (D155)
-  const cover = s.coverMonths.toString().replace('.', ',');
-  return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ необходимые траты и платежи', href: sheetHref('reserve-info') }));
-}
-
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
 function newIncomeLine(): HTMLElement | null {
   const st = getState();

@@ -27,7 +27,7 @@ function months(m: number | null): string {
 
 function explanation(v: PositionView): Explanation {
   if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
-  if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, положение оценить нечем', { level: 'warn' })];
+  if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
@@ -86,7 +86,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
     { class: 'warnline stack' },
     h('strong', null, `Это «${LEVEL_NAMES[4]}», но есть уязвимость`),
     v.l4Warnings.map((w) => h('div', null, w.text)),
-    h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где положение хрупкое.'),
+    h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где профиль хрупкий.'),
   );
 }
 
@@ -96,7 +96,7 @@ function directionsBlock(v: PositionView): HTMLElement {
   return h(
     'div',
     { class: 'stack' },
-    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления положения. ${desc}`),
+    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
     h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
     rows(
       ...v.directions.map((d) =>
