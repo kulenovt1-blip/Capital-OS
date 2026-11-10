@@ -12,7 +12,7 @@ import {
   DIRECTIONS, INDICATOR_IDS, MIN_HISTORY_VECTOR, computeIndicators, type Direction, type IndicatorId, type IndicatorInputs,
 } from './indicators';
 import { directionScore, isDirectionSufficient } from './directions';
-import { limitStates, withoutForecast, type LimitId } from './limits';
+import { LIMIT_VALUES, limitStates, withoutForecast, type LimitId } from './limits';
 import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
 import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
@@ -184,7 +184,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
 
   const blockedShare = cap.gross > 0 ? Math.max(0, 1 - liquidOn(cap, addDays(today, 30)) / cap.gross) : 0;
   const level = fin.level;
-  const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs) : null;
+  const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs, base.fired) : null;
   const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : base?.result.lifted ? liftedText(base.result.lifted.reason, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
@@ -237,11 +237,15 @@ function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): strin
   return LEVEL_MEANINGS[level];
 }
 
-function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs): PositionView['next'] {
+function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs, fired: readonly LimitId[] = []): PositionView['next'] {
   const to = (level + 1) as Level;
   const needs: string[] = [];
   const pts = to === 2 ? 20 - g : to === 3 ? 40 - g : -l4Margin;
-  if (pts > 0) needs.push(`${Math.ceil(pts)} ${plural(Math.ceil(pts))} общей оценки`);
+  // пока работает ограничитель, G выше его предела не поднимется, сколько ни прибавляй очков (С3, D160): называется само условие
+  const threshold = to === 2 ? 20 : to === 3 ? 40 : 75;
+  const blocking = fired.filter((id) => LIMIT_VALUES[id] < threshold);
+  for (const id of blocking) needs.push(`снять ограничение: ${LIMIT_TEXTS[id]}`);
+  if (pts > 0 && !blocking.length) needs.push(`${Math.ceil(pts)} ${plural(Math.ceil(pts))} общей оценки`);
   if (to === 2 && i.savingRate !== null && i.savingRate < 0 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push('чтобы доходы покрывали расходы (или запас от 3 месяцев)');
   if (to === 3 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push(reserveNeed(L3_RESERVE_MONTHS, i));
   if (to === 4 && i.reserveEssentialMonths < L4_RESERVE_MONTHS) needs.push(reserveNeed(L4_RESERVE_MONTHS, i));

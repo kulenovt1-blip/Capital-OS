@@ -11,7 +11,7 @@ import { emptyState } from '../../engine/state';
 import { INDEPENDENCE_TEXTS, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
 import { levelFromIndicators } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
-import { applyProbeOpts, build, SPECS2, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
+import { applyProbeOpts, build, randomSpec, SPECS2, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
 import { computeBalances } from '../../engine/ledger';
 
 const view = (state: Parameters<typeof positionViewOf>[0]) => positionViewOf(state, TODAY);
@@ -201,4 +201,21 @@ describe('С2 (D159): сверка не сошлась — уровень пре
     expect(view(bad).reconcileOk).toBe(false);
     expect(view(bad).preliminary).toBe(true);
   });
+});
+
+describe('С3 (D160): «чтобы подняться» при сработавшем ограничителе называет условие, а не очки', () => {
+  it('на 400 случайных профилях: ограничитель ниже порога следующей ступени → в needs есть «снять ограничение» и нет очков', () => {
+    let hit = 0;
+    for (let i = 1; i <= 400; i++) {
+      const v = view(build(randomSpec(i)));
+      if (!v.next || v.level === null || v.basis !== 'score') continue;
+      const thr = v.next.level === 2 ? 20 : v.next.level === 3 ? 40 : 75;
+      const blocked = v.limitsFired.some((l) => ({ cover1: 39, gap: 59, cliff: 59 })[l.id] < thr);
+      if (!blocked) continue;
+      hit++;
+      expect(v.next.needs.some((x) => x.startsWith('снять ограничение'))).toBe(true);
+      expect(v.next.needs.some((x) => /очк/.test(x))).toBe(false);
+    }
+    expect(hit).toBeGreaterThan(0);
+  }, 60_000);
 });
