@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { reserveNow } from '../../engine/reserve';
 import { gateLevel, levelOf, levelFromIndicators, L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type LevelInput, type Level } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
-import { build, namedProfiles, randomSpec, randomSpecDyn, stressCase, applyProbeOpts, TODAY } from '../support/position-profiles';
+import { build, SPECS2, namedProfiles, randomSpec, randomSpecDyn, stressCase, applyProbeOpts, TODAY } from '../support/position-profiles';
 
 const strong: LevelInput = { g: 90, directions: { N: 90, V: 90, F: 90 }, reliable: { N: true, V: true, F: true }, fired: [] };
 
@@ -105,5 +105,17 @@ describe('пул проб с фактами (1120 профилей + именн�
     // 1131 профиль: по очкам 61 / 184 / 558 / 328; с фактами 144 / 110 / 550 / 327 — 83 профиля с дефицитом без запаса уходят в «Не хватает на жизнь»
     expect({ withFacts: c, byScore: by }).toEqual({ withFacts: [143, 111, 550, 327], byScore: [61, 184, 558, 328] });
     // К3 (D156): «Не хватает на жизнь» — только дефицит и запас < 3 мес.; один профиль с запасом 8,85 мес. (D382) поднят с 1 до 2: 144 / 110 → 143 / 111
+  });
+});
+
+describe('С1 (D158): нет необходимых расходов — запас не определён, а не равен нулю', () => {
+  it('ограничитель «нет запаса» неизвестен, условия по запасу не проверяются, ступень не опускается из-за 0,0 мес.', () => {
+    const rep = computeIndicators(build(SPECS2[1]!), TODAY);
+    const noEss = { ...rep, inputs: { ...rep.inputs!, needEssential: 0, reserveEssentialMonths: 0 } };
+    const base = levelFromIndicators(rep)!, lv = levelFromIndicators(noEss)!;
+    expect(lv.fired).not.toContain('cover1');
+    expect(lv.result.held).toBeNull();
+    expect(lv.result.level).toBeGreaterThanOrEqual(base.result.level - 1);
+    expect(lv.g).toBeGreaterThan(39);
   });
 });

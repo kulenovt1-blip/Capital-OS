@@ -184,7 +184,8 @@ export function levelFromIndicators(report: IndicatorsReport): PositionLevel | n
     directions: Object.fromEntries(DIRECTIONS.map((d) => [d, directions[d].score])) as Record<Direction, number | null>,
     reliable: Object.fromEntries(DIRECTIONS.map((d) => [d, isDirectionSufficient(directions[d])])) as Record<Direction, boolean>,
     fired: agg.fired,
-    facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate },
+    // без необходимых расходов запас в месяцах не определён: условия по запасу не проверяются (С1, D158)
+    ...(report.inputs.needEssential > 0 ? { facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate } } : {}),
   });
   return { directions, g: agg.g, fired: agg.fired, result };
 }

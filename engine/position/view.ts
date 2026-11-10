@@ -195,7 +195,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
-    confidence, preliminary: isPreliminary(confidence),
+    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0,
     independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),
   };
 }
