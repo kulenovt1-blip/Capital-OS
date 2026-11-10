@@ -18,7 +18,8 @@
  *  2. Ручной пассивный доход (строка расписания с `passive: true`) считается доходом без истории в операциях, как «введён вручную» в пробе:
  *     он входит в средний доход (N3), но не в историю остатков (N2, V2, V4).
  *  3. Нет ни одной операции → все показатели `null` (проба предполагала, что данные есть).
- *  4. V3 вычисляется по формуле спецификации, но на входе — платежи по графику = фактические платежи по рассрочкам (как в пробе, спец. 8.6),
+ *  4. Нет расписания доходов (строк нет и событий «начало дохода» нет) → F2, F3, F4 = `null` (спец. 5.1), а не нули.
+ *  5. V3 вычисляется по формуле спецификации, но на входе — платежи по графику = фактические платежи по рассрочкам (как в пробе, спец. 8.6),
  *     поэтому на данных он пока всегда «не применим»; смысл появится, когда будут браться плановые платежи графика (T19).
  */
 import type { Money } from '../money';
@@ -204,9 +205,18 @@ export interface IndicatorInputs {
   /** Минимум доступных денег по неблагоприятному сценарию за 12 месяцев минус долг людям. */
   troughNet: number;
 }
+/** Источник дохода для ограничителей и интервалов (тенге). */
+export interface ForecastSource { status: IncomeStatus; monthly: number; volume: number; endsWithin6m: boolean }
+/** Что показал прогноз: кассовый разрыв и источники дохода. */
+export interface ForecastFacts { hasGap: boolean; sources: ForecastSource[] }
 export interface IndicatorsReport {
   values: Indicators;
   inputs: IndicatorInputs | null;
+  forecast: ForecastFacts | null;
+}
+export interface IndicatorOptions {
+  /** Предел знаменателя V1 в месяцах; для сверки с пробой без правки D — `Infinity`. */
+  v1CapMonths?: number;
 }
 
 const T = (m: Money | number): number => m / 100;
@@ -218,8 +228,8 @@ export function emptyIndicators(): Indicators {
   return out;
 }
 
-export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today)): IndicatorsReport {
-  if (!series.hasData) return { values: emptyIndicators(), inputs: null };
+export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today), options: IndicatorOptions = {}): IndicatorsReport {
+  if (!series.hasData) return { values: emptyIndicators(), inputs: null, forecast: null };
   const o = buildOverview(state, today);
   const H = series.histMonths;
 
@@ -246,7 +256,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   // II. Вектор
   if (H >= MIN_HISTORY_VECTOR) {
     const netNowC = series.netConfirmed[0], netAgoC = series.netConfirmed[SERIES_LOOKBACK];
-    values.V1 = netNowC !== null && netNowC !== undefined && netAgoC !== null && netAgoC !== undefined ? growthScore(T(netNowC), T(netAgoC), needLifestyle) : null;
+    values.V1 = netNowC !== null && netNowC !== undefined && netAgoC !== null && netAgoC !== undefined ? growthScore(T(netNowC), T(netAgoC), needLifestyle, SERIES_LOOKBACK, options.v1CapMonths ?? V1_CAPITAL_CAP_MONTHS) : null;
     values.V2 = flowTrendScore(free, needLifestyle);
     const paid6 = toT(series.installmentsPaid).slice(-6).reduce((a, b) => a + b, 0);
     const debtThen = netAgoC !== null && netAgoC !== undefined && (netAgoC < 0 || debtTotal > 0) ? debtTotal + paid6 : 0;
@@ -263,11 +273,14 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const trough = Math.min(...adverse.months.slice(1, 13).map((m) => T(m.liquidEnd)));
   const troughNet = trough - payablesNow;
   const m12 = base.months.slice(1, 13);
-  const sources = incomeSources(input, today).map((s) => ({ status: s.status, volume: T(s.volume) }));
+  const facts = incomeSources(input, today).map((s) => ({ status: s.status, monthly: T(s.monthly), volume: T(s.volume), endsWithin6m: s.endsWithin6m }));
+  const sources = facts;
+  // расписания доходов нет (ни строк, ни событий «начало дохода») — обеспеченность, опасность потери и будущая норма сбережений неизвестны, а не нули (спец. 5.1)
+  const scheduleKnown = input.incomes.length > 0 || input.events.some((e) => e.kind === 'income_start');
   values.F1 = reserveScore(troughNet, needEssential);
-  values.F2 = reliabilityScore(sources, needEssential);
-  values.F3 = exposureScore(sources);
-  values.F4 = normalize(forecastSavingRate(mean(m12.map((m) => T(m.income))), mean(m12.map((m) => T(m.expenses) + T(m.obligations)))), SCALES.saving);
+  values.F2 = scheduleKnown ? reliabilityScore(sources, needEssential) : null;
+  values.F3 = scheduleKnown ? exposureScore(sources) : null;
+  values.F4 = scheduleKnown ? normalize(forecastSavingRate(mean(m12.map((m) => T(m.income))), mean(m12.map((m) => T(m.expenses) + T(m.obligations)))), SCALES.saving) : null;
 
   return {
     values,
@@ -277,5 +290,6 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
       reserveLifestyleMonths: needLifestyle > 0 ? netLiquid / needLifestyle : 0,
       troughNet,
     },
+    forecast: { hasGap: base.gaps.length > 0, sources: facts },
   };
 }
