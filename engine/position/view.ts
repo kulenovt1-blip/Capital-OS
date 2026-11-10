@@ -16,7 +16,7 @@ import { limitStates, withoutForecast, type LimitId } from './limits';
 import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
 import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
-import { boundsContext, historyBounds, scheduleBounds, type Bounds } from './unknown';
+import { boundsContext, historyBounds, reserveBounds, scheduleBounds, type Bounds } from './unknown';
 import { computeRunway, type Runway } from './runway';
 import { spiralSigns, type SpiralSigns } from './spiral';
 import { confidenceOf, isPreliminary } from './confidence';
@@ -125,7 +125,7 @@ const NO_SPIRAL: SpiralSigns = { status: 'no_data', overdue: null, growth: null,
 
 /** Интервалы неизвестного по реальным данным: короткая история и отсутствие расписания доходов. Остальное неизвестное — вся шкала 0–100. */
 function actualBounds(ctx: ReturnType<typeof boundsContext>, histMonths: number, scheduleKnown: boolean): Bounds {
-  return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : scheduleBounds(ctx)) };
+  return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : { ...scheduleBounds(ctx), ...reserveBounds(ctx) }) };
 }
 
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
