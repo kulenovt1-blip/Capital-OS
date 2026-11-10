@@ -15,7 +15,7 @@ const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
 const pct = (x: number): string => `${Math.round(x * 100)} %`;
 const mo = (x: number): string => (x >= 600 ? 'больше 50 лет' : `${nf(x)} мес.`);
-const SHORT = { N: 'Сейчас', V: 'Вектор', F: 'Будущее' } as const;
+const SHORT = { N: 'Сейчас', V: 'Динамика', F: 'Будущее' } as const;
 
 function months(m: number | null): string {
   if (m === null) return 'не определить';

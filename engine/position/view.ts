@@ -23,12 +23,12 @@ import { confidenceOf, isPreliminary } from './confidence';
 import { INDEPENDENCE_TEXTS, L5_NAME, desiredScenarioOf, independenceOfState, levelWithIndependence, type DesiredScenario, type IndependenceResult } from './independence';
 import { essentialMarkupMissing } from './inputs';
 
-export const DIRECTION_NAMES: Readonly<Record<Direction, string>> = { N: 'Здесь и сейчас', V: 'Вектор', F: 'Безопасность будущего' };
+export const DIRECTION_NAMES: Readonly<Record<Direction, string>> = { N: 'Здесь и сейчас', V: 'Динамика', F: 'Безопасность будущего' };
 export const DIRECTION_QUESTIONS: Readonly<Record<Direction, string>> = { N: 'Каково положение сегодня?', V: 'Как оно менялось за полгода?', F: 'Выдержит ли оно будущее и удар?' };
 
 /** Названия показателей простыми словами (на экране коды N1, V2 и т. п. не показываются). */
 export const INDICATOR_LABELS: Readonly<Record<IndicatorId, string>> = {
-  N1: 'Запас денег', N2: 'Норма сбережений', N3: 'Долговая нагрузка', N4: 'Капитал',
+  N1: 'Запас денег', N2: 'Сколько откладываю', N3: 'Долговая нагрузка', N4: 'Капитал',
   V1: 'Рост капитала', V2: 'Динамика остатка в месяц', V3: 'Платежи по долгу против графика', V4: 'Привычка откладывать',
   F1: 'Запас в плохой период', F2: 'Покрытие необходимого доходом', F3: 'Риск потерять главный доход', F4: 'Будущая норма сбережений',
 };
