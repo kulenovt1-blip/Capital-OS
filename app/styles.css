@@ -581,3 +581,11 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .hero .value { font-weight: 800; letter-spacing: -0.03em; }
 .top h1 { font-weight: 800; letter-spacing: -0.03em; }
 .pos-level-name { font-weight: 800; letter-spacing: -0.02em; }
+.pos-radar { display: flex; flex-direction: column; align-items: center; }
+.pos-level-card { text-align: center; }
+.pos-level-card .pos-ladder, .pos-level-card .muted { text-align: left; }
+.top .ttl-row h1 { flex: 0 1 auto; max-width: 100%; }
+/* на вложенных экранах значок доверия — только цветная точка (название экрана важнее); смысл — в aria-label и в листе по нажатию (D167) */
+.top.sub-top .trust { max-width: none; flex: none; min-width: 44px; justify-content: center; padding: 0 12px; }
+.top.sub-top .trust span:not(.td) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.top.sub-top .trust .td { width: 12px; height: 12px; }

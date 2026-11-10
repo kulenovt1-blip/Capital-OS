@@ -43,7 +43,7 @@ registerExplain('position', 'Как посчитано: «Финансовый �
 
 // ───────────────────────── блоки ─────────────────────────
 
-function levelCard(v: PositionView): HTMLElement {
+function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
   const isL5 = v.basis === 'independence';
   const lines: (HTMLElement | null)[] = [];
   if (v.range && v.rangeLevels) {
@@ -63,6 +63,8 @@ function levelCard(v: PositionView): HTMLElement {
     h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
+    // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
+    chart,
     isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
     ...lines,
     ladderFold(v),
@@ -90,14 +92,21 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   );
 }
 
-function directionsBlock(v: PositionView): HTMLElement {
+function radarBlock(v: PositionView): HTMLElement {
   const [n, vv, f] = v.directions;
   const desc = v.directions.map((d) => `${d.name}: ${d.score === null ? 'оценить нечем' : Math.round(d.score)}`).join('; ');
   return h(
     'div',
-    { class: 'stack' },
+    { class: 'pos-radar' },
     radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
     h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
+  );
+}
+
+function directionsBlock(v: PositionView): HTMLElement {
+  return h(
+    'div',
+    { class: 'stack' },
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
@@ -236,7 +245,7 @@ export function renderPosition(): HTMLElement {
     );
     return root;
   }
-  root.append(levelCard(v));
+  root.append(levelCard(v, radarBlock(v)));
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));
