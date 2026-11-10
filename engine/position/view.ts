@@ -19,7 +19,7 @@ import { boundsContext, historyBounds, scheduleBounds, type Bounds } from './unk
 import { computeRunway, type Runway } from './runway';
 import { spiralSigns, type SpiralSigns } from './spiral';
 import { confidenceOf, isPreliminary } from './confidence';
-import { INDEPENDENCE_TEXTS, L5_NAME, independenceOfState, levelWithIndependence, type IndependenceResult } from './independence';
+import { INDEPENDENCE_TEXTS, L5_NAME, desiredScenarioOf, independenceOfState, levelWithIndependence, type DesiredScenario, type IndependenceResult } from './independence';
 import { essentialMarkupMissing } from './inputs';
 
 export const DIRECTION_NAMES: Readonly<Record<Direction, string>> = { N: 'Здесь и сейчас', V: 'Вектор', F: 'Безопасность будущего' };
@@ -109,6 +109,8 @@ export interface PositionView {
   independenceNote: string | null;
   independenceLine: string | null;
   essentialMissing: boolean;
+  /** Личный сценарий «при желаемых расходах (гипотеза)»; null — сумма не задана. Основные поля от него не зависят. */
+  desired: DesiredScenario | null;
 }
 
 const emptyRunway = (): Runway => ({ status: 'no_data', deficit: 0, resources: 0, months: null, scenarios: [] });
@@ -129,7 +131,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
       status: 'no_data', level: null, levelName: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
-      independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing,
+      independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
     };
   }
 
@@ -183,7 +185,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
     confidence, preliminary: isPreliminary(confidence),
-    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing,
+    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today),
   };
 }
 

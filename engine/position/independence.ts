@@ -179,10 +179,15 @@ export const notAssessedLine = (missing: readonly IndependenceMissing[]): string
 
 /** Независимость по состоянию бэкапа. */
 export function independenceOfState(state: AppState, today: IsoDate): IndependenceResult {
+  return computeIndependence(independenceInputOf(state, today).input);
+}
+
+/** Вход расчёта независимости и деньги «сразу» (для запаса); общий для факта и личного сценария (T21). */
+export function independenceInputOf(state: AppState, today: IsoDate): { input: IndependenceInput; netLiquid: number } {
   const horizon = horizonYears(state.settings.position?.age);
   const series = buildPositionSeries(state, today);
   if (!series.hasData) {
-    return computeIndependence({ capital: 0, need: 0, passive: [], deficit: null, horizon, limitsFired: [], spiral: null, missing: ['no_data'] });
+    return { input: { capital: 0, need: 0, passive: [], deficit: null, horizon, limitsFired: [], spiral: null, missing: ['no_data'] }, netLiquid: 0 };
   }
   const rep = computeIndicators(state, today, series);
   const inputs = rep.inputs!;
@@ -209,11 +214,52 @@ export function independenceOfState(state: AppState, today: IsoDate): Independen
   const states = rep.values.F2 === null ? withoutForecast(limitStates(inputs, rep.forecast!)) : limitStates(inputs, rep.forecast!);
   const limitsFired = LIMIT_IDS.filter((id) => states[id] === 'yes');
 
-  return computeIndependence({
-    capital, need: inputs.needLifestyle, passive,
-    deficit: runway.status === 'no_data' ? null : runway.deficit,
-    horizon, limitsFired, spiral: spiralSigns(series).spiral, missing,
-  });
+  return {
+    input: {
+      capital, need: inputs.needLifestyle, passive,
+      deficit: runway.status === 'no_data' ? null : runway.deficit,
+      horizon, limitsFired, spiral: spiralSigns(series).spiral, missing,
+    },
+    netLiquid: inputs.netLiquid,
+  };
+}
+
+// ───────────────────────── личный сценарий (T21) ─────────────────────────
+
+export const DESIRED_LABEL = 'гипотеза';
+
+export interface DesiredScenario {
+  /** Желаемый обычный месяц и фактический, тенге. */
+  desired: number;
+  current: number;
+  /** Независимость при желаемых расходах: те же капитал и поступления, другой расход. */
+  independence: IndependenceResult;
+  /** Запас денег в месяцах при желаемых расходах. */
+  reserveMonths: number;
+  /** Капитал для порога L5 при желаемых и при фактических расходах (центральные допущения). */
+  requiredCapital: { desired: number; current: number };
+  /** Гипотетический уровень: 5, если при желаемых расходах независимость подтвердилась, иначе null (основной уровень не меняется). */
+  hypotheticalLevel: 5 | null;
+}
+
+/**
+ * Личный сценарий «а если бы я тратил желаемую сумму» (T21, решение 8). Чистая надстройка: основной расчёт не читает
+ * `desiredMonthly` и не меняется; без суммы или без данных сценария нет.
+ */
+export function desiredScenarioOf(state: AppState, today: IsoDate): DesiredScenario | null {
+  const d = state.settings.position?.desiredMonthly;
+  if (!d || !(d > 0)) return null;
+  const { input, netLiquid } = independenceInputOf(state, today);
+  if (input.missing.includes('no_data')) return null;
+  const desired = d / 100;
+  const independence = computeIndependence({ ...input, need: desired });
+  const current = computeIndependence(input);
+  return {
+    desired, current: input.need, independence,
+    reserveMonths: netLiquid / desired,
+    requiredCapital: { desired: independence.requiredCapital, current: current.requiredCapital },
+    hypotheticalLevel: independence.status === 'confirmed' ? 5 : null,
+  };
 }
 
 export type FinalLevel = 1 | 2 | 3 | 4 | 5;

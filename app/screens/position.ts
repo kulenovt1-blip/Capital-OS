@@ -3,7 +3,7 @@
  * Экран ничего не считает: всё берётся из `positionViewOf` (engine/position/view.ts) и рисуется в порядке важности для телефона.
  * Слова без внутренних терминов; коды показателей (N1, V2…) на экране не показываются.
  */
-import { INDEPENDENCE_TEXTS, INDICATOR_LABELS, step, type Explanation, type PositionView } from '../../engine/index';
+import { DESIRED_LABEL, INDEPENDENCE_TEXTS, INDICATOR_LABELS, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { positionNow } from '../ctx';
@@ -161,6 +161,31 @@ function independenceBlock(v: PositionView): HTMLElement | null {
   );
 }
 
+function desiredBlock(v: PositionView): HTMLElement | null {
+  const d = v.desired;
+  if (!d) return null;
+  const i = d.independence;
+  const col = (title: string, tot: number, sub2: string) => h('div', { class: 'pos-col' }, h('div', { class: 'k' }, title), h('div', { class: 'v' }, pct(tot)), h('div', { class: 'muted' }, sub2));
+  const level = i.status === 'not_assessed'
+    ? 'при таких расходах независимость оценить нечем: данных не хватает'
+    : d.hypotheticalLevel === 5 ? 'при таких расходах независимость подтверждалась бы (L5 «Свобода выбора»)' : 'при таких расходах независимость не подтверждалась бы';
+  return h(
+    'div',
+    { class: 'stack' },
+    sub(`При желаемых расходах (${DESIRED_LABEL})`, info('desiredScenario')),
+    h('div', { class: 'card stack' },
+      h('p', { class: 'muted' }, `А если бы ты тратил ${money(d.desired)} в месяц, а не ${money(d.current)}. Капитал и доходы те же. Это гипотеза: основной уровень от неё не меняется.`),
+      h('div', { class: 'pos-cols' },
+        col('Сейчас', v.independence.total.central, `при ${money(d.current)} в месяц`),
+        col(`Гипотеза`, i.total.central, `при ${money(d.desired)} в месяц`)),
+      h('p', { class: 'muted' }, `Покрытие капиталом и независимым доходом ${INDEPENDENCE_TEXTS.centralLabel}; при консервативных — ${pct(i.total.conservative)}. Для независимости нужно 125 %.`),
+      i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Капитал для порога: около ${money(d.requiredCapital.desired)} (сейчас для ${money(d.current)} в месяц — около ${money(d.requiredCapital.current)}).`) : h('p', { class: 'muted' }, 'Порог достигается уже за счёт независимых поступлений.'),
+      h('p', { class: 'muted' }, `Запас денег при таких тратах — ${mo(d.reserveMonths)}`),
+      h('p', null, level.replace(/^./, (c) => c.toUpperCase()) + '.'),
+      h('small', { class: 'hint' }, INDEPENDENCE_TEXTS.scenarioNote)),
+  );
+}
+
 function confidenceBlock(v: PositionView): HTMLElement {
   return rows(
     row({
@@ -193,6 +218,8 @@ export function renderPosition(): HTMLElement {
   if (sp) root.append(sp);
   const ind = independenceBlock(v);
   if (ind) root.append(ind);
+  const ds = desiredBlock(v);
+  if (ds) root.append(ds);
   root.append(confidenceBlock(v), h('div', { class: 'foot-note' }, explainLink('position')));
   return root;
 }

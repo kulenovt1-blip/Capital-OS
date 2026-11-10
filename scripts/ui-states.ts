@@ -42,6 +42,7 @@ function configured(): AppState {
     { id: 'sal', title: 'Зарплата', dayOfMonth: 5, amount: tenge(180_000), kind: 'work' },
     { id: 'stip', title: 'Стипендия', dayOfMonth: 10, amount: tenge(38_000), kind: 'stable', end: '2027-06-30' },
   ];
+  st.settings.position = { desiredMonthly: tenge(300_000) };
   st.settings.savingsFlows = { mode: 'estimate', confirmed: true };
   for (const s of detectInstallments(st, TODAY).suggestions) {
     const r = remainingFromTerm(s, 12);
