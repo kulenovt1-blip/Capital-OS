@@ -30,8 +30,8 @@ describe('константы', () => {
     expect(L4_DIRECTION_MIN).toBe(60);
     expect(BORDER_MARGIN).toBe(1);
   });
-  it('названия уровней из спецификации 7.2', () => {
-    expect(LEVEL_NAMES).toEqual({ 1: 'Выживание', 2: 'Нестабильность', 3: 'Стабильность', 4: 'Безопасность' });
+  it('названия уровней — человеческие (D151; в спецификации 7.2 были «Выживание / Нестабильность / Стабильность / Безопасность»)', () => {
+    expect(LEVEL_NAMES).toEqual({ 1: 'Не хватает на жизнь', 2: 'От зарплаты до зарплаты', 3: 'Есть подушка', 4: 'Защищён от ударов' });
   });
   it('границы и полоса по одному G — те же, что использует диапазон (T06)', () => {
     expect([...RANGE_BOUNDS]).toEqual([...LEVEL_BOUNDS]);
@@ -201,7 +201,7 @@ describe('именные профили равны пробе (спец. 13.1, 1
 describe('доли уровней на пуле проб (спец. 7.2, колонка v4)', () => {
   const tally = (states: ReturnType<typeof build>[]) => {
     const c = [0, 0, 0, 0];
-    for (const s of states) c[probeLevel(s).result.level - 1]!++;
+    for (const s of states) { const r = probeLevel(s).result; c[(r.held?.byScore ?? r.level) - 1]!++; } // доли спец. 7.2 — по очкам; с фактами D151 — position-level-facts.test.ts
     return c;
   };
   it('случайные R1–R400: 5 / 60 / 214 / 121', () => {

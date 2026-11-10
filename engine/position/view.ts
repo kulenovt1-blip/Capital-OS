@@ -13,7 +13,8 @@ import {
 } from './indicators';
 import { directionScore, isDirectionSufficient } from './directions';
 import { limitStates, withoutForecast, type LimitId } from './limits';
-import { LEVEL_NAMES, levelFromIndicators, type BoundaryId } from './level';
+import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
+import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
 import { boundsContext, historyBounds, scheduleBounds, type Bounds } from './unknown';
 import { computeRunway, type Runway } from './runway';
@@ -90,8 +91,14 @@ export interface PositionView {
   /** Подписи уровней краёв диапазона (по полной функции уровня, D139). */
   rangeLevels: { low: string; high: string } | null;
   limitsFired: { id: LimitId; text: string }[];
-  /** До следующего уровня: сколько очков не хватает (null — нечего показывать). */
-  next: { level: number; name: string; shortfall: number } | null;
+  /** Что значит текущий уровень — одна фраза (D151). */
+  levelMeaning: string | null;
+  /** Все пять ступеней: название, смысл, текущая ли (D151). */
+  ladder: { level: number; name: string; meaning: string; current: boolean }[];
+  /** Уровень ниже, чем по очкам: что не выполнено (D151); null — не опущен. */
+  held: string | null;
+  /** До следующего уровня: что нужно — очки и/или факты; null — нечего показывать. */
+  next: { level: number; name: string; needs: string[] } | null;
   onBorder: BoundaryId[];
   l4Unconfirmed: boolean;
   /** Только при L4. */
@@ -131,7 +138,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const independence = independenceOfState(state, today, pre);
   if (!series.hasData || !report) {
     return {
-      status: 'no_data', level: null, levelName: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
+      status: 'no_data', level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
       independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
@@ -168,19 +175,19 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     const baseStates = limitStates(inputs, report.forecast!);
     const states = scheduleKnown ? baseStates : withoutForecast(baseStates);
     range = positionRange(report.values, actualBounds(boundsContext(series, inputs), series.histMonths, scheduleKnown), states);
-    if (range) rangeLevels = { low: LEVEL_NAMES[Math.min(range.levelLow, 4) as 1 | 2 | 3 | 4], high: LEVEL_NAMES[Math.min(range.levelHigh, 4) as 1 | 2 | 3 | 4] };
+    if (range) rangeLevels = { low: LEVEL_NAMES[gateLevel(Math.min(range.levelLow, 4) as Level, factsOf(inputs)).level], high: LEVEL_NAMES[gateLevel(Math.min(range.levelHigh, 4) as Level, factsOf(inputs)).level] };
   }
 
   const blockedShare = cap.gross > 0 ? Math.max(0, 1 - liquidOn(cap, addDays(today, 30)) / cap.gross) : 0;
   const level = fin.level;
-  const shortfall = base?.result.shortfallToNext ?? null;
-  const next = base && level !== null && level <= 3 && shortfall !== null ? { level: level + 1, name: LEVEL_NAMES[(level + 1) as 2 | 3 | 4], shortfall } : null;
+  const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs) : null;
+  const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
   const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
 
   return {
-    status: 'ok', level, levelName: fin.name, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : LEVEL_MEANINGS[level as Level], ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: base?.result.onBorder ?? [], l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
@@ -192,3 +199,35 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
 }
 
 export { INDEPENDENCE_TEXTS, L5_NAME };
+
+// ───────────────────────── ступени и следующий шаг (D151) ─────────────────────────
+
+export const L5_MEANING = 'Капитал и независимый доход покрывают расходы с запасом — можно не работать ради денег';
+const factsOf = (i: IndicatorInputs): LevelFacts => ({ reserveMonths: i.reserveEssentialMonths, savingRate: i.savingRate });
+const tg = (x: number): string => formatKZT(tenge(Math.round(Math.max(0, x) / 1000) * 1000));
+const reserveNeed = (months: number, i: IndicatorInputs): string =>
+  `запас от ${months} месяцев необходимых расходов: сейчас ${nf(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
+
+export function ladderOf(current: number | null): PositionView['ladder'] {
+  const four: PositionView['ladder'] = ([1, 2, 3, 4] as Level[]).map((l) => ({ level: l, name: LEVEL_NAMES[l], meaning: LEVEL_MEANINGS[l], current: current === l }));
+  return [...four, { level: 5, name: L5_NAME, meaning: L5_MEANING, current: current === 5 }];
+}
+
+function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i: IndicatorInputs): string {
+  const why = reason === 'deficit' ? 'за последние месяцы расходы больше доходов, а запас меньше 3 месяцев'
+    : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`
+    : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`;
+  return `По очкам это «${LEVEL_NAMES[byScore]}», но ${why}`;
+}
+
+function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs): PositionView['next'] {
+  const to = (level + 1) as Level;
+  const needs: string[] = [];
+  const pts = to === 2 ? 20 - g : to === 3 ? 40 - g : -l4Margin;
+  if (pts > 0) needs.push(`${Math.ceil(pts)} ${plural(Math.ceil(pts))} общей оценки`);
+  if (to === 2 && i.savingRate !== null && i.savingRate < 0 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push('чтобы доходы покрывали расходы (или запас от 3 месяцев)');
+  if (to === 3 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push(reserveNeed(L3_RESERVE_MONTHS, i));
+  if (to === 4 && i.reserveEssentialMonths < L4_RESERVE_MONTHS) needs.push(reserveNeed(L4_RESERVE_MONTHS, i));
+  return needs.length ? { level: to, name: LEVEL_NAMES[to], needs } : null;
+}
+const plural = (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? 'очко' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'очка' : 'очков');

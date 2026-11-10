@@ -3,12 +3,12 @@
  * Экран ничего не считает: всё берётся из `positionViewOf` (engine/position/view.ts) и рисуется в порядке важности для телефона.
  * Слова без внутренних терминов; коды показателей (N1, V2…) на экране не показываются.
  */
-import { DESIRED_LABEL, INDEPENDENCE_TEXTS, INDICATOR_LABELS, step, type Explanation, type PositionView } from '../../engine/index';
+import { DESIRED_LABEL, INDEPENDENCE_TEXTS, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { positionNow } from '../ctx';
 import { radar } from '../radar';
-import { fmt, info, nWord, row, rows, sub } from '../ui';
+import { fmt, info, row, rows, sub } from '../ui';
 import { sheetHref } from '../main';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
@@ -27,7 +27,7 @@ function months(m: number | null): string {
 function explanation(v: PositionView): Explanation {
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, положение оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
-  out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `L${v.level} «${v.levelName}»`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
+  out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
     out.push(step(`position.dir.${d.id}`, `${d.name}: ${d.score === null ? 'оценить нечем' : `${nf(d.score)} из 100`}${d.reliable ? '' : ' (данных мало)'}`));
     for (const i of d.indicators) out.push(step(`position.ind.${i.id}`, `${i.label}: ${i.score === null ? 'пока неизвестно' : `${nf(i.score)} из 100`}`, { detail: true }));
@@ -53,15 +53,28 @@ function levelCard(v: PositionView): HTMLElement {
     );
   }
   if (v.onBorder.length) lines.push(h('p', { class: 'muted' }, 'Ты на границе уровней: небольшое изменение сдвинет уровень.'));
-  if (v.l4Unconfirmed) lines.push(h('p', { class: 'muted' }, 'По оценке это «Безопасность», но данных пока мало, поэтому показан уровень ниже. Данные накопятся — уровень подтвердится.'));
+  if (v.l4Unconfirmed) lines.push(h('p', { class: 'muted' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показан уровень ниже. Данные накопятся — уровень подтвердится.`));
+  if (v.held) lines.push(h('p', { class: 'muted' }, `${v.held}.`));
   return h(
     'div',
     { class: 'card stack pos-level-card' },
-    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `L${v.level}`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
+    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
-    isL5 ? h('p', { class: 'muted' }, INDEPENDENCE_TEXTS.l5Label) : v.g !== null ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
+    v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
+    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
     ...lines,
+    ladderFold(v),
   );
+}
+
+/** Все пять ступеней: где ты и что значит каждая (D151). */
+function ladderFold(v: PositionView): HTMLElement {
+  return h('details', { class: 'fold pos-ladder', 'data-key': 'position:ladder' },
+    h('summary', null, 'Все уровни'),
+    h('ol', { class: 'pos-ladder-list' },
+      [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
+        h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
+        h('div', { class: 'muted' }, s.meaning)))));
 }
 
 function warningsBlock(v: PositionView): HTMLElement | null {
@@ -69,7 +82,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   return h(
     'div',
     { class: 'warnline stack' },
-    h('strong', null, 'Это «Безопасность», но есть уязвимость'),
+    h('strong', null, `Это «${LEVEL_NAMES[4]}», но есть уязвимость`),
     v.l4Warnings.map((w) => h('div', null, w.text)),
     h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где положение хрупкое.'),
   );
@@ -82,7 +95,7 @@ function directionsBlock(v: PositionView): HTMLElement {
     'div',
     { class: 'stack' },
     radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления положения. ${desc}`),
-    h('p', { class: 'one-line' }, 'Пунктир — уровень 60: каждое направление должно его достичь, чтобы получить «Безопасность».'),
+    h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
@@ -99,7 +112,7 @@ function weakBlock(v: PositionView): HTMLElement | null {
   if (v.weak) {
     items.push(row({ title: `Слабое место: ${v.weak.directionName}`, sub: v.weak.indicator ? `самое слабое в нём — «${v.weak.indicator.label}», ${Math.round(v.weak.indicator.score)} из 100` : undefined, chevron: false }));
   }
-  if (v.next) items.push(row({ title: `До «${v.next.name}» не хватает ${nWord(Math.ceil(v.next.shortfall), 'очко', 'очка', 'очков')}`, sub: 'очки — по шкале 0–100', chevron: false }));
+  if (v.next) items.push(row({ title: `Чтобы подняться на «${v.next.name}»`, sub: `нужно: ${v.next.needs.join('; ')}`, chevron: false }));
   for (const l of v.limitsFired) items.push(row({ title: 'Сдерживает уровень', sub: l.text, chevron: false, cls: 'warn' }));
   return items.length ? rows(...items) : null;
 }
@@ -158,10 +171,10 @@ function independenceBlock(v: PositionView): HTMLElement | null {
     { class: 'stack' },
     sub('Независимость', info('independence')),
     h('div', { class: 'card stack' },
-      h('p', { class: 'muted' }, 'Какую часть расходов покрывает капитал и независимый доход. Для независимости нужно 125 %.'),
+      h('p', { class: 'muted' }, 'Какую часть расходов покрывает капитал и независимый доход. Чтобы можно было не работать, нужно 125 %: расходы и ещё четверть на непредвиденное.'),
       h('div', { class: 'pos-cols' }, col(INDEPENDENCE_TEXTS.centralLabel, i.c.central, i.total.central), col(INDEPENDENCE_TEXTS.conservativeLabel, i.c.conservative, i.total.conservative)),
       i.p > 0 ? h('p', { class: 'muted' }, `Независимые поступления (пенсия, аренда и т. п.) покрывают ${pct(i.p)} расходов`) : null,
-      i.status === 'not_confirmed' && i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Для порога при центральных допущениях нужен капитал около ${money(i.requiredCapital)}`) : null,
+      i.status === 'not_confirmed' && i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Для этого (обычный прогноз) нужен капитал около ${money(i.requiredCapital)}`) : null,
       v.independenceNote ? h('p', { class: 'muted' }, v.independenceNote.replace(/\b([NVF][1-4])\b/g, (c) => INDICATOR_LABELS[c as keyof typeof INDICATOR_LABELS]?.toLowerCase() ?? c)) : null,
       h('small', { class: 'hint' }, `${INDEPENDENCE_TEXTS.scenarioNote}. ${INDEPENDENCE_TEXTS.assumptions.replace(/^./, (c) => c.toUpperCase())}`)),
   );
@@ -174,7 +187,7 @@ function desiredBlock(v: PositionView): HTMLElement | null {
   const col = (title: string, tot: number, sub2: string) => h('div', { class: 'pos-col' }, h('div', { class: 'k' }, title), h('div', { class: 'v' }, pct(tot)), h('div', { class: 'muted' }, sub2));
   const level = i.status === 'not_assessed'
     ? 'при таких расходах независимость оценить нечем: данных не хватает'
-    : d.hypotheticalLevel === 5 ? 'при таких расходах независимость подтверждалась бы (L5 «Свобода выбора»)' : 'при таких расходах независимость не подтверждалась бы';
+    : d.hypotheticalLevel === 5 ? `при таких расходах получилось бы «${L5_NAME}»` : `при таких расходах «${L5_NAME}» не получилось бы`;
   return h(
     'div',
     { class: 'stack' },
@@ -184,8 +197,8 @@ function desiredBlock(v: PositionView): HTMLElement | null {
       h('div', { class: 'pos-cols' },
         col('Сейчас', v.independence.total.central, `при ${money(d.current)} в месяц`),
         col(`Гипотеза`, i.total.central, `при ${money(d.desired)} в месяц`)),
-      h('p', { class: 'muted' }, `Покрытие капиталом и независимым доходом ${INDEPENDENCE_TEXTS.centralLabel}; при консервативных — ${pct(i.total.conservative)}. Для независимости нужно 125 %.`),
-      i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Капитал для порога: около ${money(d.requiredCapital.desired)} (сейчас для ${money(d.current)} в месяц — около ${money(d.requiredCapital.current)}).`) : h('p', { class: 'muted' }, 'Порог достигается уже за счёт независимых поступлений.'),
+      h('p', { class: 'muted' }, `Цифры — по обычному прогнозу; по осторожному — ${pct(i.total.conservative)}. Нужно 125 %.`),
+      i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Нужный капитал: около ${money(d.requiredCapital.desired)} (сейчас для ${money(d.current)} в месяц — около ${money(d.requiredCapital.current)}).`) : h('p', { class: 'muted' }, 'Порог достигается уже за счёт независимых поступлений.'),
       h('p', { class: 'muted' }, `Запас денег при таких тратах — ${mo(d.reserveMonths)}`),
       h('p', null, level.replace(/^./, (c) => c.toUpperCase()) + '.'),
       h('small', { class: 'hint' }, INDEPENDENCE_TEXTS.scenarioNote)),
@@ -234,7 +247,7 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Положение: L${v.level} · ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  return rows(row({ title: `Положение: ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
 }
 
 export { sheetHref };

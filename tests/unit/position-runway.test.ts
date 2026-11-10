@@ -172,7 +172,7 @@ const analyse = (states: ReturnType<typeof pools.random>) => states.map((st) => 
   const series = buildPositionSeries(st, TODAY);
   const rep = computeIndicators(st, TODAY, series, OPTS);
   const lv = levelFromIndicators(rep);
-  return { runway: computeRunway(series, rep.inputs?.needEssential ?? 0), level: lv ? lv.result.level : null };
+  return { runway: computeRunway(series, rep.inputs?.needEssential ?? 0), level: lv ? (lv.result.held?.byScore ?? lv.result.level) : null }; // уровень из очков; факты D151 — position-level-facts.test.ts
 });
 const memo: Record<string, ReturnType<typeof analyse>> = {};
 const get = (k: keyof typeof pools) => (memo[k] ??= analyse(pools[k]()));

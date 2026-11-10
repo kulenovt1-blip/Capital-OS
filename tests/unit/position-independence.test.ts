@@ -306,7 +306,7 @@ describe('FI1–FI8 (спец. 10.9): C, P и устойчивость на со
       const r = levelOf('FI3');
       expect(r.basis).toBe('independence');
       expect(r.note).toBe(INDEPENDENCE_TEXTS.l5Note);
-      expect(r.name).toBe('Свобода выбора');
+      expect(r.name).toBe('Могу не работать');
     });
     it('FI4 остаётся по G: основание — оценка, причина «не хватает капитала»', () => {
       const r = levelOf('FI4');
@@ -451,12 +451,13 @@ describe('формулировки: нет слов «безопасно», «г
   it('ни одна фиксированная строка не содержит запрещённых слов', () => {
     for (const s of all()) expect(s, s).not.toMatch(FORBIDDEN);
   });
-  it('обязательные формулировки: допущения центрального набора, запас 25 %, пометка при L5', () => {
-    expect(INDEPENDENCE_TEXTS.assumptions).toContain('20 % в год');
-    expect(INDEPENDENCE_TEXTS.assumptions).toContain('5–6 %');
-    expect(INDEPENDENCE_TEXTS.l5Label).toBe('независимость при центральных допущениях с запасом 25 %');
-    expect(INDEPENDENCE_TEXTS.l5Note).toContain('N2, V4, F2, F4');
-    expect(INDEPENDENCE_TEXTS.scenarioNote.toLowerCase()).toContain('сценарная оценка');
+  it('обязательные формулировки простыми словами (D151): два прогноза, четверть на непредвиденное, пометка при L5, «не гарантия»', () => {
+    expect(INDEPENDENCE_TEXTS.assumptions).toContain('Обычный прогноз');
+    expect(INDEPENDENCE_TEXTS.assumptions).toContain('Осторожный');
+    expect(INDEPENDENCE_TEXTS.l5Label).toContain('четверть');
+    expect(INDEPENDENCE_TEXTS.l5Note).toContain('живёшь на капитал');
+    expect(INDEPENDENCE_TEXTS.scenarioNote.toLowerCase()).toContain('не гарантия');
+    for (const t of Object.values(INDEPENDENCE_TEXTS)) expect(t, t).not.toMatch(/допущени|паритет|консерватив|централ|синтетич|N\d|V\d|F\d/);
   });
   it('строка «не оценена» называет, чего не хватает', () => {
     expect(notAssessedLine(['history'])).toMatch(/^независимость не оценена: не хватает /);

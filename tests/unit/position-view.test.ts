@@ -124,7 +124,7 @@ describe('уровень совпадает с движком', () => {
       const v = view(applyProbeOpts(np.state, np.opts));
       if (v.next) {
         expect(v.next.level).toBe(v.level! + 1);
-        expect(v.next.shortfall).toBeGreaterThan(0);
+        expect(v.next.needs.length).toBeGreaterThan(0);
       }
       if (v.level !== null && v.level >= 4) expect(v.next).toBeNull();
     }

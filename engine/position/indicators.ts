@@ -204,6 +204,8 @@ export interface IndicatorInputs {
   reserveLifestyleMonths: number;
   /** Минимум доступных денег по неблагоприятному сценарию за 12 месяцев минус долг людям. */
   troughNet: number;
+  /** Норма сбережений как есть (медиана 3 последних месяцев; < 0 — тратится больше, чем приходит); null — истории меньше 3 месяцев. */
+  savingRate: number | null;
 }
 /** Источник дохода для ограничителей и интервалов (тенге). */
 export interface ForecastSource { status: IncomeStatus; monthly: number; volume: number; endsWithin6m: boolean }
@@ -250,7 +252,8 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const values: Indicators = {};
   // I. Здесь и сейчас
   values.N1 = n1Score(netLiquid, needEssential, needLifestyle);
-  values.N2 = H >= MIN_HISTORY_N2 ? normalize(medianOf(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))), SCALES.saving) : null;
+  const savingRate = H >= MIN_HISTORY_N2 ? medianOf(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))) : null;
+  values.N2 = savingRate === null ? null : normalize(savingRate, SCALES.saving);
   values.N3 = debtLoadScore(obligationsMonthly, debtTotal, incomeMonthly);
   values.N4 = capitalScore(net, needLifestyle);
   // II. Вектор
@@ -289,6 +292,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
       reserveEssentialMonths: needEssential > 0 ? netLiquid / needEssential : 0,
       reserveLifestyleMonths: needLifestyle > 0 ? netLiquid / needLifestyle : 0,
       troughNet,
+      savingRate,
     },
     forecast: { hasGap: base.gaps.length > 0, sources: facts },
   };

@@ -25,6 +25,9 @@ import { addDays } from '../../engine/date';
 import type { AppState } from '../../engine/state';
 import { applyProbeOpts, build, namedProfiles, randomSpec, randomSpecDyn, stressCase, TODAY } from '../support/position-profiles';
 
+/** Сверка с пробой — по уровню из очков: условия-факты D151 появились позже и здесь не проверяются (см. position-level-facts.test.ts). */
+const byScore = (l: PositionLevel): PositionLevel => ({ ...l, result: { ...l.result, level: l.result.held?.byScore ?? l.result.level } });
+
 interface Row {
   name: string;
   state: AppState;
@@ -44,7 +47,7 @@ const pool: Row[] = [];
     const series = buildPositionSeries(state, TODAY);
     const report = computeIndicators(state, TODAY, series);
     const probe = computeIndicators(state, TODAY, series, { v1CapMonths: Infinity });
-    pool.push({ name, state, report, probe, level: levelFromIndicators(report)!, probeLevel: levelFromIndicators(probe)! });
+    pool.push({ name, state, report, probe, level: byScore(levelFromIndicators(report)!), probeLevel: byScore(levelFromIndicators(probe)!) });
   }
 }
 /** Первые 11 строк пула — именные профили; остальные 1120 — выборки проб. */
@@ -107,8 +110,8 @@ describe('контроль V1 (D125, D = 24)', () => {
     let n = 0;
     for (const r of pool) {
       const { V1: _drop, ...rest } = r.report.values;
-      const without = levelFromIndicators({ ...r.report, values: rest });
-      if (without!.result.level !== r.level.result.level) n++;
+      const without = byScore(levelFromIndicators({ ...r.report, values: rest })!);
+      if (without.result.level !== r.level.result.level) n++;
     }
     expect(n / pool.length).toBeLessThanOrEqual(0.08);
     expect(n / pool.length).toBeGreaterThan(0.05);
