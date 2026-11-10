@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { baseForecast, buildOverview, personStage, type PersonStage, unconfirmedCategories, goalVerdicts, runway, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
+import { baseForecast, buildOverview, personStage, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -25,7 +25,7 @@ export const ov = (): Overview => compute().o;
 // прогноз «как сейчас», вердикты целей и запас прочности — тяжелее Обзора, считаются по запросу (D96)
 let fcState: AppState | null = null;
 let fcKey = '';
-let fc: { sim?: SimResult; verdicts?: Map<string, GoalVerdict>; runway?: ReturnType<typeof runway> | undefined; runwayDone?: boolean; stage?: PersonStage | null; stageDone?: boolean } = {};
+let fc: { sim?: SimResult; verdicts?: Map<string, GoalVerdict>; noIncome?: ReturnType<typeof monthsWithoutIncome> | undefined; noIncomeDone?: boolean; stage?: PersonStage | null; stageDone?: boolean } = {};
 function fcMemo() {
   const st = getState();
   const k = today();
@@ -54,13 +54,13 @@ export function stageNow(): PersonStage | null {
   }
   return m.stage ?? null;
 }
-export function runwayNow(): ReturnType<typeof runway> {
+export function monthsWithoutIncomeNow(): ReturnType<typeof monthsWithoutIncome> {
   const m = fcMemo();
-  if (!m.runwayDone) {
-    m.runway = runway(getState(), today());
-    m.runwayDone = true;
+  if (!m.noIncomeDone) {
+    m.noIncome = monthsWithoutIncome(getState(), today());
+    m.noIncomeDone = true;
   }
-  return m.runway ?? null;
+  return m.noIncome ?? null;
 }
 export const steps = (): SetupStep[] => compute().steps;
 export const progress = () => setupProgress(steps());

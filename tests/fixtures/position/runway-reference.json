@@ -1,0 +1,13 @@
+{
+  "_note": "Эталон T08: переписан из project docs (position-spec-v4-b.md, раздел 9A.2 и 9A.3), снят НЕ с кода движка. D34 — пример панели в 9A.2 (значения округлены: допуск 0,5 тыс. по дефициту, 0,05 млн по ресурсам, 0,5 мес. по срокам). Доли — 9A.1/9A.3: выборки R1–R400, D1–D400, стресс 0–319 + 11 именных = 1131 профиль; показатели без правки V1.",
+  "d34": {
+    "deficitThousand": 285,
+    "resourcesMillion": 27.4,
+    "months": 96,
+    "scenarios": { "cut10": 125, "cut20": 180, "essentialOnly": null, "incomeMinus20": 76, "inflation10": 59 }
+  },
+  "deficitShares": { "random": { "size": 400, "deficit": 70 }, "dynamic": { "size": 400, "deficit": 96 }, "stress": { "size": 320, "deficit": 101 } },
+  "deficitTotalWithNamed": 268,
+  "deficitLevels": [61, 139, 68, 0],
+  "monthsBeyondHorizon": 600
+}

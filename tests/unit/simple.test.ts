@@ -14,7 +14,7 @@ import { makeInstallment } from '../../engine/obligations';
 import { mergeAccountSettings, accountKindOf, accountKindGuess } from '../../engine/settings';
 import { tenge, type Money } from '../../engine/money';
 import {
-  arrivedIncomes, autoLabelCategories, basketClass, confirmGuessedCategories, oneoffOf, unconfirmedCategories, cushionStatus, detectNewIncomes, lockedByDate, goalVerdicts, reorderGoals, runway,
+  arrivedIncomes, autoLabelCategories, basketClass, confirmGuessedCategories, oneoffOf, unconfirmedCategories, cushionStatus, detectNewIncomes, lockedByDate, goalVerdicts, reorderGoals, monthsWithoutIncome,
   setAsideReminders, settleSetAsides, splitIncome,
 } from '../../engine/simple';
 import { fixtureBytes } from '../support/fixtures';
@@ -383,7 +383,7 @@ describe('вердикты целей и запас прочности', () => {
   });
 
   it('без доходов деньги кончаются — запас прочности в месяцах', () => {
-    const r = runway(state(), TODAY);
+    const r = monthsWithoutIncome(state(), TODAY);
     expect(r).not.toBeNull();
     expect(r!.months).toBeGreaterThanOrEqual(0);
     expect(r!.until > TODAY).toBe(true);

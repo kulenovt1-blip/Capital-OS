@@ -336,7 +336,7 @@ export function capitalAt(sim: SimResult, k: number): Money | null {
  * Запас прочности: если доходы пропадут с завтрашнего дня — сколько месяцев хватит денег (до первого кассового разрыва).
  * null — хватит дольше горизонта.
  */
-export function runway(state: AppState, today: IsoDate): { months: number; until: IsoDate } | null {
+export function monthsWithoutIncome(state: AppState, today: IsoDate): { months: number; until: IsoDate } | null {
   const { input } = buildSimInput(state, today);
   const sim = simulate({ ...input, incomes: [], events: input.events.filter((e) => e.kind !== 'income_start' && e.kind !== 'income_change'), horizonMonths: Math.max(60, input.horizonMonths) });
   const g = sim.gaps[0];
