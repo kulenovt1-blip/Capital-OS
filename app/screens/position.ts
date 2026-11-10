@@ -49,7 +49,7 @@ function levelCard(v: PositionView): HTMLElement {
   if (v.range && v.rangeLevels) {
     lines.push(
       h('p', { class: 'muted' },
-        v.range.levelsCovered === 1 && v.rangeLevels.low === v.rangeLevels.high
+        v.rangeLevels.low === v.rangeLevels.high
           ? `Часть данных неизвестна, но на уровень это не влияет: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}.`
           : `Часть данных неизвестна: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}, то есть от «${v.rangeLevels.low}» до «${v.rangeLevels.high}».${v.range.showPoint ? ` Ориентир — ${Math.round(v.range.point)}.` : ' Точнее сказать нельзя.'}`),
     );
@@ -63,7 +63,7 @@ function levelCard(v: PositionView): HTMLElement {
     h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
-    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
+    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
     ...lines,
     ladderFold(v),
   );
@@ -145,7 +145,8 @@ function moneyBlock(v: PositionView): HTMLElement {
 function runwayBlock(v: PositionView): HTMLElement | null {
   const r = v.runway;
   if (r.status === 'no_data') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), h('p', { class: 'muted' }, 'Нужно хотя бы три полных месяца истории, чтобы это посчитать.'));
-  if (r.status === 'no_deficit') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), rows(row({ title: 'Ты не тратишь больше, чем получаешь', sub: 'денег хватает, пока так продолжается', chevron: false })));
+  // С7 (D164): под этим заголовком — ответ на сам вопрос: на сколько месяцев хватит денег без дохода (запас из условий ступени)
+  if (r.status === 'no_deficit') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), rows(row({ title: `Денег хватит на ${months(v.money.reserveEssentialMonths)} без дохода`, sub: 'на необходимых расходах; сейчас ты не тратишь больше, чем получаешь', chevron: false })));
   return h(
     'div',
     { class: 'stack' },

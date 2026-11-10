@@ -246,7 +246,8 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
 
   const inc = toT(series.income);
   const free = toT(series.free);
-  const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true ? T(i.amount) : 0), 0);
+  // только действующие сегодня строки: закончившийся или ещё не начавшийся доход в нагрузку по долгам не входит (С5, D162)
+  const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true && (!i.start || i.start <= today) && (!i.end || i.end >= today) ? T(i.amount) : 0), 0);
   const incomeMonthly = mean(inc.slice(-6)) + manualIncomeMonthly;
 
   const values: Indicators = {};

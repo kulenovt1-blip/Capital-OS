@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { emptyState } from '../../engine/state';
-import { INDEPENDENCE_TEXTS, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
+import { INDEPENDENCE_TEXTS, borderOf, heldText, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
 import { levelFromIndicators } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
 import { applyProbeOpts, build, randomSpec, SPECS2, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
@@ -218,4 +218,16 @@ describe('С3 (D160): «чтобы подняться» при сработав�
     }
     expect(hit).toBeGreaterThan(0);
   }, 60_000);
+});
+
+describe('С6 (D163): «на границе» и округление запаса у порогов 3 и 6 месяцев', () => {
+  const inp = (m: number) => ({ needEssential: 100, reserveEssentialMonths: m }) as never;
+  it('запас 2,99 / 3,00 / 5,99: пометка «на границе» есть, текст не пишет «меньше 3 (3,0)»', () => {
+    expect(borderOf([], inp(2.99))).toEqual(['L2/L3']);
+    expect(borderOf([], inp(3))).toEqual(['L2/L3']);
+    expect(borderOf([], inp(5.99))).toEqual(['L3/L4']);
+    expect(borderOf([], inp(4.5))).toEqual([]);
+    expect(heldText('reserve3', 3, inp(2.99))).toContain('(2,9)');
+    expect(heldText('reserve6', 4, inp(5.99))).toContain('(5,9)');
+  });
 });

@@ -48,6 +48,10 @@ export const L4_WARN_BLOCKED_SHARE = 0.5;
 export interface L4Warning { id: 'reserve' | 'trough' | 'blocked'; text: string }
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
+/** Месяцы запаса — округляя вниз: «2,99» не должно превращаться в «3,0» рядом со словами «меньше 3» (С6, D163). */
+const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
+/** Запас до порога месяцев, меньше которого уровень считается «на границе» по фактам (С6, D163). */
+export const RESERVE_BORDER_MARGIN = 0.25;
 
 /**
  * Три условия (D128, утверждено 05.11): запас по необходимым расходам < 6 мес.; минимум запаса по неблагоприятному прогнозу < 3 необходимых месяцев;
@@ -193,7 +197,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   return {
     status: 'ok', unrated: [], reconcileOk: !(overview.reconcile?.accounts.some((a) => a.status === 'mismatch') ?? false), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
-    next, onBorder: base?.result.onBorder ?? [], l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
+    next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
@@ -210,22 +214,32 @@ export const L5_MEANING = 'Капитал и независимый доход �
 const factsOf = (i: IndicatorInputs): LevelFacts => ({ reserveMonths: i.reserveEssentialMonths, savingRate: i.savingRate });
 const tg = (x: number): string => formatKZT(tenge(Math.round(Math.max(0, x) / 1000) * 1000));
 const reserveNeed = (months: number, i: IndicatorInputs): string =>
-  `запас от ${months} месяцев необходимых расходов: сейчас ${nf(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
+  `запас от ${months} месяцев необходимых расходов: сейчас ${nfDown(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
 
 export function ladderOf(current: number | null): PositionView['ladder'] {
   const four: PositionView['ladder'] = ([1, 2, 3, 4] as Level[]).map((l) => ({ level: l, name: LEVEL_NAMES[l], meaning: LEVEL_MEANINGS[l], current: current === l }));
   return [...four, { level: 5, name: L5_NAME, meaning: L5_MEANING, current: current === 5 }];
 }
 
-function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i: IndicatorInputs): string {
+export function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i: IndicatorInputs): string {
   const why = reason === 'deficit' ? 'за последние месяцы расходы больше доходов, а запас меньше 3 месяцев'
-    : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`
-    : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`;
+    : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nfDown(i.reserveEssentialMonths)})`
+    : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nfDown(i.reserveEssentialMonths)})`;
   return `По очкам это «${LEVEL_NAMES[byScore]}», но ${why}`;
 }
 
+/** «На границе» и по очкам, и по запасу: до порога 3 или 6 месяцев меньше RESERVE_BORDER_MARGIN (С6, D163). */
+export function borderOf(byScore: BoundaryId[], i: IndicatorInputs): BoundaryId[] {
+  const out = new Set<BoundaryId>(byScore);
+  if (i.needEssential > 0) {
+    if (Math.abs(i.reserveEssentialMonths - L3_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L2/L3');
+    if (Math.abs(i.reserveEssentialMonths - L4_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L3/L4');
+  }
+  return [...out];
+}
+
 function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs): string {
-  const why = reason === 'reserve' ? `запас ${nf(i.reserveEssentialMonths)} мес. необходимых расходов — это не «${LEVEL_NAMES[1]}»`
+  const why = reason === 'reserve' ? `запас ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов — это не «${LEVEL_NAMES[1]}»`
     : reason === 'income' ? 'за последние месяцы расходы не больше доходов'
     : 'данных мало, чтобы подтвердить, что расходы больше доходов';
   return `По очкам это «${LEVEL_NAMES[1]}», но ${why}`;
@@ -233,7 +247,7 @@ function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs
 
 /** Фраза-смысл ступени: при запасе ≥ 3 мес. на ступенях 1–2 общий текст был бы неправдой — называется причина низкой оценки (К3, D156). */
 function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): string {
-  if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nf(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
+  if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
   return LEVEL_MEANINGS[level];
 }
 
