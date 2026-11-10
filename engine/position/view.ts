@@ -183,13 +183,13 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const blockedShare = cap.gross > 0 ? Math.max(0, 1 - liquidOn(cap, addDays(today, 30)) / cap.gross) : 0;
   const level = fin.level;
   const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs) : null;
-  const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : null;
+  const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : base?.result.lifted ? liftedText(base.result.lifted.reason, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
   const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
 
   return {
-    status: 'ok', unrated: [], level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : LEVEL_MEANINGS[level as Level], ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', unrated: [], level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: base?.result.onBorder ?? [], l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
@@ -220,6 +220,19 @@ function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i
     : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`
     : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`;
   return `По очкам это «${LEVEL_NAMES[byScore]}», но ${why}`;
+}
+
+function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs): string {
+  const why = reason === 'reserve' ? `запас ${nf(i.reserveEssentialMonths)} мес. необходимых расходов — это не «${LEVEL_NAMES[1]}»`
+    : reason === 'income' ? 'за последние месяцы расходы не больше доходов'
+    : 'данных мало, чтобы подтвердить, что расходы больше доходов';
+  return `По очкам это «${LEVEL_NAMES[1]}», но ${why}`;
+}
+
+/** Фраза-смысл ступени: при запасе ≥ 3 мес. на ступенях 1–2 общий текст был бы неправдой — называется причина низкой оценки (К3, D156). */
+function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): string {
+  if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nf(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
+  return LEVEL_MEANINGS[level];
 }
 
 function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs): PositionView['next'] {

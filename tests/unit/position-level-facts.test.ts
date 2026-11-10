@@ -79,10 +79,20 @@ describe('пул проб с фактами (1120 профилей + именн�
       if (r.held) expect(r.held.byScore).toBeGreaterThan(r.level);
     }
   });
+  it('К3 (D156): ступень 1 — только при дефиците и запасе < 3 мес.; иначе поднята до 2 с пометкой', () => {
+    for (const { rep, lv } of rows) {
+      const i = rep.inputs!, r = lv!.result;
+      const deficitNoReserve = i.savingRate !== null && i.savingRate < 0 && i.reserveEssentialMonths < 3;
+      if (r.level === 1) expect(deficitNoReserve).toBe(true);
+      if (r.lifted) { expect(r.level).toBe(2); expect(deficitNoReserve).toBe(false); }
+    }
+    expect(rows.filter(({ lv }) => lv!.result.lifted).length).toBe(1);
+  });
   it('снимок долей после D151 (регрессия)', () => {
     const c = [0, 0, 0, 0], by = [0, 0, 0, 0];
-    for (const { lv } of rows) { c[lv!.result.level - 1]!++; by[(lv!.result.held?.byScore ?? lv!.result.level) - 1]!++; }
+    for (const { lv } of rows) { c[lv!.result.level - 1]!++; by[(lv!.result.held?.byScore ?? lv!.result.lifted?.byScore ?? lv!.result.level) - 1]!++; }
     // 1131 профиль: по очкам 61 / 184 / 558 / 328; с фактами 144 / 110 / 550 / 327 — 83 профиля с дефицитом без запаса уходят в «Не хватает на жизнь»
-    expect({ withFacts: c, byScore: by }).toEqual({ withFacts: [144, 110, 550, 327], byScore: [61, 184, 558, 328] });
+    expect({ withFacts: c, byScore: by }).toEqual({ withFacts: [143, 111, 550, 327], byScore: [61, 184, 558, 328] });
+    // К3 (D156): «Не хватает на жизнь» — только дефицит и запас < 3 мес.; один профиль с запасом 8,85 мес. (D382) поднят с 1 до 2: 144 / 110 → 143 / 111
   });
 });

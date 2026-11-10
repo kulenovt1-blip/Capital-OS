@@ -201,7 +201,7 @@ describe('именные профили равны пробе (спец. 13.1, 1
 describe('доли уровней на пуле проб (спец. 7.2, колонка v4)', () => {
   const tally = (states: ReturnType<typeof build>[]) => {
     const c = [0, 0, 0, 0];
-    for (const s of states) { const r = probeLevel(s).result; c[(r.held?.byScore ?? r.level) - 1]!++; } // доли спец. 7.2 — по очкам; с фактами D151 — position-level-facts.test.ts
+    for (const s of states) { const r = probeLevel(s).result; c[(r.held?.byScore ?? r.lifted?.byScore ?? r.level) - 1]!++; } // доли спец. 7.2 — по очкам; с фактами D151 — position-level-facts.test.ts
     return c;
   };
   it('случайные R1–R400: 5 / 60 / 214 / 121', () => {
