@@ -293,6 +293,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
+    .filter((f) => !(f.id === 'negative_months' && (st.settings.sanityAnswered ?? []).includes(`negative_months:${f.months?.[0]}`)))
     .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income') && !asked.shown.has(f))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
@@ -302,7 +303,13 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     const action = (f: SanityFinding): Act[] => {
       if (f.id === 'negative_months' && f.months?.[0]) {
         const d = `${f.months[0]}-01`;
-        return [{ label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) }];
+        // аудит UX: у плашки был один выход — «урезать траты»; человек, который знает про минус и так и задумал, не мог её убрать.
+        // Ответ привязан к первому «минусовому» месяцу: сдвинулся месяц — плашка вернётся.
+        const key = `negative_months:${f.months[0]}`;
+        return [
+          { label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) },
+          { label: 'Знаю, скрыть', run: () => void act((s) => ({ ...s, settings: { ...s.settings, sanityAnswered: [...new Set([...(s.settings.sanityAnswered ?? []), key])] } }), 'Скрыто. Вернётся, если минус сдвинется на другой месяц') },
+        ];
       }
       if (f.id === 'cushion_ignores_money') {
         return [
