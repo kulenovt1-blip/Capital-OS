@@ -57,6 +57,7 @@ function freeChain(o: Overview): HTMLElement {
       sp.uncheckedMonthly > 0 ? row({ title: 'Из них не проверено', sub: 'категории, которые приложение не узнало, — по среднему за месяц', value: fmt(mulDivDay(sp.uncheckedMonthly)), href: '#/baskets' }) : null,
       row({ title: 'В копилках', sub: 'не входят — их не тратишь', value: fmt(sp.inSavings) }),
     ),
+    rareLine(),
   );
 }
 
@@ -108,21 +109,9 @@ function rareLine(): HTMLElement | null {
 function heroBlock(o: Overview): HTMLElement {
   const sp = o.spend;
   const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
-  const enough = sp.usualPerDay > 0 ? (sp.perDay >= sp.usualPerDay ? ' — хватает' : ' — меньше обычного') : '';
-  const subline =
-    sp.canSpend < 0
-      ? h('span', null, `до дохода не хватает ${fmt((-sp.canSpend) as never)}`)
-      : h(
-          'span',
-          null,
-          // «в день» — на все траты сразу, не только на еду (D105)
-          `≈ ${fmt(sp.perDay)} в день на всё`,
-          sp.usualPerDay > 0 ? ` · обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '',
-          // часть «обычно уходит» — по категориям, которые приложение не узнало (D104)
-          sp.uncheckedMonthly > 0 ? h('span', null, ' · ', h('a', { href: '#/baskets', style: 'color:inherit' }, `не проверено ${fmt(mulDivDay(sp.uncheckedMonthly))} в день ›`)) : null,
-          rareLine(),
-        );
-  return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+  // этап 2: под числом одна строка; «обычно уходит», редкие траты и непроверенное — в «Как посчитано»
+  const subline = sp.canSpend < 0 ? h('span', null, `до дохода не хватает ${fmtShort((-sp.canSpend) as never)}`) : h('span', null, `≈ ${fmtShort(sp.perDay)} в день на всё`);
+  return hero(label, fmtShort(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
 /** Истории меньше 3 полных месяцев — числа приблизительные (шаг 4 аудита, D105). */
@@ -159,15 +148,6 @@ function cushionRow(o: Overview): HTMLElement | null {
       href: '#/goals',
     }),
   );
-}
-
-/** Запас в месяцах — одной строкой: на сколько хватит денег без дохода и на чём это основано (D123, D143). Арифметика — в листе `reserve-info`. */
-function reserveRow(): HTMLElement | null {
-  const s = reserveCtx();
-  if (!s) return null;
-  if (ov().capital.unrated.length) return null; // счёт не в тенге без курса: запас был бы неверным (D155)
-  const cover = s.coverMonths.toString().replace('.', ',');
-  return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ необходимые траты и платежи', href: sheetHref('reserve-info') }));
 }
 
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
@@ -224,6 +204,19 @@ function firstTimeHint(): HTMLElement | null {
   );
 }
 
+/** Всё, что ждёт ответа, — одной сворачиваемой строкой «Нужно решение · N» (этап 2): вопросы не вклиниваются в экран. */
+function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { done: number; total: number }): HTMLElement | null {
+  const income = newIncomeLine();
+  const n = items.length + (income ? 1 : 0);
+  if (!n) return null;
+  return h(
+    'details',
+    { class: 'fold', 'data-key': 'overview:decisions' },
+    h('summary', null, `Нужно решение · ${n}`),
+    h('div', { class: 'stack' }, income, attention(items, progressNow)),
+  );
+}
+
 export function renderOverview(): HTMLElement {
   const o = ov();
   if (!o.hasData) return emptyState();
@@ -273,6 +266,8 @@ export function renderOverview(): HTMLElement {
       ),
     ),
   );
+  // этап 2: пять блоков — главное число, счета, ступень с запасом, платежи, «Нужно решение»; остальное — в «Подробнее» и в «Как посчитано»
+  const decisions = decisionRow(items, p.done < p.total ? p : undefined);
   return h(
     'div',
     { class: 'screen' },
@@ -282,12 +277,10 @@ export function renderOverview(): HTMLElement {
     h(
       'div',
       { class: 'cells' },
-      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmt(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
-      h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmt(sp.inSavings))),
+      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
+      h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
-    newIncomeLine(),
     positionRow(),
-    reserveRow(),
     cushionRow(o),
     o.upcoming30.length
       ? h(
@@ -296,14 +289,14 @@ export function renderOverview(): HTMLElement {
           h(
             'summary',
             { class: 'row' },
-            h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, `${nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей')} до ${fmtDay(till)}`)),
-            h('div', { class: 'val' }, fmt(total30 as never)),
+            h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей'))),
+            h('div', { class: 'val' }, fmtShort(total30 as never)),
             h('span', { class: 'chev', 'aria-hidden': 'true' }, '›'),
           ),
           o.upcoming30.map((u) => row({ title: `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, sub: fmtDay(u.date), value: fmt(u.amount), cls: 'sub-row' })),
         )
       : null,
-    items.length ? attention(items, p.done < p.total ? p : undefined) : null,
+    decisions,
     details,
   );
 }

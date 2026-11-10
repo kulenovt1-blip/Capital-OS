@@ -27,7 +27,7 @@ function months(m: number | null): string {
 
 function explanation(v: PositionView): Explanation {
   if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
-  if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, положение оценить нечем', { level: 'warn' })];
+  if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
@@ -86,7 +86,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
     { class: 'warnline stack' },
     h('strong', null, `Это «${LEVEL_NAMES[4]}», но есть уязвимость`),
     v.l4Warnings.map((w) => h('div', null, w.text)),
-    h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где положение хрупкое.'),
+    h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где профиль хрупкий.'),
   );
 }
 
@@ -96,7 +96,7 @@ function directionsBlock(v: PositionView): HTMLElement {
   return h(
     'div',
     { class: 'stack' },
-    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления положения. ${desc}`),
+    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
     h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
     rows(
       ...v.directions.map((d) =>
@@ -137,7 +137,8 @@ function moneyBlock(v: PositionView): HTMLElement {
             chevron: false,
           })
         : null,
-      row({ title: 'Запас денег', sub: `по обычным расходам ${mo(m.reserveLifestyleMonths)} · по необходимым ${mo(m.reserveEssentialMonths)}`, chevron: false }),
+      // один запас (этап 2, К4): на необходимых расходах — как в условиях ступени и на «Обзоре»
+      row({ title: 'Запас', sub: 'на сколько хватит денег без дохода, на необходимых расходах', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
     ),
   );
 }
@@ -257,7 +258,10 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  // один запас на «Обзоре» (К4, этап 2): та же цифра, что в условиях ступени
+  const reserve = v.money.reserveEssentialMonths > 0 ? `запас ${v.money.reserveEssentialMonths >= 600 ? 'больше 50 лет' : `${Math.floor(v.money.reserveEssentialMonths * 10 + 1e-9) / 10} мес.`.replace('.', ',')}` : '';
+  const note = !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : '';
+  return rows(row({ title: `Ступень ${v.level} · ${v.levelName}`, sub: [reserve, note].filter(Boolean).join(' · ') || undefined, href: '#/position' }));
 }
 
 export { sheetHref };
