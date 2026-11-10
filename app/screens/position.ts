@@ -101,7 +101,9 @@ function directionsBlock(v: PositionView): HTMLElement {
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
-          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`)),
+          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
+            // полоска с чертой порога 60 (форма Г, D166)
+            d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
           h('p', { class: 'muted' }, d.question),
           rows(...d.indicators.map((i) => row({ title: i.label, value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
       ),

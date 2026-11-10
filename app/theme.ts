@@ -1,5 +1,5 @@
 /**
- * Тема и размер текста (D76; тема с D152 одна — тёмная B1). Хранятся в localStorage этого устройства — это настройка вида, а не данные:
+ * Тема и размер текста (D76; тема с D166 одна — светлая «Бирюза»). Хранятся в localStorage этого устройства — это настройка вида, а не данные:
  * в JSON-бэкап не попадают. До отрисовки тему выставляет короткий скрипт в index.html, чтобы экран не мигал.
  */
 const KF = 'capos-fs';
@@ -22,9 +22,9 @@ const write = (k: string, v: string): void => {
 export const fontPref = (): '0' | '1' => (read(KF) === '1' ? '1' : '0');
 
 function apply(): void {
-  document.documentElement.dataset.theme = 'dark';
+  document.documentElement.dataset.theme = 'light';
   document.documentElement.dataset.fs = fontPref();
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b110d');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#edf1f2');
 }
 
 export function initTheme(): void {
