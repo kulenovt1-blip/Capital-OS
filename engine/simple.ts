@@ -327,6 +327,12 @@ export function baseForecast(state: AppState, today: IsoDate, months = Math.max(
   return simulate({ ...input, horizonMonths: months });
 }
 
+/** То же, что `baseForecast`, но с трассой по дням — для «сколько будет на дату» и «Расчёта по шагам» (D142). Числа те же. */
+export function baseForecastTrace(state: AppState, today: IsoDate, months = Math.max(state.settings.simulationMonths, state.settings.forecastViewMonths ?? 12)): SimResult {
+  const { input } = buildSimInput(state, today);
+  return simulate({ ...input, horizonMonths: months }, undefined, { trace: true });
+}
+
 /** Капитал через k месяцев по прогнозу. */
 export function capitalAt(sim: SimResult, k: number): Money | null {
   return sim.months[k]?.capital ?? null;

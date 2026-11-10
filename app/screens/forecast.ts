@@ -3,7 +3,7 @@
  * кассовые разрывы, когда достигнешь целей. События «что если» — на главном «Прогнозе» («Планирую…», D101).
  */
 import {
-  buildSimInput, kindBehavior, runForecast, formatMonthRu, formatDateRu,
+  balanceOn, buildSimInput, forecastDate, kindBehavior, runForecast, formatMonthRu, formatDateRu,
   type Money, type MonthKey, type Scenario, type SimInput, type SimResult,
 } from '../../engine/index';
 import { bandChart } from '../chart';
@@ -204,7 +204,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
 
   root.append(seg(avail.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза'));
   // `capitalAfter` есть только для 6/12/24/36 мес.; короткие сроки берём из помесячного ряда
-  const capAt = (r: SimResult, m: number): Money | null => r.months[Math.min(m, r.months.length - 1)]?.assets ?? null;
+  const capAt = (r: SimResult, m: number): Money | null => (r.trace ? balanceOn(r.trace, forecastDate(t, m)).assets : (r.months[Math.min(m, r.months.length - 1)]?.assets ?? null));
   const cap = (r: SimResult) => capAt(r, k);
   const lo = cap(tr.worse);
   const hi = cap(tr.better);
@@ -218,7 +218,7 @@ export function renderForecast(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': `На руках через ${word}` },
       h('div', { class: 'label' }, h('span', null, `На руках через ${word} будет`)),
       h('div', { class: `value${(cap(tr.base) ?? 0) < 0 ? ' neg' : ''}` }, cap(tr.base) === null ? '—' : fmtShort(cap(tr.base)!)),
-      h('div', { class: 'subline' }, `если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`, alt ? ` · ${alt}` : ''),
+      h('div', { class: 'subline' }, `на ${formatDateRu(forecastDate(t, k))}, если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`, alt ? ` · ${alt}` : ''),
       h('a', { class: 'link', href: sheetHref('fc-scenarios') }, 'Что значит «хуже» и «лучше» ›'),
     ),
   );

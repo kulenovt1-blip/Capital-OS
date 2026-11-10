@@ -17,6 +17,7 @@ export * from './goals';
 export * from './goals-view';
 export * from './allocate';
 export * from './simulate';
+export * from './forecast-steps';
 export * from './plan';
 export * from './classes';
 export * from './setup';

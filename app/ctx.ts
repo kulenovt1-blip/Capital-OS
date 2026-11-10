@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { baseForecast, buildOverview, personStage, positionViewOf, type PositionView, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
+import { baseForecast, baseForecastTrace, buildOverview, personStage, positionViewOf, type PositionView, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -25,7 +25,7 @@ export const ov = (): Overview => compute().o;
 // прогноз «как сейчас», вердикты целей и запас прочности — тяжелее Обзора, считаются по запросу (D96)
 let fcState: AppState | null = null;
 let fcKey = '';
-let fc: { sim?: SimResult; verdicts?: Map<string, GoalVerdict>; noIncome?: ReturnType<typeof monthsWithoutIncome> | undefined; noIncomeDone?: boolean; stage?: PersonStage | null; stageDone?: boolean } = {};
+let fc: { sim?: SimResult; simTrace?: SimResult; verdicts?: Map<string, GoalVerdict>; noIncome?: ReturnType<typeof monthsWithoutIncome> | undefined; noIncomeDone?: boolean; stage?: PersonStage | null; stageDone?: boolean } = {};
 function fcMemo() {
   const st = getState();
   const k = today();
@@ -39,6 +39,11 @@ function fcMemo() {
 export function forecastNow(): SimResult {
   const m = fcMemo();
   return (m.sim ??= baseForecast(getState(), today()));
+}
+/** Тот же прогноз «как сейчас», но с трассой по дням: баланс на дату и «Расчёт по шагам» (D142). */
+export function forecastTraceNow(): SimResult {
+  const m = fcMemo();
+  return (m.simTrace ??= baseForecastTrace(getState(), today()));
 }
 export function verdicts(): Map<string, GoalVerdict> {
   const m = fcMemo();

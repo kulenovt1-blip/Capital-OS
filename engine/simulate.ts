@@ -173,6 +173,32 @@ export interface Gap {
   maxDeficit: Money;
 }
 
+/** Одна строка трассы: что и как изменило деньги на руках в этот день (D142). */
+export interface SimTraceItem {
+  date: IsoDate;
+  kind: 'income' | 'obligation' | 'event' | 'expense' | 'interest';
+  title: string;
+  /** Для расходов — ключ статьи (для группировки в «Расчёте по шагам»). */
+  key?: string;
+  /** Влияние на деньги на руках: поступление +, расход −. */
+  delta: Money;
+}
+
+export interface SimTraceDay {
+  date: IsoDate;
+  /** Деньги на руках на конец дня: наличные + вклады + начисленные, но ещё не зачисленные проценты месячной капитализации. */
+  assets: Money;
+  liabilities: Money;
+}
+
+/** Трасса по дням — только по запросу (`simulate(…, …, { trace: true })`); на числа прогноза не влияет. */
+export interface SimTrace {
+  startAssets: Money;
+  startLiabilities: Money;
+  days: SimTraceDay[];
+  items: SimTraceItem[];
+}
+
 export interface SimResult {
   scenarioId: string;
   months: SimMonth[];
@@ -187,6 +213,8 @@ export interface SimResult {
   violations: string[];
   assumptions: string[];
   explanation: Explanation;
+  /** Есть только при `opts.trace`. */
+  trace?: SimTrace;
 }
 
 export const CAPITAL_HORIZONS = [6, 12, 24, 36] as const;
@@ -304,7 +332,7 @@ function subtreeProgress(goals: readonly Goal[], direct: ReadonlyMap<GoalId, Mon
   return out;
 }
 
-export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): SimResult {
+export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO, opts: { trace?: boolean } = {}): SimResult {
   const inp = applyScenario(input, scenario.patch);
   const explanation: Explanation = [];
   const violations: string[] = [];
@@ -323,6 +351,11 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
   const daily = events.filter((e) => e.kind === 'one_off' || e.kind === 'obligation_payoff');
   let payments = [...inp.payments].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.obligationId < b.obligationId ? -1 : 1));
 
+  const trace: SimTrace | null = opts.trace ? { startAssets: add(cash, sum(deposits.map((x) => x.balance))), startLiabilities: liabilities, days: [], items: [] } : null;
+  const note = (date: IsoDate, kind: SimTraceItem['kind'], title: string, delta: Money, key?: string): void => {
+    if (trace && delta !== 0) trace.items.push({ date, kind, title, delta, ...(key !== undefined ? { key } : {}) });
+  };
+
   const months: SimMonth[] = [];
   const gaps: Gap[] = [];
   let gap: Gap | null = null;
@@ -337,7 +370,9 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
       cashEnd: ZERO, depositsEnd: ZERO, liquidEnd: ZERO, assets: ZERO, liabilities: ZERO, capital: ZERO, goalProgress: {}, allocated: {}, drawn: {}, reserveMonthsTenths: null,
     };
     let interestDays = 0;
+    let pendingPrev = ZERO; // проценты месячной капитализации, начисленные к вчерашнему дню и ещё не зачисленные (только для трассы)
     for (let d = first; d <= last; d = addDays(d, 1)) {
+      let dayInterest = ZERO;
       const isStart = d === inp.start;
       const dayIdx = Number(d.slice(8, 10));
       if (!isStart) {
@@ -349,6 +384,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
           const a = s.growth ? grow(s.amount, s.growth.rateBp, steps) : s.amount;
           cash = add(cash, a);
           m.income = add(m.income, a);
+          note(d, 'income', s.title, a);
         }
       }
       // события
@@ -357,6 +393,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
         if (e.kind === 'one_off') {
           cash = sub(cash, e.amount);
           m.events = add(m.events, e.amount);
+          note(d, 'event', e.title, neg(e.amount));
         } else {
           const rest = payments.filter((p) => p.obligationId === e.target && p.date >= d);
           const remaining = sum(rest.filter((p) => p.reducesLiability).map((p) => p.amount));
@@ -364,6 +401,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
           cash = sub(cash, pay);
           liabilities = sub(liabilities, remaining);
           m.events = add(m.events, pay);
+          note(d, 'event', e.title, neg(pay));
           payments = payments.filter((p) => !rest.includes(p));
           explanation.push(step('sim.payoff', `${day(d)}: досрочно погашено «${e.title}» — ${money(pay)}, будущие платежи сняты`, { amount: pay, date: d }));
         }
@@ -374,6 +412,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
         cash = sub(cash, p.amount);
         if (p.reducesLiability) liabilities = sub(liabilities, p.amount);
         m.obligations = add(m.obligations, p.amount);
+        note(d, 'obligation', p.title, neg(p.amount));
       }
       if (!isStart) {
         // расходы
@@ -383,6 +422,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
           const a = dailyShare(monthly, dim, dayIdx);
           cash = sub(cash, a);
           m.expenses = add(m.expenses, a);
+          note(d, 'expense', x.title, neg(a), x.key);
         }
         // проценты
         interestDays++;
@@ -391,6 +431,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
           const it = applyBp(dep.balance, dep.rateBp, 1);
           dep.balance = add(dep.balance, it);
           m.interestAccrued = add(m.interestAccrued, it);
+          dayInterest = add(dayInterest, it);
         }
       }
       // покрыть минус из доступных вкладов
@@ -411,6 +452,14 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
       } else if (gap) {
         gaps.push(gap);
         gap = null;
+      }
+      if (trace) {
+        // месячные проценты к этому дню: то же, что будет зачислено в конце месяца, если остаток не изменится
+        let pending = ZERO;
+        if (interestDays > 0) for (const dep of deposits) if (dep.capitalization === 'monthly' && dep.rateBp !== 0) pending = add(pending, applyBp(dep.balance, dep.rateBp, interestDays));
+        note(d, 'interest', 'Проценты по вкладам', add(dayInterest, sub(pending, pendingPrev)));
+        pendingPrev = pending;
+        trace.days.push({ date: d, assets: add(add(cash, sum(deposits.map((x) => x.balance))), pending), liabilities });
       }
     }
     // месячная капитализация
@@ -504,6 +553,7 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
     violations,
     assumptions: assumptions(inp, scenario),
     explanation,
+    ...(trace ? { trace } : {}),
   };
 }
 

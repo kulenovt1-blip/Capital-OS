@@ -154,7 +154,7 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
 /** Прогноз по всем сценариям из настроек. */
 export function runForecast(state: AppState, today: IsoDate): SimResult[] {
   const { input } = buildSimInput(state, today);
-  return state.settings.scenarios.map((sc) => simulate(input, sc));
+  return state.settings.scenarios.map((sc) => simulate(input, sc, { trace: true }));
 }
 
 export function runWhatIf(state: AppState, today: IsoDate, decision: LifeEvent[]): WhatIfResult[] {

@@ -3,11 +3,11 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { SAVING_CUT_PCT, cushionFill, expensePart, higherStages, routeTo, stageDef, stageRange, STAGE_LIST, ROUTE_DEADLINES, type StageNo, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherStages, routeTo, stageDef, stageRange, STAGE_LIST, ROUTE_DEADLINES, type StageNo, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
-import { forecastNow, ov, stageNow, verdicts } from '../ctx';
-import { attention, fmt, fmtDay, fmtShort, monthGen, monthTo, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
+import { forecastNow, forecastTraceNow, ov, stageNow, verdicts } from '../ctx';
+import { attention, fmt, info, fmtDay, fmtShort, monthGen, monthTo, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { HORIZONS, warningItems } from './forecast';
@@ -21,7 +21,7 @@ function spendParts(): HTMLElement | null {
   const usual = input.expenses.filter((x) => part(x.key) === 'usual').reduce((a, x) => a + x.monthly, 0) as Money;
   const rare = input.expenses.filter((x) => part(x.key) === 'rare').reduce((a, x) => a + x.monthly, 0) as Money;
   if (usual + rare <= 0) return null;
-  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Траты в месяц: обычные ${fmtShort(usual)}${rare > 0 ? ` + редкие ${fmtShort(rare)}` : ''} ›`);
+  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Расчёт по шагам · траты в месяц ${fmtShort((usual + rare) as Money)} ›`);
 }
 
 /** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
@@ -44,33 +44,35 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
     'div',
     { class: 'stack' },
     ...(() => {
-      // цепочка до итогового числа (D123): сколько на руках сейчас → сколько будет, по слагаемым
+      // «Расчёт по шагам» (D142): от «на руках сейчас» до итога на дату «сегодня + N мес.» — слагаемыми, как на калькуляторе
       const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
-      const sim = forecastNow();
-      const ms = sim.months.slice(0, Math.min(k, sim.months.length - 1) + 1);
-      const last = ms[ms.length - 1];
-      if (!last) return [];
-      const sum = (f: (m: (typeof ms)[number]) => number) => ms.reduce((a, m) => a + f(m), 0) as Money;
-      const inc = sum((m) => m.income), exp = sum((m) => m.expenses), obl = sum((m) => m.obligations), ev = sum((m) => m.events), int = sum((m) => m.interestAccrued);
-      const now = ov().spend.onHand;
-      const rest = (last.assets - (now + inc - exp - obl - ev + int)) as Money;
+      const tr = forecastTraceNow().trace;
+      if (!tr) return [];
+      const until = forecastDate(today(), k);
+      const group = (key: string) => (expensePart(st, key) === 'rare' ? { id: 'rare', title: 'Редкие траты (доля годовых)' } : { id: 'usual', title: 'Обычные траты' });
+      // на длинном сроке повторы (зарплата каждый месяц) сворачиваются в одну строку «× N»; сумма та же
+      const full = stepsTo(tr, until, { group });
+      const steps = full.lines.length > 14 ? stepsTo(tr, until, { group, collapse: true }) : full;
       const sg = (x: number) => (x < 0 ? '−' : '+');
       const abs = (x: number) => fmt(Math.abs(x) as Money);
       const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
-      const dueDebt = (last.assets - last.capital) as Money;
       return [
-        sub(`Как получилось число через ${word}`),
+        sub(`Расчёт по шагам: до ${formatDateRu(steps.until)} (через ${word})`, info('forecastSteps')),
         rows(
-          row({ title: 'На руках сейчас', sub: 'сумма по всем счетам', value: fmt(now), chevron: false }),
-          row({ title: `${sg(inc)} Доходы`, sub: 'за эти месяцы, по расписанию', value: abs(inc), chevron: false }),
-          row({ title: '− Обычные и редкие траты', value: abs(exp), chevron: false }),
-          row({ title: '− Платежи по долгам', value: abs(obl), chevron: false }),
-          ev !== 0 ? row({ title: `${ev > 0 ? '−' : '+'} Плановые события`, value: abs(ev), chevron: false }) : null,
-          int !== 0 ? row({ title: `${sg(int)} Проценты на счетах`, value: abs(int), chevron: false }) : null,
-          Math.abs(rest) >= 1_000_00 ? row({ title: `${sg(rest)} Прочее`, sub: 'всё, что не попало в строки выше (доплаты, округления, перенос между счетами)', value: abs(rest), chevron: false }) : null,
-          row({ title: h('strong', null, `= На руках через ${word}`), value: h('strong', null, fmt(last.assets)), chevron: false }),
+          row({ title: 'На руках сейчас', sub: 'сумма по всем счетам', value: fmt(steps.from), chevron: false }),
+          ...steps.lines.map((l) =>
+            row({
+              title: `${sg(l.amount)} ${l.date && !(l.count && l.count > 1) ? `${fmtDay(l.date)} ` : ''}${l.title}${l.count && l.count > 1 ? ` × ${l.count}` : ''}`,
+              ...(l.count && l.count > 1 && l.date && l.to ? { sub: `с ${fmtDay(l.date)} по ${fmtDay(l.to)}` } : {}),
+              ...(l.days !== undefined ? { sub: l.kind === 'interest' ? 'начислено к этой дате' : `за ${nWord(l.days, 'день', 'дня', 'дней')}, каждый день по доле месяца` } : {}),
+              value: abs(l.amount),
+              chevron: false,
+            }),
+          ),
+          row({ title: h('strong', null, `= На руках ${formatDateRu(steps.until)}`), value: h('strong', null, fmt(steps.total)), chevron: false }),
         ),
-        dueDebt > 0 ? h('p', { class: 'muted' }, `Долги к тому времени: ещё ${fmt(dueDebt)}. Они не вычтены — «капитал» был бы ${fmt(last.capital)}.`) : null,
+        h('p', { class: 'muted' }, 'Сумма строк равна итогу до тиына; на экране суммы округлены до тенге, поэтому на калькуляторе может выйти разница в 1–2 ₸. Доходы и платежи — на своих датах; траты — доля месяца за каждый день срока, поэтому здесь они «по медианам», а не только известные платежи.'),
+        steps.liabilities > 0 ? h('p', { class: 'muted' }, `Долги к ${fmtDay(steps.until)}: ещё ${fmt(steps.liabilities)}. Они не вычтены — «капитал» был бы ${fmt((steps.total - steps.liabilities) as Money)}.`) : null,
       ];
     })(),
     h('p', { class: 'muted' }, 'Каждый месяц: доходы − обычные траты − платежи по долгам. Остаток копится и раскладывается по целям — по порядку списка.'),
@@ -194,10 +196,14 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   }
   const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
   const sim = forecastNow();
-  // «на руках», как на «Обзоре» (D123): все счета, а не «капитал» (деньги минус долги) — иначе «через месяц 589 тыс.» при 744 тыс. сейчас
-  const m = sim.months[Math.min(k, sim.months.length - 1)];
-  const onHand = m ? m.assets : null;
-  const debtThen = m ? ((m.assets - m.capital) as Money) : (0 as Money);
+  // «на руках», как на «Обзоре» (D123): все счета, а не «капитал» (деньги минус долги); срок — «сегодня + N мес.» (D142), а не конец месяца
+  const until = forecastDate(today(), k);
+  const bal = (() => {
+    const tr = forecastTraceNow().trace;
+    return tr ? balanceOn(tr, until) : null;
+  })();
+  const onHand = bal ? bal.assets : null;
+  const debtThen = bal ? bal.liabilities : (0 as Money);
   const stg = stageNow();
   const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
   root.append(
@@ -207,7 +213,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       { class: 'hero', 'aria-label': 'Прогноз' },
       h('div', { class: 'label' }, `На руках через ${word} будет`),
       h('div', { class: `value${(onHand ?? 0) < 0 ? ' neg' : ''}` }, onHand === null ? '—' : fmtShort(onHand)),
-      h('div', { class: 'subline' }, `если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`),
+      h('div', { class: 'subline' }, `на ${formatDateRu(until)}, если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`),
       debtThen > 0 ? h('div', { class: 'subline' }, `Долги к тому времени: ещё ${fmtShort(debtThen)} — они не вычтены.`) : null,
       spendParts(),
     ),
