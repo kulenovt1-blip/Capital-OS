@@ -356,3 +356,47 @@ describe('свойства', () => {
     expect(buildPositionSeries(reversed, TODAY)).toEqual(buildPositionSeries(st, TODAY));
   });
 });
+
+// ───────── семейные рассрочки: история долга (D129) ─────────
+// Профиль A: доход 90 000 в месяц, траты 40 000, платёж по рассрочке на телефон 25 000 с 17-го числа с ноября 2025, остаток 150 000 на 04.11.2026.
+// Ручной расчёт долга на прошлую дату: остаток сегодня + платежи, сделанные после этой даты. За 6 месяцев (май–октябрь) платежей на 150 000.
+// Капитал сегодня 270 000 (деньги 420 000 − долг 150 000); он растёт на 50 000 в месяц: 25 000 остаётся от дохода и 25 000 уходит на погашение долга.
+describe('рассрочки: своя и семейная учитываются одинаково (D129)', () => {
+  const ownState = () => build(SPECS2[0]!);
+  const familyState = () => {
+    const st = build(SPECS2[0]!);
+    const phone = st.imported!.categories.find((c) => c.id === 'c_phone')!;
+    return {
+      ...st,
+      settings: { ...st.settings, classification: setCategoryClass(st.settings.classification, phone, 'E_installment_family' as never, 'expense') },
+      obligations: [makeInstallment({ id: 'ph', title: 'Телефон', owner: 'family', remaining: tenge(150_000), remainingAsOf: TODAY, payment: tenge(25_000), firstDate: '2026-11-17' })],
+    };
+  };
+  const debts = [150_000, 175_000, 200_000, 225_000, 250_000, 275_000, 300_000].map((x) => tenge(x));
+  const nets = [270_000, 220_000, 170_000, 120_000, 70_000, 20_000, -30_000].map((x) => tenge(x));
+
+  it('своя рассрочка: долг и капитал на прошлые даты — по ручному расчёту', () => {
+    const s = buildPositionSeries(ownState(), TODAY);
+    expect(s.debt).toEqual(debts);
+    expect(s.netConfirmed).toEqual(nets);
+    expect(s.installmentsPaid).toEqual(Array(12).fill(tenge(25_000)));
+    expect(s.installmentsFamilyPaid).toEqual(Array(12).fill(0));
+  });
+
+  it('семейная рассрочка с теми же платежами даёт тот же долг и тот же капитал: платежи возвращаются в долг на прошлые даты', () => {
+    const s = buildPositionSeries(familyState(), TODAY);
+    expect(s.debt).toEqual(debts);
+    expect(s.netConfirmed).toEqual(nets);
+    expect(s.installmentsPaid).toEqual(Array(12).fill(0));
+    expect(s.installmentsFamilyPaid).toEqual(Array(12).fill(tenge(25_000)));
+  });
+
+  it('рост капитала за 6 месяцев при семейной рассрочке — 50 000 в месяц, а не 25 000 (до исправления погашение долга пропадало)', () => {
+    const s = buildPositionSeries(familyState(), TODAY);
+    expect((s.netConfirmed[0]! - s.netConfirmed[6]!) / 6).toBe(tenge(50_000));
+  });
+
+  it('у профилей проб (только свои рассрочки) ряды не изменились — эталон выше проходит без поправок', () => {
+    expect(profiles.some((p) => buildPositionSeries(applyProbeOpts(p.state, p.opts), TODAY).installmentsFamilyPaid.some((x) => x !== 0))).toBe(false);
+  });
+});

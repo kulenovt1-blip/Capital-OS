@@ -27,7 +27,7 @@ export interface Decision {
   userNote: string;
 }
 import { DEFAULT_SETTINGS, SAVINGS_TITLE_RE, normalizeIncomeKind, type Adjustment, type ManualAccount, type Settings } from './settings';
-import { normalizePositionSettings } from './position/settings';
+import { normalizeIncomeStatuses, normalizePositionSettings } from './position/settings';
 
 export const STATE_VERSION = 1;
 export const APP_ID = 'capital-os';
@@ -130,9 +130,12 @@ export function parseState(json: string): ParseResult {
   const position = normalizePositionSettings(state.settings.position);
   if (position.value) state.settings.position = position.value;
   else delete state.settings.position;
+  // T03: ручные статусы источников дохода; недопустимое отбрасывается с предупреждением
+  const statuses = normalizeIncomeStatuses(state.settings.incomeSchedule);
+  state.settings.incomeSchedule = statuses.items;
   const errs = validateState(state);
   if (errs.length) return fail(`Бэкап повреждён: ${errs.slice(0, 5).join('; ')}${errs.length > 5 ? ` и ещё ${errs.length - 5}` : ''}`);
-  return { ok: true, value: state, explanation: [{ code: 'state.loaded', text: `Бэкап версии ${raw.version} загружен` }, ...position.warnings] };
+  return { ok: true, value: state, explanation: [{ code: 'state.loaded', text: `Бэкап версии ${raw.version} загружен` }, ...position.warnings, ...statuses.warnings] };
 }
 
 /**

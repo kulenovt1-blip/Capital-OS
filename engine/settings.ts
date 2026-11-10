@@ -10,7 +10,7 @@ import { DEFAULT_STRATEGY_SETTINGS, type StrategyId, type StrategySettings } fro
 import { DEFAULT_SCENARIOS, type LifeEvent, type Scenario } from './simulate';
 import type { IncomeKindDef } from './income-kinds';
 import { DEFAULT_CLASS_SETTINGS, type ClassSettings } from './classes';
-import type { PositionSettings } from './position/settings';
+import type { IncomeStatus, PositionSettings } from './position/settings';
 
 export type Liquidity = { kind: 'instant' } | { kind: 'days'; days: number } | { kind: 'locked_until'; date: IsoDate };
 
@@ -131,6 +131,11 @@ export interface IncomeScheduleItem {
   indexed?: boolean;
   /** Месяц повышения (1–12), если человек его указал; иначе — по истории, без истории — январь (D119). */
   indexMonth?: number;
+  /**
+   * Ручное переопределение статуса источника для «Положения» (T03): P / T / X / I. Нет значения — статус выводится из данных
+   * (`incomeSources`). На прогноз не влияет.
+   */
+  status?: IncomeStatus;
 }
 
 /** Вид дохода = поведение в прогнозе, а не метка (D66). Встроенные — ниже; свои — id 'K_…' (D75). */

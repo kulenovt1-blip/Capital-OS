@@ -31,3 +31,4 @@ export * from './roadmap';
 export * from './hidden';
 export * from './position/settings';
 export * from './position/series';
+export * from './position/sources';

@@ -3,7 +3,7 @@
  * Чистая функция от состояния и даты: без доступа к времени и хранилищу, деньги — целые тиыны.
  *
  * Что собирается:
- *  - потоки по полным месяцам (до 12 последних, только с начала данных): доход, расход, остаток, платежи по своим рассрочкам,
+ *  - потоки по полным месяцам (до 12 последних, только с начала данных): доход, расход, остаток, платежи по своим и семейным рассрочкам,
  *    взято в долг у людей, возвращено людям;
  *  - капитал подтверждённого слоя на 7 дат: сегодня и концы месяцев 1…6 месяцев назад (подтверждённый слой — всё, что видно в бэкапе:
  *    счета с корректировками, без ручных активов; долги и рассрочки вычтены);
@@ -14,7 +14,7 @@
  * Определения перенесены из проб (series/series4, project docs: position-probe-v3-a, position-probe-v4-a) без изменения модели.
  * Намеренные отличия от пробы, не влияющие на её числа там, где данные есть:
  *  - на дату, раньше которой в бэкапе нет ни одной операции, ряды дают `null`, а не число (проба считала там баланс 0);
- *  - платежи по рассрочкам «после даты» берутся по датам операций (дата прошлой точки < дата платежа ≤ сегодня), а не по календарным
+ *  - платежи по рассрочкам (своим и семейным, D129) «после даты» берутся по датам операций (дата прошлой точки < дата платежа ≤ сегодня), а не по календарным
  *    месяцам ряда: платёж в текущем неполном месяце тоже возвращается в долг прошлой даты. На данных проб (операции кончаются
  *    в прошлом месяце) результат тот же;
  *  - долг людям считается так же, как в `computeCapital` (с долгами до начала учёта и без ухода ниже нуля), а не сырой суммой.
@@ -49,6 +49,8 @@ export interface PositionSeries {
   free: Money[];
   /** Платежи по своим рассрочкам (класс E_installment_own). */
   installmentsPaid: Money[];
+  /** Платежи по семейным рассрочкам (класс E_installment_family): платишь ты, но за семью. */
+  installmentsFamilyPaid: Money[];
   /** Взято в долг у людей. */
   borrowed: Money[];
   /** Возвращено людям. */
@@ -103,7 +105,7 @@ export function buildPositionSeries(state: AppState, today: IsoDate): PositionSe
     overdueCount: o.obligations.reduce((a, st) => a + st.entries.filter((e) => e.status === 'overdue' && e.date > st.obligation.remainingAsOf).length, 0),
   };
   if (!hasData || !o.classification) {
-    return { ...base, hasData: false, histMonths: 0, months: [], income: [], expense: [], free: [], installmentsPaid: [], borrowed: [], borrowedBack: [], netConfirmed: nulls(), debt: nulls(), payables: nulls() };
+    return { ...base, hasData: false, histMonths: 0, months: [], income: [], expense: [], free: [], installmentsPaid: [], installmentsFamilyPaid: [], borrowed: [], borrowedBack: [], netConfirmed: nulls(), debt: nulls(), payables: nulls() };
   }
 
   let firstDate = data!.operations[0]!.date;
@@ -118,15 +120,16 @@ export function buildPositionSeries(state: AppState, today: IsoDate): PositionSe
   const expense = months.map((m) => flows[m]!.expense);
   const free = income.map((x, i) => sub(x, expense[i]!));
   const installmentsPaid = months.map((m) => flows[m]!.byClass['E_installment_own']);
+  const installmentsFamilyPaid = months.map((m) => flows[m]!.byClass['E_installment_family']);
   const borrowed = months.map((m) => flows[m]!.byClass['F_borrowed']);
   const borrowedBack = months.map((m) => flows[m]!.byClass['F_borrowed_back']);
 
-  // долги по графикам и вручную: остаток сейчас; на прошлую дату — плюс платежи по своим рассрочкам, сделанные после неё
+  // долги по графикам и вручную: остаток сейчас; на прошлую дату — плюс платежи по своим и семейным рассрочкам, сделанные после неё (D129)
   const liab = o.capital.liabilities;
   const obligationsNow = sum([liab.installmentsOwn, liab.installmentsFamily, liab.debtsManual]);
   const paidAfter = (d: IsoDate): Money => {
     let s = ZERO;
-    for (const c of ops) if (c.cls === 'E_installment_own' && c.op.kind !== 'transfer' && c.op.date > d && c.op.date <= today) s = add(s, c.op.amount);
+    for (const c of ops) if ((c.cls === 'E_installment_own' || c.cls === 'E_installment_family') && c.op.kind !== 'transfer' && c.op.date > d && c.op.date <= today) s = add(s, c.op.amount);
     return s;
   };
 
@@ -151,5 +154,5 @@ export function buildPositionSeries(state: AppState, today: IsoDate): PositionSe
     netConfirmed.push(sub(cap.gross, total));
   }
 
-  return { ...base, hasData: true, histMonths, months, income, expense, free, installmentsPaid, borrowed, borrowedBack, netConfirmed, debt, payables };
+  return { ...base, hasData: true, histMonths, months, income, expense, free, installmentsPaid, installmentsFamilyPaid, borrowed, borrowedBack, netConfirmed, debt, payables };
 }

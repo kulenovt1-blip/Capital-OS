@@ -133,6 +133,7 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
         id: x.id, title: x.title, amount: x.amount, dayOfMonth: x.dayOfMonth,
         kind: normalizeIncomeKind(x.kind, state.settings.incomeKinds.map((k) => k.id)),
         ...(x.start ? { start: x.start } : {}), ...(x.end ? { end: x.end } : {}),
+        ...(x.status ? { status: x.status } : {}),
         // повышение — в месяц, когда его делали раньше (D119), а не через год от сегодня
         ...(x.indexed && state.settings.inflationBp > 0 ? { growth: { rateBp: state.settings.inflationBp, everyMonths: 12 }, growthAnchor: growthAnchor(today, x.indexMonth ?? raiseMonth(ops, today, x) ?? 1, x.dayOfMonth) } : {}),
       })),

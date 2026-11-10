@@ -14,6 +14,7 @@ import { add, applyBp, min, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money }
 import { addDays, addMonths, daysInMonth, endOfMonth, formatMonthRu, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate, type MonthKey } from './date';
 import { day, money, step, type Explanation } from './explain';
 import type { IncomeKind } from './settings';
+import type { IncomeStatus } from './position/settings';
 import { kindBehavior } from './income-kinds';
 import { ladder, STRATEGY_LABELS, type StrategyParams, type StrategySettings } from './ladder';
 import type { Goal, GoalId } from './goals';
@@ -31,6 +32,8 @@ export interface IncomeStream {
   growth?: { rateBp: number; everyMonths: number };
   /** От какой даты считать шаги роста (месяц прошлого повышения, D119); без неё — от начала потока или симуляции. */
   growthAnchor?: IsoDate;
+  /** Ручное переопределение статуса для «Положения» (T03); на прогноз не влияет. */
+  status?: IncomeStatus;
 }
 
 export interface ExpenseBaseline {
@@ -239,8 +242,35 @@ export function applyScenario(input: SimInput, p: ScenarioPatch): SimInput {
 
 // ───────────────────────── симуляция ─────────────────────────
 
-interface Stream extends IncomeStream {
+/** Поток после сборки: с опорной датой роста и происхождением (расписание или событие). */
+export interface AssembledStream extends IncomeStream {
   anchor: IsoDate;
+  origin: 'schedule' | 'event';
+}
+type Stream = AssembledStream;
+
+/**
+ * Общая сборка потоков дохода: расписание + события income_start / income_stop / income_change (T03).
+ * Её используют и прогноз (`simulate`), и статусы источников «Положения» (`incomeSources`), поэтому они не расходятся.
+ * События применяются по дате, при равной дате — по id; вход не меняется.
+ */
+export function assembleIncomeStreams(incomes: readonly IncomeStream[], events: readonly LifeEvent[], start: IsoDate): AssembledStream[] {
+  const streams: Stream[] = incomes.map((s) => ({ ...s, anchor: s.growthAnchor ?? s.start ?? start, origin: 'schedule' as const }));
+  const sorted = [...events].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
+  for (const e of sorted) {
+    if (e.kind === 'income_stop' || e.kind === 'income_change') {
+      for (const s of streams) if (s.id === e.target || s.id.startsWith(`${e.target}@`)) if (!s.end || s.end >= e.date) s.end = addDays(e.date, -1);
+      const orig = streams.find((s) => s.id === e.target);
+      if (e.kind === 'income_change' && orig) {
+        const { status: _status, ...rest } = orig; // новый поток — ожидаемый, переопределение не наследует
+        void _status;
+        streams.push({ ...rest, id: `${orig.id}@${e.date}`, amount: e.amount, start: e.date, anchor: orig.anchor, origin: 'event', ...(e.until ? { end: e.until } : { end: undefined }) } as Stream);
+      }
+    } else if (e.kind === 'income_start') {
+      streams.push({ id: e.target ?? e.id, title: e.title, amount: e.amount, dayOfMonth: e.dayOfMonth ?? Number(e.date.slice(8, 10)), start: e.date, anchor: e.date, kind: e.incomeKind ?? 'work', origin: 'event', ...(e.until ? { end: e.until } : {}) });
+    }
+  }
+  return streams;
 }
 
 function grow(amount: Money, rateBp: number, steps: number): Money {
@@ -284,19 +314,11 @@ export function simulate(input: SimInput, scenario: Scenario = BASE_SCENARIO): S
   const progress = new Map(inp.progress);
 
   // события, меняющие потоки, применяются к параметрам заранее
-  const streams: Stream[] = inp.incomes.map((s) => ({ ...s, anchor: s.growthAnchor ?? s.start ?? inp.start }));
+  const streams = assembleIncomeStreams(inp.incomes, inp.events, inp.start);
   const expenses = inp.expenses.map((x) => ({ ...x }));
   const events = [...inp.events].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
   for (const e of events) {
-    if (e.kind === 'income_stop' || e.kind === 'income_change') {
-      for (const s of streams) if (s.id === e.target || s.id.startsWith(`${e.target}@`)) if (!s.end || s.end >= e.date) s.end = addDays(e.date, -1);
-      const orig = streams.find((s) => s.id === e.target);
-      if (e.kind === 'income_change' && orig) streams.push({ ...orig, id: `${orig.id}@${e.date}`, amount: e.amount, start: e.date, anchor: orig.anchor, ...(e.until ? { end: e.until } : { end: undefined }) } as Stream);
-    } else if (e.kind === 'income_start') {
-      streams.push({ id: e.target ?? e.id, title: e.title, amount: e.amount, dayOfMonth: e.dayOfMonth ?? Number(e.date.slice(8, 10)), start: e.date, anchor: e.date, kind: e.incomeKind ?? 'work', ...(e.until ? { end: e.until } : {}) });
-    } else if (e.kind === 'recurring_change') {
-      expenses.push({ key: e.id, title: e.title, monthly: e.amount, growthBp: 0, start: e.date, ...(e.until ? { end: e.until } : {}) });
-    }
+    if (e.kind === 'recurring_change') expenses.push({ key: e.id, title: e.title, monthly: e.amount, growthBp: 0, start: e.date, ...(e.until ? { end: e.until } : {}) });
   }
   const daily = events.filter((e) => e.kind === 'one_off' || e.kind === 'obligation_payoff');
   let payments = [...inp.payments].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.obligationId < b.obligationId ? -1 : 1));
