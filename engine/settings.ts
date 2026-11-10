@@ -10,7 +10,7 @@ import { DEFAULT_STRATEGY_SETTINGS, type StrategyId, type StrategySettings } fro
 import { DEFAULT_SCENARIOS, type LifeEvent, type Scenario } from './simulate';
 import type { IncomeKindDef } from './income-kinds';
 import { DEFAULT_CLASS_SETTINGS, type ClassSettings } from './classes';
-import type { IncomeStatus, PositionSettings } from './position/settings';
+import type { AssetKind, IncomeStatus, PositionSettings } from './position/settings';
 
 export type Liquidity = { kind: 'instant' } | { kind: 'days'; days: number } | { kind: 'locked_until'; date: IsoDate };
 
@@ -102,6 +102,8 @@ export interface ManualAccount {
    * Операции после balanceDate прибавляются к балансу (DECISIONS D29).
    */
   receivesSavingsFlows?: boolean;
+  /** Вид актива для «Положения» (T04): наличные / вклад / ценные бумаги / неинвестируемое. Нет значения — вклад. На прогноз не влияет. */
+  assetKind?: AssetKind;
 }
 
 /** Разовая корректировка с обязательным комментарием. */
@@ -136,6 +138,10 @@ export interface IncomeScheduleItem {
    * (`incomeSources`). На прогноз не влияет.
    */
   status?: IncomeStatus;
+  /** Доход не зависит от труда (пенсия, рента, проценты, дивиденды) — для независимых поступлений `P` (T04). Нет значения — от труда. На прогноз не влияет. */
+  passive?: boolean;
+  /** Пассивный доход идёт с активов, уже учтённых в капитале (T04). `false` — «не из этих активов». Нет значения — с этих же активов. */
+  fromAssets?: boolean;
 }
 
 /** Вид дохода = поведение в прогнозе, а не метка (D66). Встроенные — ниже; свои — id 'K_…' (D75). */

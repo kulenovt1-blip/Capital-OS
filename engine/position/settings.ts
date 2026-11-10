@@ -76,3 +76,72 @@ export function normalizeIncomeStatuses<T extends { title: string; status?: unkn
   });
   return { items: out, warnings };
 }
+
+/**
+ * Вид актива ручного счёта (T04). Нужен только расчёту независимости (T10) и показателю капитала: от вида зависит безопасная ставка изъятия
+ * (спецификация 10.3): ценные бумаги — выше, вклад — ниже, наличные — ноль. «Неинвестируемое» (недвижимость для жилья, закрытые активы) в капитал для
+ * изъятия не входит. На прогноз и ряды вид не влияет.
+ * «Не указано» = вклад: самая консервативная из ставок, при которой деньги всё же считаются работающими.
+ */
+export type AssetKind = 'cash' | 'deposit' | 'securities' | 'non_investable';
+export const ASSET_KINDS: readonly AssetKind[] = ['cash', 'deposit', 'securities', 'non_investable'];
+export const DEFAULT_ASSET_KIND: AssetKind = 'deposit';
+export const isAssetKind = (v: unknown): v is AssetKind => typeof v === 'string' && (ASSET_KINDS as readonly string[]).includes(v);
+
+/** Вид актива счёта; нет значения — `DEFAULT_ASSET_KIND`. */
+export const assetKindOf = (a: { assetKind?: AssetKind }): AssetKind => a.assetKind ?? DEFAULT_ASSET_KIND;
+
+/**
+ * Приводит виды активов в ручных счетах к допустимому виду: недопустимое значение отбрасывается с предупреждением,
+ * `null` — «нет значения» без предупреждения. Счета без поля не пересоздаются. Идемпотентна.
+ */
+export function normalizeAssetKinds<T extends { title: string; assetKind?: unknown }>(items: readonly T[]): { items: T[]; warnings: ExplainStep[] } {
+  const warnings: ExplainStep[] = [];
+  const out = items.map((x) => {
+    if (!('assetKind' in x)) return x;
+    if (isAssetKind(x.assetKind)) return x;
+    if (x.assetKind !== null && x.assetKind !== undefined) warnings.push(step('account.assetKind.dropped', `Вид актива счёта «${x.title}» в бэкапе пропущен: ожидается наличные, вклад, ценные бумаги или неинвестируемое`, { level: 'warn' }));
+    const { assetKind: _dropped, ...rest } = x;
+    void _dropped;
+    return rest as T;
+  });
+  return { items: out, warnings };
+}
+
+/**
+ * Происхождение дохода для независимых поступлений `P` (T04, спецификация 10.1):
+ *  labor — доход от труда или не отмеченный как пассивный: в `P` не входит (потеря работы = потеря дохода);
+ *  from_assets — пассивный доход с активов, которые уже считаются в капитале `K` (проценты, дивиденды): в `P` не входит, иначе капитал посчитан дважды;
+ *  independent — пассивный и явно «не из этих активов» (пенсия, рента, аренда имущества вне капитала): входит в `P`.
+ * «Не указано»: доход — от труда; пассивный без ответа про происхождение — с этих же активов (консервативно).
+ */
+export type IncomeOrigin = 'labor' | 'from_assets' | 'independent';
+export function incomeOrigin(x: { passive?: boolean; fromAssets?: boolean }): IncomeOrigin {
+  if (x.passive !== true) return 'labor';
+  return x.fromAssets === false ? 'independent' : 'from_assets';
+}
+
+/** Множитель индексации для `P`: доход растёт вместе с ценами — 1; не растёт или не указано — 0,5 (гипотеза спецификации). */
+export const incomeIndexFactor = (x: { indexed?: boolean }): number => (x.indexed === true ? 1 : 0.5);
+
+/**
+ * Приводит признаки «не зависит от труда» (`passive`) и «из этих активов» (`fromAssets`) в расписании доходов к допустимому виду:
+ * не логическое значение отбрасывается с предупреждением, `null` — без предупреждения. Доходы без полей не пересоздаются. Идемпотентна.
+ */
+export function normalizeIncomeFlags<T extends { title: string; passive?: unknown; fromAssets?: unknown }>(items: readonly T[]): { items: T[]; warnings: ExplainStep[] } {
+  const warnings: ExplainStep[] = [];
+  const out = items.map((x) => {
+    const hasP = 'passive' in x, hasF = 'fromAssets' in x;
+    if (!hasP && !hasF) return x;
+    const bad = (k: 'passive' | 'fromAssets') => k in x && typeof x[k] !== 'boolean';
+    if (!bad('passive') && !bad('fromAssets')) return x;
+    const rest: Record<string, unknown> = { ...x };
+    for (const k of ['passive', 'fromAssets'] as const) {
+      if (!bad(k)) continue;
+      if (x[k] !== null && x[k] !== undefined) warnings.push(step(`income.${k}.dropped`, `Признак дохода «${x.title}» (${k === 'passive' ? 'не зависит от труда' : 'из этих активов'}) в бэкапе пропущен: ожидается да или нет`, { level: 'warn' }));
+      delete rest[k];
+    }
+    return rest as T;
+  });
+  return { items: out, warnings };
+}
