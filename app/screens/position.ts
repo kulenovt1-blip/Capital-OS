@@ -29,13 +29,16 @@ function explanation(v: PositionView): Explanation {
   if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
+  out.push(step('position.rule', 'Как получается ступень: общая оценка из трёх направлений (слабое тянет вниз) плюс факты — запас от 3 месяцев для «Есть подушка», от 6 месяцев и все направления от 60 для «Защищён от ударов»', { detail: true }));
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
     out.push(step(`position.dir.${d.id}`, `${d.name}: ${d.score === null ? 'оценить нечем' : `${nf(d.score)} из 100`}${d.reliable ? '' : ' (данных мало)'}`));
     for (const i of d.indicators) out.push(step(`position.ind.${i.id}`, `${i.label}: ${i.score === null ? 'пока неизвестно' : `${nf(i.score)} из 100`}`, { detail: true }));
   }
-  for (const l of v.limitsFired) out.push(step(`position.limit.${l.id}`, `Ограничитель: ${l.text}`, { level: 'warn' }));
-  if (v.range) out.push(step('position.range', `Диапазон по неизвестному: от ${nf(v.range.low)} до ${nf(v.range.high)}${v.range.showPoint ? `, ориентир ${nf(v.range.point)}` : ''}`));
+  for (const l of v.limitsFired) out.push(step(`position.limit.${l.id}`, `Оценка срезана, потому что ${l.text}`, { level: 'warn' }));
+  if (v.held) out.push(step('position.held', `${v.held}`, { level: 'warn' }));
+  if (v.next) out.push(step('position.next', `Чтобы подняться на «${v.next.name}»: ${v.next.needs.join('; ')}`));
+  if (v.range) out.push(step('position.range', `Часть данных неизвестна, поэтому оценка — от ${nf(v.range.low)} до ${nf(v.range.high)}${v.range.showPoint ? `; ближе всего к ${nf(v.range.point)}` : ''}`));
   out.push(step('position.confidence', `Достоверность данных: ${pct(v.confidence)}${v.preliminary ? ' — уровень предварительный' : ''}`));
   return out;
 }
@@ -60,7 +63,7 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
   return h(
     'div',
     { class: 'card stack pos-level-card' },
-    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
+    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, info('levels'), v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
