@@ -16,7 +16,7 @@
 // @ts-nocheck — служебный скрипт для Bun
 import { chromium } from 'playwright';
 import { serializeState } from '../engine/index';
-import { BASE, TODAY, STATES, SCREENS, put } from './ui-states';
+import { BASE, TODAY, STATES, SCREENS, put, todayOf } from './ui-states';
 
 const FORBIDDEN: [RegExp, string][] = [
   [/\b[IEFTU]_[a-z_]+\b/i, 'код типа'],
@@ -36,14 +36,30 @@ const FORBIDDEN: [RegExp, string][] = [
 ];
 
 /** Предельная высота главных экранов в экранах телефона (D121). */
-const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6 };
+const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6, position: 4 };
 
-const CONFIGURED = ['position', 'plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'cushion-fill', 'distribute', 'a-to-b', 'to-date', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'manual-new', 'income-item', 'you', 'position', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
+/**
+ * Что обязано быть на экране «Положение» в каждом состоянии (T16), без учёта регистра: так ловится пропавший блок,
+ * а не только лишний мусор. Слов «безопасно», «гарантированно», «обеспечено» на экране нет в любом состоянии (D126).
+ */
+const POSITION_EXPECT: Record<string, { has: string[]; hasNot?: string[] }> = {
+  'pos-l4': { has: ['L4', 'Всего капитал', 'Независимость', 'Достоверность данных'], hasNot: ['Сдерживает уровень', 'предварительно', 'При желаемых расходах'] },
+  'pos-l5': { has: ['L5', 'Свобода выбора', 'При желаемых расходах (гипотеза)', 'Это сценарная оценка, не гарантия'], hasNot: ['предварительно'] },
+  'pos-limit': { has: ['Сдерживает уровень', 'кассовый разрыв'] },
+  'pos-border': { has: ['Ты на границе уровней', 'не хватает 1 очко'] },
+  'pos-spiral': { has: ['Признаки долговой спирали', 'Есть просроченные платежи', 'Из них можно снять за 30 дней'] },
+  'pos-short': { has: ['предварительно', 'независимость не оценена', 'Нужно хотя бы три полных месяца', 'мало данных'], hasNot: ['При желаемых расходах'] },
+};
+const POSITION_BANNED = /\b(безопасно|гарантированно|обеспечено)\b/i;
+
+const CONFIGURED = ['position', 'debt-new', 'plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'cushion-fill', 'distribute', 'a-to-b', 'to-date', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'manual-new', 'income-item', 'you', 'position', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
   ['imported', ['start', 'start-savings', 'start-goals', 'overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],
   ['empty', ['overview', 'position', 'setup', 'goals', 'income', 'forecast', 'import', 'more']],
   ['broken', ['overview', 'goals', 'income', 'forecast', 'more', 'import']],
+  // экран «Положение» во всех видах, в которых он рисуется по-разному (T16); «overview» — строка уровня и «Запас хватит на N мес.»
+  ...['pos-l4', 'pos-l5', 'pos-limit', 'pos-border', 'pos-spiral', 'pos-short'].map((n): [string, string[]] => [n, ['position', 'overview', 'reserve-info', 'a-to-b']]),
 ];
 const TRUST_SCREENS = new Set(['overview', 'goals', 'income', 'forecast', 'more']);
 
@@ -146,12 +162,12 @@ for (const scheme of ['light', 'dark'] as const) {
     const page = await ctx.newPage();
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`${BASE}/?today=${TODAY}`);
-    await put(page, serializeState(STATES[stateName]!(), TODAY));
+    await page.goto(`${BASE}/?today=${todayOf(stateName)}`);
+    await put(page, serializeState(STATES[stateName]!(), todayOf(stateName)));
     for (const name of screens) {
       const hash = SCREENS.find(([s]) => s === name)?.[1];
       if (!hash) throw new Error(`нет адреса для «${name}»`);
-      await page.goto(`${BASE}/?today=${TODAY}${hash}`);
+      await page.goto(`${BASE}/?today=${todayOf(stateName)}${hash}`);
       await page.reload();
       await page.waitForTimeout(350);
       if (name === 'income-result') {
@@ -175,6 +191,16 @@ for (const scheme of ['light', 'dark'] as const) {
         if (m) problems.push(`в тексте ${label}: «${text.slice(Math.max(0, m.index! - 20), m.index! + 25).replace(/\s+/g, ' ')}»`);
       }
       problems.push(...(await page.evaluate(inPage)));
+      // ни один экран не шире телефона (T16)
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      if (overflow > 0) problems.push(`горизонтальная прокрутка: страница шире экрана на ${overflow} px`);
+      if (name === 'position' && POSITION_EXPECT[stateName]) {
+        const low = text.toLowerCase().replace(/[\u00a0\u202f]/g, ' ');
+        for (const w of POSITION_EXPECT[stateName]!.has) if (!low.includes(w.toLowerCase())) problems.push(`на экране «Положение» нет «${w}»`);
+        for (const w of POSITION_EXPECT[stateName]!.hasNot ?? []) if (low.includes(w.toLowerCase())) problems.push(`на экране «Положение» не должно быть «${w}»`);
+        const banned = text.match(POSITION_BANNED);
+        if (banned) problems.push(`запрещённое слово «${banned[0]}» (D126)`);
+      }
       if (scheme === 'light' && stateName === 'broken' && TRUST_SCREENS.has(name)) {
         const chip = await page.locator('.trust').first();
         const cls = (await chip.getAttribute('class')) ?? '';
@@ -186,7 +212,7 @@ for (const scheme of ['light', 'dark'] as const) {
         if (top > 300) problems.push(`главная плашка начинается на ${Math.round(top)} px`);
       }
       // лимит высоты (D121): главные экраны не растут обратно в стену текста; смотрим в светлой теме, один раз
-      if (scheme === 'light' && stateName === 'configured' && HEIGHT_LIMIT[name]) {
+      if (scheme === 'light' && (stateName === 'configured' || stateName.startsWith('pos-')) && HEIGHT_LIMIT[name] && (stateName === 'configured' || name === 'position')) {
         const screens = (await page.evaluate(() => document.documentElement.scrollHeight)) / 844;
         if (screens > HEIGHT_LIMIT[name]!) problems.push(`экран «${name}» ${screens.toFixed(1)} экрана телефона — больше лимита ${HEIGHT_LIMIT[name]}`);
       }

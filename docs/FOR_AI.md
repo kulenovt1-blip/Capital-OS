@@ -34,7 +34,8 @@ npm test                      # или: bun test
 npm run typecheck             # или: npx tsc --noEmit -p tsconfig.local.json
 PORT=5199 bun scripts/dev-server.ts &
 bun scripts/ui-check.ts       # все экраны, светлая и тёмная тема
-bun scripts/storage-check.ts  # защита данных
+bun scripts/storage-check.ts  # защита данных; в т. ч. настройки и активы «Положения» (T16)
+bun scripts/ui-inputs.ts      # вводы «Положения»: «О тебе», ручной актив, ошибки форм (T16)
 ```
 
 Все должны проходить.

@@ -9,6 +9,7 @@ import {
   autoLabelCategories, emptyState, importMmbackup, mergeAccountSettings, setCategoryClass, exampleGoals, detectInstallments,
   suggestionToObligation, remainingFromTerm, tenge, type AppState,
 } from '../engine/index';
+import { TODAY as PROFILE_TODAY, SPECS2, build, independenceProfiles, namedProfiles, spiralCase } from '../tests/support/position-profiles';
 
 const ROOT = join(import.meta.dir, '..');
 export const BASE = process.env.UI_URL ?? 'http://localhost:5199';
@@ -69,12 +70,33 @@ function broken(): AppState {
   return st;
 }
 
+/** Профиль из тестовых фикстур «Положения» как состояние для интерфейса: первая настройка пройдена, как у настоящего пользователя. */
+function profile(st: AppState, position?: AppState['settings']['position']): AppState {
+  return { ...st, settings: { ...st.settings, firstRunDone: true, ...(position ? { position } : {}) } };
+}
+const named = (name: string) => namedProfiles().find((p) => p.name === name)!.state;
+
+/** Состояния экрана «Положение» (T16): по одному на каждый случай, который экран рисует по-разному. */
+const POSITION_STATES: Record<string, () => AppState> = {
+  'pos-l4': () => profile(named('B Работающий')),
+  'pos-l5': () => profile(independenceProfiles().find((p) => p.name === 'FI3')!.state, { age: 55, desiredMonthly: tenge(500_000) }),
+  'pos-limit': () => profile(named('B + трата 3 млн')),
+  'pos-border': () => profile(named('D34')),
+  'pos-spiral': () => profile(spiralCase(1, 'spiralAB').state),
+  'pos-short': () => profile(build({ ...SPECS2[0]!, from: '2026-09' })),
+};
+
 export const STATES: Record<string, () => AppState> = {
   empty: () => emptyState(),
   imported: () => imported('synthetic.mmbackup'),
   configured,
   broken,
+  ...POSITION_STATES,
 };
+
+/** У профилей «Положения» своя «сегодня»: их операции построены относительно неё (tests/support/position-profiles.ts). */
+export const STATE_TODAY: Record<string, string> = Object.fromEntries(Object.keys(POSITION_STATES).map((k) => [k, PROFILE_TODAY]));
+export const todayOf = (state: string): string => STATE_TODAY[state] ?? TODAY;
 
 /** Экран → адрес; «income-result» дополнительно вводит сумму и сравнивает варианты. */
 export const SCREENS: [string, string][] = [
@@ -88,7 +110,7 @@ export const SCREENS: [string, string][] = [
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
   ['position', '#/position'], ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'], ['you', '#/prefs~you'],
-  ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
+  ['debt-new', '#/debts~debt-new'], ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],
   ['reserve-info', '#/overview~reserve-info'], ['save-where', '#/forecast~save-where'], ['save-cat', '#/forecast~save-cat/cat-food'], ['a-to-b', '#/forecast~a-to-b'], ['to-date', '#/forecast~to-date'], ['cushion-fill', '#/goals~cushion-fill'],

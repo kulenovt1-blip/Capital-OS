@@ -8,6 +8,8 @@
  *  C. На экране восстановления можно восстановить бэкап из файла.
  *  E. Копию до переноса записать не удалось → перенос не начинается: красная плашка, запись заблокирована, исходник не тронут;
  *     «Повторить» после того, как место появилось, — копия сделана, запись снова разрешена (D103).
+ *  F. Данные «Положения» (T16): настройки возраста и желаемых трат и ручной актив «жильё» переживают перезагрузку;
+ *     бэкап без этих настроек и бэкап с испорченными значениями открываются без ошибок и без личного сценария.
  *  D. Старое состояние (до D96) при первом открытии откладывается копией state.before-simple и не перезаписывается ею повторно.
  * Код выхода 1, если хоть одна проверка не прошла.
  */
@@ -178,6 +180,58 @@ let rawBefore = '';
   await page.waitForTimeout(400);
   check('E: «Повторить» сделал копию', (await idbGet(page, 'state.before-simple')) === legacy);
   check('E: плашка ушла', !(await page.locator('.storage-banner').count()));
+  await ctx.close();
+}
+
+// ── F ──
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const desiredBlock = (t: string) => /при желаемых расходах/i.test(t);
+  const load = async (obj: any) => {
+    await page.goto(URL);
+    await put(page, JSON.stringify(obj));
+    await page.goto(`${URL}#/position`);
+    await page.reload();
+    await page.waitForTimeout(500);
+    return page.evaluate(() => document.body.innerText);
+  };
+  const base = () => JSON.parse(serializeState(STATES.configured(), TODAY));
+
+  // F1: настройки и актив «жильё» переживают перезагрузку
+  const o1 = base();
+  o1.state.settings.position = { age: 35, desiredMonthly: 25_000_000 };
+  o1.state.manualAccounts.push({ id: 'man-f', title: 'Квартира', balance: 3_000_000_000, balanceDate: TODAY, liquidity: { kind: 'locked_until', date: '2030-01-01' }, comment: '', assetKind: 'non_investable' });
+  const t1 = await load(o1);
+  check('F1: личный сценарий на экране после загрузки', desiredBlock(t1));
+  await page.reload();
+  await page.waitForTimeout(400);
+  const disk = JSON.parse(await idbGet(page, 'state')).state;
+  check('F1: возраст, желаемые траты и вид актива на диске после перезагрузки', disk.settings.position?.age === 35 && disk.settings.position?.desiredMonthly === 25_000_000 && disk.manualAccounts.find((a: any) => a.id === 'man-f')?.assetKind === 'non_investable');
+
+  // F2: бэкап без настроек положения (до T13)
+  const o2 = base();
+  delete o2.state.settings.position;
+  const t2 = await load(o2);
+  check('F2: бэкап без настроек открывается, личного сценария нет', /Положение/.test(t2) && !desiredBlock(t2));
+
+  // F3: испорченные значения не роняют приложение и не попадают в расчёт
+  for (const [label, bad] of [['возраст — строка, сумма отрицательная', { age: 'x', desiredMonthly: -5 }], ['настройки — не объект', 'oops'], ['возраст 7, сумма с копейками', { age: 7, desiredMonthly: 1.5 }]] as const) {
+    const o3 = base();
+    o3.state.settings.position = bad;
+    const t3 = await load(o3);
+    check(`F3: ${label} — экран открылся, личного сценария нет`, /Положение/.test(t3) && !desiredBlock(t3));
+  }
+
+  // F4: неизвестный вид актива из чужого бэкапа
+  const o4 = base();
+  o4.state.manualAccounts.push({ id: 'man-z', title: 'Что-то', balance: 100_000, balanceDate: TODAY, liquidity: { kind: 'instant' }, comment: '', assetKind: 'zzz' });
+  const t4 = await load(o4);
+  check('F4: неизвестный вид актива — экран открылся', /Положение/.test(t4));
+
+  check('F: нет ошибок страницы', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 
