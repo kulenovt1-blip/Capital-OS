@@ -1,9 +1,7 @@
 /**
- * Тема и размер текста (D76). Хранятся в localStorage этого устройства — это настройка вида, а не данные:
+ * Тема и размер текста (D76; тема с D152 одна — тёмная B1). Хранятся в localStorage этого устройства — это настройка вида, а не данные:
  * в JSON-бэкап не попадают. До отрисовки тему выставляет короткий скрипт в index.html, чтобы экран не мигал.
  */
-export type ThemePref = 'auto' | 'light' | 'dark';
-const KT = 'capos-theme';
 const KF = 'capos-fs';
 
 const read = (k: string): string | null => {
@@ -21,26 +19,15 @@ const write = (k: string, v: string): void => {
   }
 };
 
-export const themePref = (): ThemePref => {
-  const v = read(KT);
-  return v === 'light' || v === 'dark' ? v : 'auto';
-};
 export const fontPref = (): '0' | '1' => (read(KF) === '1' ? '1' : '0');
 
 function apply(): void {
-  const p = themePref();
-  const dark = p === 'dark' || (p === 'auto' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.documentElement.dataset.theme = 'dark';
   document.documentElement.dataset.fs = fontPref();
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0e100e' : '#f4f4ef');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b110d');
 }
 
 export function initTheme(): void {
-  apply();
-  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', apply);
-}
-export function setTheme(p: ThemePref): void {
-  write(KT, p);
   apply();
 }
 export function setFont(v: '0' | '1'): void {

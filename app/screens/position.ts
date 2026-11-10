@@ -37,7 +37,7 @@ function explanation(v: PositionView): Explanation {
   out.push(step('position.confidence', `Достоверность данных: ${pct(v.confidence)}${v.preliminary ? ' — уровень предварительный' : ''}`));
   return out;
 }
-registerExplain('position', 'Как посчитано: «Положение»', () => explanation(positionNow()));
+registerExplain('position', 'Как посчитано: «Финансовый профиль»', () => explanation(positionNow()));
 
 // ───────────────────────── блоки ─────────────────────────
 
@@ -220,7 +220,7 @@ export function renderPosition(): HTMLElement {
   const v = positionNow();
   const root = h('div', { class: 'screen' });
   if (v.status === 'no_data') {
-    root.append(h('div', { class: 'card stack' }, h('strong', null, 'Положение пока не оценить'), h('p', { class: 'muted' }, 'Для оценки нужны операции из MoneyManager.'), h('a', { class: 'btn primary wide', href: '#/import' }, 'Загрузить бэкап')));
+    root.append(h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, 'Для оценки нужны операции из MoneyManager.'), h('a', { class: 'btn primary wide', href: '#/import' }, 'Загрузить бэкап')));
     return root;
   }
   root.append(levelCard(v));
@@ -247,7 +247,7 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Положение: ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
 }
 
 export { sheetHref };

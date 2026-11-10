@@ -39,7 +39,7 @@ const FORBIDDEN: [RegExp, string][] = [
 const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6, position: 4 };
 
 /**
- * Что обязано быть на экране «Положение» в каждом состоянии (T16), без учёта регистра: так ловится пропавший блок,
+ * Что обязано быть на экране «Финансовый профиль» в каждом состоянии (T16), без учёта регистра: так ловится пропавший блок,
  * а не только лишний мусор. Слов «безопасно», «гарантированно», «обеспечено» на экране нет в любом состоянии (D126).
  */
 const POSITION_EXPECT: Record<string, { has: string[]; hasNot?: string[] }> = {
@@ -196,8 +196,8 @@ for (const scheme of ['light', 'dark'] as const) {
       if (overflow > 0) problems.push(`горизонтальная прокрутка: страница шире экрана на ${overflow} px`);
       if (name === 'position' && POSITION_EXPECT[stateName]) {
         const low = text.toLowerCase().replace(/[\u00a0\u202f]/g, ' ');
-        for (const w of POSITION_EXPECT[stateName]!.has) if (!low.includes(w.toLowerCase())) problems.push(`на экране «Положение» нет «${w}»`);
-        for (const w of POSITION_EXPECT[stateName]!.hasNot ?? []) if (low.includes(w.toLowerCase())) problems.push(`на экране «Положение» не должно быть «${w}»`);
+        for (const w of POSITION_EXPECT[stateName]!.has) if (!low.includes(w.toLowerCase())) problems.push(`на экране «Финансовый профиль» нет «${w}»`);
+        for (const w of POSITION_EXPECT[stateName]!.hasNot ?? []) if (low.includes(w.toLowerCase())) problems.push(`на экране «Финансовый профиль» не должно быть «${w}»`);
         const banned = text.match(POSITION_BANNED);
         if (banned) problems.push(`запрещённое слово «${banned[0]}» (D126)`);
       }

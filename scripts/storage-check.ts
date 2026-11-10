@@ -215,21 +215,21 @@ let rawBefore = '';
   const o2 = base();
   delete o2.state.settings.position;
   const t2 = await load(o2);
-  check('F2: бэкап без настроек открывается, личного сценария нет', /Положение/.test(t2) && !desiredBlock(t2));
+  check('F2: бэкап без настроек открывается, личного сценария нет', /Финансовый профиль/.test(t2) && !desiredBlock(t2));
 
   // F3: испорченные значения не роняют приложение и не попадают в расчёт
   for (const [label, bad] of [['возраст — строка, сумма отрицательная', { age: 'x', desiredMonthly: -5 }], ['настройки — не объект', 'oops'], ['возраст 7, сумма с копейками', { age: 7, desiredMonthly: 1.5 }]] as const) {
     const o3 = base();
     o3.state.settings.position = bad;
     const t3 = await load(o3);
-    check(`F3: ${label} — экран открылся, личного сценария нет`, /Положение/.test(t3) && !desiredBlock(t3));
+    check(`F3: ${label} — экран открылся, личного сценария нет`, /Финансовый профиль/.test(t3) && !desiredBlock(t3));
   }
 
   // F4: неизвестный вид актива из чужого бэкапа
   const o4 = base();
   o4.state.manualAccounts.push({ id: 'man-z', title: 'Что-то', balance: 100_000, balanceDate: TODAY, liquidity: { kind: 'instant' }, comment: '', assetKind: 'zzz' });
   const t4 = await load(o4);
-  check('F4: неизвестный вид актива — экран открылся', /Положение/.test(t4));
+  check('F4: неизвестный вид актива — экран открылся', /Финансовый профиль/.test(t4));
 
   check('F: нет ошибок страницы', errors.length === 0, errors.join(' | '));
   await ctx.close();

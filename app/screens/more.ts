@@ -5,7 +5,7 @@ import { ov, progress, steps } from '../ctx';
 import { fmt, fmtDay, nWord, row, rows, toggle } from '../ui';
 import { act } from '../store';
 import { isInstalled } from '../install';
-import { themePref } from '../theme';
+import { fontPref } from '../theme';
 import { daysBetween, essentialMarkupMissing } from '../../engine/index';
 import { sheetHref } from '../main';
 
@@ -27,7 +27,7 @@ export function renderMore(): HTMLElement {
   const found = o.installments.suggestions.length;
   const backupAge = st.lastBackupAt ? daysBetween(st.lastBackupAt, today()) : null;
   const reconcileBad = o.hasData && !o.reconcile?.ok;
-  const theme = { auto: 'как в телефоне', light: 'светлая', dark: 'тёмная' }[themePref()];
+  const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const imp = !o.hasData ? 'данных нет' : `импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`;
   const bak = st.lastBackupAt ? `бэкап ${fmtDay(st.lastBackupAt)}` : 'бэкап не скачивался';
   // 6 плиток (D96): разметка — в «Данные → Раскладка трат»
@@ -44,7 +44,7 @@ export function renderMore(): HTMLElement {
       tile('#/accounts', 'Счета', !o.hasData ? 'после импорта' : review && !review.done && !review.locked ? 'ждут ответа' : nWord(accounts, 'счёт', 'счёта', 'счетов'), review && !review.done && !review.locked ? 'warn' : ''),
       tile('#/incomes', 'Доходы', st.settings.incomeSchedule.length ? `доходов: ${st.settings.incomeSchedule.length}` : 'не заданы', st.settings.incomeSchedule.length ? '' : 'warn'),
       tile('#/debts', 'Долги и рассрочки', found ? `найдено в операциях: ${found}` : st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', found ? 'warn' : ''),
-      tile('#/prefs', 'Настройки', `тема: ${theme}`),
+      tile('#/prefs', 'Настройки', `текст: ${text}`),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION}`),
   );
@@ -71,7 +71,7 @@ export function renderData(): HTMLElement {
 
 /** «Настройки»: вид, установка (если ещё не установлено), редкое и для продвинутых. */
 export function renderPrefs(): HTMLElement {
-  const theme = { auto: 'как в телефоне', light: 'светлая', dark: 'тёмная' }[themePref()];
+  const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const st = getState();
   const details = !!st.settings.showDetails;
   const p = st.settings.position;
@@ -89,7 +89,7 @@ export function renderPrefs(): HTMLElement {
     ),
     rows(
       row({ title: 'О тебе', sub: p?.age || p?.desiredMonthly ? [p.age ? `${p.age} лет` : '', p.desiredMonthly ? `хочу тратить ${fmt(p.desiredMonthly)} в месяц` : ''].filter(Boolean).join(' · ') : 'возраст и сколько хочешь тратить в месяц', href: sheetHref('you') }),
-      row({ title: 'Вид', sub: `тема: ${theme}`, href: '#/view' }),
+      row({ title: 'Вид', sub: `текст: ${text}`, href: '#/view' }),
       isInstalled() ? null : row({ title: 'Установить как приложение', sub: 'значок на экране, работает без интернета', href: '#/install' }),
       row({ title: 'Редкое', sub: 'долги на начало учёта, ручные счета, поправки', href: '#/rare' }),
       row({ title: 'Для продвинутых', sub: 'правила разметки, параметры, сценарии', href: '#/advanced' }),

@@ -19,15 +19,16 @@
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --bg: #0e100e; --surface: #1a1d1a; --surface-sunken: #262a26; --surface-inverse: #263126; --on-inverse: #eeeee6; --on-inverse-muted: #b9beb2;
-  --ink: #eeeee6; --ink-2: #c8ccc2; --muted: #a3a89c; --line: #2e332e; --line-strong: #3a403a; --divider: #262a26;
-  --primary: #eeeee6; --on-primary: #0e100e;
-  --good: #46c06f; --good-tint: #16301e; --on-good-tint: #8cdaa7;
+  /* B1 (D152): тёмный фон, салатовый акцент */
+  --bg: #0b110d; --surface: #131b15; --surface-sunken: #1b251e; --surface-inverse: #131b15; --on-inverse: #e8efe9; --on-inverse-muted: #a9b6ac;
+  --ink: #e8efe9; --ink-2: #c3cdc5; --muted: #98a59b; --line: #26312a; --line-strong: #344038; --divider: #1b251e;
+  --primary: #d9f99d; --on-primary: #0b1a10;
+  --good: #8fd19e; --good-tint: #16301e; --on-good-tint: #b8e8c4;
   --warn: #f2cf5b; --warn-tint: #2e2709; --on-warn-tint: #f2cf5b; --warn-line: #5c4e1a;
   --bad: #ff8c7a; --bad-tint: #3a1a15; --on-bad-tint: #ffb3a6; --bad-line: #5c302b;
-  --focus: #79a8ff; --scrim: rgba(0, 0, 0, 0.62); --nav: #151815;
-  --series-1: #4a93ec; --series-2: #e8774a; --series-3: #2fc08a; --band: rgba(74, 147, 236, 0.16);
-  color-scheme: dark;
+  --focus: #d9f99d; --scrim: rgba(0, 0, 0, 0.62); --nav: #0e1510;
+  --accent: #d9f99d;
+  --series-1: #d9f99d; --series-2: #e8774a; --series-3: #2fc08a; --band: rgba(217, 249, 157, 0.14);
 }
 :root[data-fs='1'] { --fz: 1.15; }
 
@@ -101,7 +102,7 @@ main { padding: 0 16px 16px; }
 .bn .brand { display: none; }
 
 /* ===== 4. КАРТОЧКИ, СТРОКИ, ЯЧЕЙКИ ===== */
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; overflow-x: auto; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
 .card > h2 { font-size: calc(18px * var(--fz)); font-weight: 800; margin-bottom: 8px; }
 .card.flat { padding: 0; overflow: hidden; }
 .hero {
@@ -565,7 +566,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 /* «Положение» (T11) */
 .pos-level-card { text-align: center; }
 .pos-level-code { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
-.pos-level-name { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.pos-level-name { font-size: 26px; font-weight: 800; line-height: 1.2; color: var(--accent, var(--ink)); }
 .pos-ladder { text-align: left; }
 .pos-ladder-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
 .pos-ladder-list li { padding: 8px 10px; border-left: 3px solid var(--line); }
