@@ -5,7 +5,7 @@ import { ov, progress, steps } from '../ctx';
 import { fmt, fmtDay, nWord, row, rows, toggle } from '../ui';
 import { act } from '../store';
 import { isInstalled } from '../install';
-import { fontPref } from '../theme';
+import { fontPref, themePref } from '../theme';
 import { daysBetween, essentialMarkupMissing } from '../../engine/index';
 import { sheetHref } from '../main';
 
@@ -90,7 +90,7 @@ export function renderPrefs(): HTMLElement {
     ),
     rows(
       row({ title: 'О тебе', sub: p?.age || p?.desiredMonthly ? [p.age ? `${p.age} лет` : '', p.desiredMonthly ? `хочу тратить ${fmt(p.desiredMonthly)} в месяц` : ''].filter(Boolean).join(' · ') : 'возраст и сколько хочешь тратить в месяц', href: sheetHref('you') }),
-      row({ title: 'Вид', sub: `текст: ${text}`, href: '#/view' }),
+      row({ title: 'Вид', sub: `тема: ${themePref() === 'auto' ? 'как в системе' : themePref() === 'dark' ? 'тёмная' : 'светлая'} · текст: ${text}`, href: '#/view' }),
       isInstalled() ? null : row({ title: 'Установить как приложение', sub: 'значок на экране, работает без интернета', href: '#/install' }),
       row({ title: 'Редкое', sub: 'долги на начало учёта, ручные счета, поправки', href: '#/rare' }),
       row({ title: 'Для продвинутых', sub: 'правила разметки, параметры, сценарии', href: '#/advanced' }),
