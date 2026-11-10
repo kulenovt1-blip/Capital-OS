@@ -111,6 +111,8 @@ export interface CapitalInput {
   openingDebts?: OpeningDebts;
   /** Куда уходили переводы «Накопительный счёт» (D61). По умолчанию — оценка. */
   savingsFlows?: SavingsFlowsSetting;
+  /** Курс, введённый человеком: тенге за 1 единицу валюты (D155). Без курса счёт в иной валюте в капитал не входит. */
+  currencyRates?: Readonly<Record<string, number>>;
 }
 
 export interface AccountPosition {
@@ -149,6 +151,8 @@ export interface CapitalReport {
   net: Money;
   /** Нетто + дебиторка — справочно, для инвариантов §3.2 (DECISIONS D30). */
   netWithReceivables: Money;
+  /** Счета не в тенге, по которым есть операции, а курса нет: в капитал не вошли, оценка уровня по ним невозможна (D155). */
+  unrated: { accountId: string; title: string; currency: string }[];
   liquidNow: Money;
   explanation: Explanation;
 }
@@ -204,13 +208,28 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
   }
 
   const accounts: AccountPosition[] = [];
+  const unrated: CapitalReport['unrated'] = [];
+  const opCounts = new Map<string, number>();
+  for (const op of data.operations) for (const [acc] of operationEffects(op)) opCounts.set(acc, (opCounts.get(acc) ?? 0) + 1);
+  const counts = opCounts;
   const push = (p: Omit<AccountPosition, 'availableFrom'>) => accounts.push({ ...p, availableFrom: p.nonInvestable ? NEVER_AVAILABLE : availableFrom(p.liquidity, today) });
 
   for (const a of [...data.accounts].sort((x, y) => (x.id < y.id ? -1 : 1))) {
     if (a.removed) continue;
     const s = settingsById.get(a.id);
     const excluded = s ? s.excluded : a.ignoreInBalance;
-    const balance = add(balances.get(a.id) ?? ZERO, adjByAcc.get(a.id) ?? ZERO);
+    let raw = balances.get(a.id) ?? ZERO;
+    if (a.currency !== 'KZT') {
+      const rate = inp.currencyRates?.[a.currency];
+      if (rate !== undefined && rate > 0) {
+        raw = tiyn(Math.round(raw * rate));
+        explanation.push(step('capital.currency', `«${a.title}»: по курсу ${rate} ₸ за 1 ${a.currency} = ${money(raw)}`, { amount: raw, refs: { accountId: a.id }, detail: true }));
+      } else {
+        if (!excluded && (counts.get(a.id) ?? 0) > 0) unrated.push({ accountId: a.id, title: a.title, currency: a.currency });
+        raw = ZERO;
+      }
+    }
+    const balance = add(raw, adjByAcc.get(a.id) ?? ZERO);
     push({ accountId: a.id, title: a.title, source: 'moneymanager', balance, excluded, liquidity: s?.liquidity ?? { kind: 'instant' } });
   }
 
@@ -299,7 +318,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
     step('capital.receivables', `Тебе должны ${money(receivables)} — показано отдельно, в капитал не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
     step('capital.liquid', `На руках ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${p.nonInvestable ? 'жильё / заблокировано, не деньги' : liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
   );
-  return { asOf: today, accounts, gross, liabilities, receivables, net, netWithReceivables, liquidNow, explanation };
+  return { asOf: today, accounts, gross, liabilities, receivables, net, netWithReceivables, unrated, liquidNow, explanation };
 }
 
 function sumAvailable(accounts: readonly AccountPosition[], date: IsoDate): Money {

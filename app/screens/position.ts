@@ -10,6 +10,7 @@ import { positionNow } from '../ctx';
 import { radar } from '../radar';
 import { fmt, info, row, rows, sub } from '../ui';
 import { sheetHref } from '../main';
+import { currencyRatesBlock } from './settings';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
@@ -25,6 +26,7 @@ function months(m: number | null): string {
 // ───────────────────────── «Как посчитано» ─────────────────────────
 
 function explanation(v: PositionView): Explanation {
+  if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, положение оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
@@ -221,6 +223,13 @@ export function renderPosition(): HTMLElement {
   const root = h('div', { class: 'screen' });
   if (v.status === 'no_data') {
     root.append(h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, 'Для оценки нужны операции из MoneyManager.'), h('a', { class: 'btn primary wide', href: '#/import' }, 'Загрузить бэкап')));
+    return root;
+  }
+  if (v.status === 'needs_rate') {
+    root.append(
+      h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, `Счёт ${v.unrated.map((a) => `«${a.title}» (${a.currency})`).join(', ')} не в тенге. Без курса уровень, запас и прогноз были бы неверными — укажи курс ниже.`)),
+      currencyRatesBlock([...new Set(v.unrated.map((a) => a.currency))]),
+    );
     return root;
   }
   root.append(levelCard(v));

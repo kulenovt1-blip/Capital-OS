@@ -70,6 +70,23 @@ function patchAccount(id: string, patch: (a: AccountSettings) => AccountSettings
   }, msg);
 }
 
+/** Курс валюты счёта, введённый человеком (D155): тенге за 1 единицу. Без него счёт в иной валюте в капитал не входит. */
+export function currencyRatesBlock(currencies: readonly string[]): HTMLElement {
+  const st = getState();
+  const box = h('div', { class: 'card stack' }, h('strong', null, 'Курс валюты'), h('p', { class: 'muted' }, 'Сколько тенге за 1 единицу валюты счёта. Курс вводишь ты, он не обновляется сам — меняй, когда изменился.'));
+  for (const cur of currencies) {
+    const input = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', value: st.settings.currencyRates?.[cur] ?? '', 'aria-label': `Курс: тенге за 1 ${cur}` });
+    const save = h('button', { class: 'btn', type: 'button' }, 'Сохранить');
+    save.addEventListener('click', () => {
+      const v = Number(String(input.value).replace(',', '.'));
+      if (!(v > 0)) { toast('Курс должен быть больше нуля'); return; }
+      void act((s) => ({ ...s, settings: { ...s.settings, currencyRates: { ...(s.settings.currencyRates ?? {}), [cur]: v } } }), `Курс ${cur}: ${v} ₸`);
+    });
+    box.append(field(`₸ за 1 ${cur}`, input), save);
+  }
+  return box;
+}
+
 export function renderAccounts(section?: string): HTMLElement {
   const st = getState();
   const root = h('div', { class: 'screen' });
@@ -79,6 +96,8 @@ export function renderAccounts(section?: string): HTMLElement {
   const bad = badAccounts();
   const need = accountsNeedingReview(st.settings.accounts, st.imported.accounts);
   if (need.length) root.append(sub('Что это за счета?'), accountsReview());
+  const foreign = [...new Set(st.imported.accounts.filter((a) => !a.removed && a.currency !== 'KZT').map((a) => a.currency))].sort();
+  if (foreign.length) root.append(currencyRatesBlock(foreign));
   const counted = o.capital.accounts.filter((p) => !p.excluded);
   const group = (k: 'spend' | 'savings') => counted.filter((p) => o.spend.kinds[p.accountId] === k);
   const total = (ps: typeof counted) => ps.reduce((a, p) => a + p.balance, 0);

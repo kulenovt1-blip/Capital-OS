@@ -164,6 +164,7 @@ function cushionRow(o: Overview): HTMLElement | null {
 function reserveRow(): HTMLElement | null {
   const s = reserveCtx();
   if (!s) return null;
+  if (ov().capital.unrated.length) return null; // счёт не в тенге без курса: запас был бы неверным (D155)
   const cover = s.coverMonths.toString().replace('.', ',');
   return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ траты и платежи', href: sheetHref('reserve-info') }));
 }
