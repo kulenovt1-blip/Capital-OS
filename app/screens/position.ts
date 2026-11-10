@@ -129,7 +129,7 @@ function runwayBlock(v: PositionView): HTMLElement | null {
     'div',
     { class: 'stack' },
     sub('Если ничего не менять', info('runway')),
-    rows(row({ title: `Тратишь больше, чем получаешь: ${money(r.deficit)} в месяц`, sub: `при этом денег хватит на ${months(r.months)}`, chevron: false, cls: 'warn' })),
+    rows(row({ title: `Тратишь больше, чем получаешь: ${money(r.deficit)} в месяц`, sub: r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'при этом денег хватит более чем на 50 лет' : `при этом денег хватит на ${months(r.months)}`, chevron: false, cls: 'warn' })),
     r.scenarios.length
       ? h('details', { class: 'fold', 'data-key': 'position:runway' }, h('summary', null, 'А если…'), rows(...r.scenarios.map((s) => row({ title: s.name, value: months(s.months), chevron: false }))))
       : null,

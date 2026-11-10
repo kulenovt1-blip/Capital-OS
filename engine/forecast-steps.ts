@@ -46,6 +46,14 @@ export function capitalOn(r: SimResult, date: IsoDate): Money | null {
   return sub(b.assets, b.liabilities);
 }
 
+/**
+ * Капитал «через k месяцев» для предпросмотров (D147): с трассой — на дату «сегодня + k месяцев» (как «Прогноз» и «Что если»),
+ * без трассы — на конец k-го месяца, как раньше.
+ */
+export function capitalInMonths(r: SimResult, today: IsoDate, k: number): Money | null {
+  return r.trace ? capitalOn(r, forecastDate(today, k)) : (r.months[k]?.capital ?? null);
+}
+
 export interface StepLine {
   /** Есть у строк-событий (доход, платёж, разовое событие); у траты и процентов — одна строка за весь срок. */
   date?: IsoDate;

@@ -125,8 +125,11 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const series = buildPositionSeries(state, today);
   const overview = buildOverview(state, today);
   const essentialMissing = essentialMarkupMissing(overview);
-  const independence = independenceOfState(state, today);
-  if (!series.hasData) {
+  // ряд, показатели и обзор считаются один раз и передаются независимости и личному сценарию (T17)
+  const report = series.hasData ? computeIndicators(state, today, series) : null;
+  const pre = { series, overview, ...(report ? { report } : {}) };
+  const independence = independenceOfState(state, today, pre);
+  if (!series.hasData || !report) {
     return {
       status: 'no_data', level: null, levelName: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
@@ -135,7 +138,6 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     };
   }
 
-  const report = computeIndicators(state, today, series);
   const base = levelFromIndicators(report);
   const fin = levelWithIndependence(base, independence);
   const inputs = report.inputs!;
@@ -185,7 +187,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
     confidence, preliminary: isPreliminary(confidence),
-    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today),
+    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),
   };
 }
 

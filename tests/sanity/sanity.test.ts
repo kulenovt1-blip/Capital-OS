@@ -28,7 +28,8 @@ import { planToGoal } from '../../engine/route';
 import { flattenTree } from '../../engine/goals';
 import { routeTo } from '../../engine/roadmap';
 import { higherTargets } from '../../engine/reserve';
-import { applyRepeatAnswer, cushionFill, cutEvent, reorderGoals, debtAfterYear, previewEvent, previewIndexed, baseForecast, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { applyRepeatAnswer, cushionFill, cutEvent, reorderGoals, debtAfterYear, previewEvent, previewIndexed, baseForecast, baseForecastTrace, capitalAt, previewBaselineMode, previewRepeat, sparseExpenses } from '../../engine/simple';
+import { capitalInMonths } from '../../engine/forecast-steps';
 import { classRegistry } from '../../engine/classes';
 import { buildOverview } from '../../engine/overview';
 import { buildSimInput } from '../../engine/plan';
@@ -182,6 +183,9 @@ function answered(s: AppState): AppState {
     },
   };
 }
+
+/** Капитал «через k месяцев» на дату «сегодня + k месяцев» — так считают предпросмотры (D147). */
+const capitalD = (st: AppState, k: number) => capitalInMonths(baseForecastTrace(st, TODAY, Math.max(k, 12)), TODAY, k);
 
 describe('здравый смысл: профиль «как у живого человека»', () => {
   const found = sanityCheck(live(), TODAY).findings;
@@ -397,8 +401,8 @@ describe('редкие траты: «повторится?» (D110, аудит �
     const before = JSON.stringify(s);
     const pv = previewRepeat(s, TODAY, 'clothes', 12);
     expect(JSON.stringify(s)).toBe(before);
-    expect(pv.now).toBe(capitalAt(baseForecast(s, TODAY, 12), 12));
-    expect(pv.ifNever).toBe(capitalAt(baseForecast(applyRepeatAnswer(s, 'clothes', 'never'), TODAY, 12), 12));
+    expect(pv.now).toBe(capitalD(s, 12));
+    expect(pv.ifNever).toBe(capitalD(applyRepeatAnswer(s, 'clothes', 'never'), 12));
     expect(pv.ifNever!).toBeGreaterThan(pv.now!);
   });
 
@@ -470,7 +474,7 @@ describe('обычные траты по месяцам без зарплаты 
     expect(JSON.stringify(s)).toBe(before);
     expect(pv.usualNow).toBe(usual(s));
     expect(pv.usualNoWork).toBe(usual(mode(s, 'no_work')));
-    expect(pv.capitalNoWork).toBe(capitalAt(baseForecast(mode(s, 'no_work'), TODAY, 12), 12));
+    expect(pv.capitalNoWork).toBe(capitalD(mode(s, 'no_work'), 12));
   });
 
   it('месяцев без работы меньше трёх — режим не включается, всё как по умолчанию', () => {
@@ -507,7 +511,7 @@ describe('предпросмотр «что будет, если…» (D114)', (
     const ev = cutEvent('p', '2026-12-01', tenge(15_000));
     const pv = previewEvent(s, TODAY, [ev]);
     const planned = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } };
-    expect(pv.capital(12).with).toBe(capitalAt(baseForecast(planned, TODAY, 12), 12));
+    expect(pv.capital(12).with).toBe(capitalD(planned, 12));
   });
 
   it('предпросмотр ответа про повышение дохода: «да» не хуже «нет» и совпадает с расчётом после ответа', () => {
@@ -515,7 +519,7 @@ describe('предпросмотр «что будет, если…» (D114)', (
     const pv = previewIndexed(s, TODAY, 'ben', 36);
     expect(pv.yes!).toBeGreaterThan(pv.no!);
     const yes = { ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((x) => (x.id === 'ben' ? { ...x, indexed: true } : x)) } };
-    expect(pv.yes).toBe(capitalAt(baseForecast(yes, TODAY, 36), 36));
+    expect(pv.yes).toBe(capitalD(yes, 36));
   });
 
   it('долг дольше года: строка «ещё должен» только тогда', () => {
@@ -620,7 +624,7 @@ describe('«Где можно сэкономить» (D116)', () => {
     expect(JSON.stringify(s)).toBe(before);
     const ev = cutEvent('x', '2026-12-01', food.cut!.perMonth);
     const planned = { ...s, settings: { ...s.settings, plannedEvents: [...s.settings.plannedEvents, ev] } };
-    expect(food.cut!.capitalGain12).toBe(capitalAt(baseForecast(planned, TODAY, 12), 12)! - capitalAt(baseForecast(s, TODAY, 12), 12)!);
+    expect(food.cut!.capitalGain12).toBe(capitalD(planned, 12)! - capitalD(s, 12)!);
     expect(savingOptions(emptyState(), TODAY)).toBeNull();
   });
 });

@@ -20,7 +20,8 @@ import { baselineWindow, type Overview } from './overview';
 import type { AppState } from './state';
 import type { IncomeScheduleItem } from './settings';
 import type { ExpenseBaseline, SimPayment } from './simulate';
-import { baseForecast, capitalAt } from './simple';
+import { baseForecastTrace } from './simple';
+import { capitalInMonths } from './forecast-steps';
 
 /** Пороги — в одном месте. */
 export const HIDDEN = {
@@ -247,6 +248,6 @@ export function expensePart(state: AppState, key: string): 'usual' | 'rare' | 'i
 
 /** Предпросмотр ответа (D119, как D114): капитал через k мес. при «да» и при «нет». */
 export function previewAnswer(state: AppState, today: IsoDate, set: (s: AppState, yes: boolean) => AppState, k = 36): { yes: Money | null; no: Money | null } {
-  const run = (s: AppState) => capitalAt(baseForecast(s, today, Math.max(k, 12)), k);
+  const run = (s: AppState) => capitalInMonths(baseForecastTrace(s, today, Math.max(k, 12)), today, k);
   return { yes: run(set(state, true)), no: run(set(state, false)) };
 }

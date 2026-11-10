@@ -14,6 +14,7 @@ import { step, type Outcome } from './explain';
 import { baselineWindow, buildOverview, type Overview } from './overview';
 import { buildSimInput, planIncome } from './plan';
 import { simulate, type SimResult } from './simulate';
+import { capitalInMonths } from './forecast-steps';
 import type { CompareResult } from './allocate';
 import type { AppState } from './state';
 import type { Category, ImportedData } from './types';
@@ -757,8 +758,8 @@ export function applyRepeatAnswer(state: AppState, categoryId: string, answer: '
 
 /** Предпросмотр: капитал через k месяцев, если оставить как есть, и если ответить «разовая». */
 export function previewRepeat(state: AppState, today: IsoDate, categoryId: string, k = 12): { now: Money | null; ifNever: Money | null } {
-  const now = capitalAt(baseForecast(state, today, Math.max(k, 12)), k);
-  const ifNever = capitalAt(baseForecast(applyRepeatAnswer(state, categoryId, 'never'), today, Math.max(k, 12)), k);
+  const now = capitalInMonths(baseForecastTrace(state, today, Math.max(k, 12)), today, k);
+  const ifNever = capitalInMonths(baseForecastTrace(applyRepeatAnswer(state, categoryId, 'never'), today, Math.max(k, 12)), today, k);
   return { now, ifNever };
 }
 
@@ -774,8 +775,8 @@ export function previewBaselineMode(state: AppState, today: IsoDate, k = 12): { 
     months: win.length,
     usualNow: o.spend.usualMonthly,
     usualNoWork: o2.spend.usualMonthly,
-    capitalNow: capitalAt(baseForecast({ ...state, settings: { ...state.settings, baselineMode: 'last' } }, today, Math.max(k, 12)), k),
-    capitalNoWork: capitalAt(baseForecast(alt, today, Math.max(k, 12)), k),
+    capitalNow: capitalInMonths(baseForecastTrace({ ...state, settings: { ...state.settings, baselineMode: 'last' } }, today, Math.max(k, 12)), today, k),
+    capitalNoWork: capitalInMonths(baseForecastTrace(alt, today, Math.max(k, 12)), today, k),
   };
 }
 
@@ -816,9 +817,9 @@ export interface EventPreview {
 /** Прогноз «как сейчас» и с событием (например, «Урежу траты») — для предпросмотра, состояние не меняется. */
 export function previewEvent(state: AppState, today: IsoDate, events: readonly import('./simulate').LifeEvent[], months = 36): EventPreview {
   const { input } = buildSimInput(state, today);
-  const base = simulate({ ...input, horizonMonths: months });
-  const w = simulate({ ...input, events: [...input.events, ...events], horizonMonths: months });
-  return { base, with: w, capital: (k) => ({ without: capitalAt(base, k), with: capitalAt(w, k) }), shifts: goalShifts(state, today, base, w) };
+  const base = simulate({ ...input, horizonMonths: months }, undefined, { trace: true });
+  const w = simulate({ ...input, events: [...input.events, ...events], horizonMonths: months }, undefined, { trace: true });
+  return { base, with: w, capital: (k) => ({ without: capitalInMonths(base, today, k), with: capitalInMonths(w, today, k) }), shifts: goalShifts(state, today, base, w) };
 }
 
 /** Событие «урежу траты на amount в месяц с даты from» — то же, что собирает форма «Планирую… → Урежу траты». */
@@ -829,7 +830,7 @@ export function cutEvent(id: string, from: IsoDate, amount: Money, title = 'Ме
 /** Что будет с доходом, если ответить «повышают» и «не повышают» (D108): капитал через k месяцев при каждом ответе. */
 export function previewIndexed(state: AppState, today: IsoDate, incomeId: string, k = 36): { yes: Money | null; no: Money | null } {
   const set = (v: boolean): AppState => ({ ...state, settings: { ...state.settings, incomeSchedule: state.settings.incomeSchedule.map((x) => (x.id === incomeId ? { ...x, indexed: v } : x)) } });
-  const run = (s: AppState) => capitalAt(baseForecast(s, today, Math.max(k, 12)), k);
+  const run = (s: AppState) => capitalInMonths(baseForecastTrace(s, today, Math.max(k, 12)), today, k);
   return { yes: run(set(true)), no: run(set(false)) };
 }
 

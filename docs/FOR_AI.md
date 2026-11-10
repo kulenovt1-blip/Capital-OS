@@ -6,14 +6,16 @@ Capital OS — PWA к MoneyManager (Android). Загружает бэкап `.mm
 
 1. `README.md` — запуск и состав проекта.
 2. `docs/simplify/spec.md` — что реализовано сейчас и как считаются числа.
-3. `docs/DECISIONS.md` — почему так (D1–D134). Новое решение — следующий номер.
+3. `docs/DECISIONS.md` — почему так (D1–D147). Новое решение — следующий номер.
 4. `docs/simplify/README.md` — цель: приложение понятно без финансовой подготовки.
 5. `docs/BLOCKERS.md` — ограничения среды.
 
 ## Устройство
 
 - `engine/` — чистые функции, деньги в целых тиынах, дата — параметр. Новый слой простых экранов — `engine/simple.ts`; распределение — `engine/ladder.ts` (стратегия «S» — по списку целей).
+- `engine/position/` — «Положение» v4: показатели, направления, ограничители, диапазон, уровни L1–L5, runway, долговая спираль, независимость (`independence.ts`, в т. ч. личный сценарий), нормализаторы вводов (`inputs.ts`); `view.ts::positionViewOf(state, today)` — вся модель экрана одной чистой функцией. Запас и «Из А в Б» — `engine/reserve.ts`, `engine/roadmap.ts`. Прогноз на дату и «Расчёт по шагам» — `engine/forecast-steps.ts` (срок «сегодня + N месяцев»; помесячный ряд остаётся для целей и «Положения»).
 - `app/` — интерфейс на vanilla TS (`h()`), экраны в `app/screens/`, справка — `app/screens/help.ts` и `app/help-text.ts`.
+- `tests/support/position-profiles.ts` — синтетические профили «Положения» (фикстуры тестов и состояния `pos-*` для `scripts/ui-states.ts`).
 - `tests/` — модульные и сценарные тесты; фикстуры синтетические (`tests/fixtures/`).
 
 ## Правила (обязательные)
@@ -33,7 +35,7 @@ Capital OS — PWA к MoneyManager (Android). Загружает бэкап `.mm
 npm test                      # или: bun test
 npm run typecheck             # или: npx tsc --noEmit -p tsconfig.local.json
 PORT=5199 bun scripts/dev-server.ts &
-bun scripts/ui-check.ts       # все экраны, светлая и тёмная тема
+bun scripts/ui-check.ts       # все экраны, светлая и тёмная тема (запускать одну, без других проверок: при нагрузке ловит ложный «контраст 1.00»)
 bun scripts/storage-check.ts  # защита данных; в т. ч. настройки и активы «Положения» (T16)
 bun scripts/ui-inputs.ts      # вводы «Положения»: «О тебе», ручной актив, ошибки форм (T16)
 ```

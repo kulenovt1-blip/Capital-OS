@@ -178,23 +178,30 @@ export const notAssessedLine = (missing: readonly IndependenceMissing[]): string
   `независимость не оценена: не хватает ${missing.map((m) => MISSING_TEXT[m]).join(', ')}`;
 
 /** Независимость по состоянию бэкапа. */
-export function independenceOfState(state: AppState, today: IsoDate): IndependenceResult {
-  return computeIndependence(independenceInputOf(state, today).input);
+export function independenceOfState(state: AppState, today: IsoDate, pre: Precomputed = {}): IndependenceResult {
+  return computeIndependence(independenceInputOf(state, today, pre).input);
+}
+
+/** Уже посчитанное экраном (T17): ряд, показатели и обзор считаются один раз на экран, а не три; числа те же. */
+export interface Precomputed {
+  series?: ReturnType<typeof buildPositionSeries>;
+  report?: ReturnType<typeof computeIndicators>;
+  overview?: ReturnType<typeof buildOverview>;
 }
 
 /** Вход расчёта независимости и деньги «сразу» (для запаса); общий для факта и личного сценария (T21). */
-export function independenceInputOf(state: AppState, today: IsoDate): { input: IndependenceInput; netLiquid: number } {
+export function independenceInputOf(state: AppState, today: IsoDate, pre: Precomputed = {}): { input: IndependenceInput; netLiquid: number } {
   const horizon = horizonYears(state.settings.position?.age);
-  const series = buildPositionSeries(state, today);
+  const series = pre.series ?? buildPositionSeries(state, today);
   if (!series.hasData) {
     return { input: { capital: 0, need: 0, passive: [], deficit: null, horizon, limitsFired: [], spiral: null, missing: ['no_data'] }, netLiquid: 0 };
   }
-  const rep = computeIndicators(state, today, series);
+  const rep = pre.report ?? computeIndicators(state, today, series);
   const inputs = rep.inputs!;
   const missing: IndependenceMissing[] = [];
 
   // K: доступное за 30 дней, без счетов «неинвестируемое», минус долг людям
-  const cap = buildOverview(state, today).capital;
+  const cap = (pre.overview ?? buildOverview(state, today)).capital;
   const notInvestable = new Set(state.manualAccounts.filter((a) => a.assetKind === 'non_investable').map((a) => a.id));
   const liquid = liquidOn({ ...cap, accounts: cap.accounts.filter((a) => !notInvestable.has(a.accountId)) }, addDays(today, K_HORIZON_DAYS));
   const capital = Math.max(0, (liquid - cap.liabilities.payablesFromOps) / 100);
@@ -246,10 +253,10 @@ export interface DesiredScenario {
  * Личный сценарий «а если бы я тратил желаемую сумму» (T21, решение 8). Чистая надстройка: основной расчёт не читает
  * `desiredMonthly` и не меняется; без суммы или без данных сценария нет.
  */
-export function desiredScenarioOf(state: AppState, today: IsoDate): DesiredScenario | null {
+export function desiredScenarioOf(state: AppState, today: IsoDate, pre: Precomputed = {}): DesiredScenario | null {
   const d = state.settings.position?.desiredMonthly;
   if (!d || !(d > 0)) return null;
-  const { input, netLiquid } = independenceInputOf(state, today);
+  const { input, netLiquid } = independenceInputOf(state, today, pre);
   if (input.missing.includes('no_data')) return null;
   const desired = d / 100;
   const independence = computeIndependence({ ...input, need: desired });
