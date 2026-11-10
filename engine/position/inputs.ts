@@ -80,12 +80,13 @@ export function shouldAskAboutLoan(prev: { assetKind?: AssetKind } | null, next:
  */
 export const incomeOriginChoice = (x: { passive?: boolean; fromAssets?: boolean }): IncomeOrigin => incomeOrigin(x);
 
-export function setIncomeOrigin<T extends Pick<IncomeScheduleItem, 'passive' | 'fromAssets'>>(x: T, origin: IncomeOrigin): T {
+export function setIncomeOrigin<T extends Pick<IncomeScheduleItem, 'passive' | 'fromAssets' | 'inHistory'>>(x: T, origin: IncomeOrigin): T {
   if (origin === 'labor') {
-    if (!('passive' in x) && !('fromAssets' in x)) return x;
-    const { passive: _p, fromAssets: _f, ...rest } = x;
+    if (!('passive' in x) && !('fromAssets' in x) && !('inHistory' in x)) return x;
+    const { passive: _p, fromAssets: _f, inHistory: _h, ...rest } = x;
     void _p;
     void _f;
+    void _h;
     return rest as T;
   }
   return { ...x, passive: true, fromAssets: origin === 'from_assets' };

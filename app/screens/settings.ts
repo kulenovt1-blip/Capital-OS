@@ -302,6 +302,7 @@ defineSheet('income-item', (id) => {
   drawIdx();
   // откуда доход: три ответа (T13); не отвечал — работа, как раньше
   let origin: IncomeOrigin = incomeOriginChoice(x);
+  let inHistory: boolean | undefined = x.inHistory;
   const originBox = h('div', { class: 'stack' });
   const ORIGIN_HINT: Record<IncomeOrigin, string> = {
     labor: 'Пропадёт, если пропадёт работа.',
@@ -313,7 +314,13 @@ defineSheet('income-item', (id) => {
       h('span', { class: 'field-label' }, 'Откуда этот доход', info('incomeOrigin')),
       seg([['labor', 'Работа'], ['from_assets', 'С моих накоплений'], ['independent', 'Не зависит от меня']] as const, origin, (v) => ((origin = v), drawOrigin()), 'Откуда этот доход'),
       h('small', { class: 'hint' }, ORIGIN_HINT[origin]),
-      ...(origin !== 'labor' ? [h('small', { class: 'hint' }, 'Если эти деньги уже приходят на твои счета и видны в операциях MoneyManager, всё равно отметь, откуда они: так расчёт поймёт, что это не работа.')] : []),
+      ...(origin !== 'labor'
+        ? [
+            h('span', { class: 'field-label' }, 'Эти деньги уже есть в операциях MoneyManager?'),
+            seg([['no', 'Нет, ещё не приходили'], ['yes', 'Да, уже приходят']] as const, inHistory === true ? 'yes' : 'no', (v) => ((inHistory = v === 'yes'), drawOrigin()), 'Есть ли доход в операциях'),
+            h('small', { class: 'hint' }, inHistory === true ? 'Тогда они уже входят в твой средний доход, второй раз приложение их не прибавит. Признак «не от работы» всё равно сохранится.' : 'Тогда приложение прибавит эту сумму к среднему доходу из операций.'),
+          ]
+        : []),
     );
   drawOrigin();
   // «Откуда доход» нужен тем, у кого аренда, пенсия, дивиденды: свёрнут, а для вида «зависит от работы» не показывается вовсе
@@ -346,8 +353,8 @@ defineSheet('income-item', (id) => {
     if (amount === null || amount <= 0) errs.push('Сумма должна быть больше нуля');
     const start = readStr(form, 'start');
     const end = readStr(form, 'end');
-    const { start: _s, end: _e, indexed: _i, indexMonth: _m, ...base } = x;
-    const item = setIncomeStatus(setIncomeOrigin({ ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}), ...(indexed === 'yes' && indexMonth ? { indexMonth } : {}) }, origin), readStr(form, 'status') as IncomeStatus | 'auto');
+    const { start: _s, end: _e, indexed: _i, indexMonth: _m, inHistory: _h, ...base } = x;
+    const item = setIncomeStatus(setIncomeOrigin({ ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}), ...(indexed === 'yes' && indexMonth ? { indexMonth } : {}), ...(origin !== 'labor' && inHistory !== undefined ? { inHistory } : {}) }, origin), readStr(form, 'status') as IncomeStatus | 'auto');
     if (!errs.length) errs.push(...validateIncomeItem(item, reg));
     err.replaceChildren(errorsBox(errs) ?? '');
     if (errs.length) return;

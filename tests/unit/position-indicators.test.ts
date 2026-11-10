@@ -258,6 +258,16 @@ describe('чистая ликвидность и ручной пассивный
     expect(withRow({ start: '2030-01-01' }).manualIncomeMonthly).toBe(0);
     near(withRow({ start: '2020-01-01', end: '2099-01-01' }).manualIncomeMonthly, 150_000, 6);
   });
+  it('С5 (D170): доход, который уже есть в операциях (inHistory), второй раз не прибавляется', () => {
+    const base = build(SPECS2[2]!);
+    const row = { id: 'int', title: 'Проценты', dayOfMonth: 1, amount: tenge(50_000), kind: 'stable' as const, passive: true };
+    const withRow = (extra: object) => computeIndicators({ ...base, settings: { ...base.settings, incomeSchedule: [...base.settings.incomeSchedule, { ...row, ...extra }] } }, TODAY);
+    const none = computeIndicators(base, TODAY).inputs!;
+    near(withRow({}).inputs!.manualIncomeMonthly, 50_000, 6); // не спрошено — как раньше
+    near(withRow({ inHistory: false }).inputs!.manualIncomeMonthly, 50_000, 6);
+    expect(withRow({ inHistory: true }).inputs!.manualIncomeMonthly).toBe(0);
+    expect(withRow({ inHistory: true }).inputs!.incomeMonthly).toBe(none.incomeMonthly);
+  });
   it('доход без признака «не зависит от труда» второй раз не считается: он уже в операциях', () => {
     const base = build(SPECS2[1]!);
     const same = computeIndicators({ ...base, settings: { ...base.settings, incomeSchedule: base.settings.incomeSchedule.map((i) => ({ ...i })) } }, TODAY);
