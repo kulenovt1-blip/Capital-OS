@@ -177,7 +177,8 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
 let qSkip = 0;
 
 function horizonSeg(k: number): HTMLElement {
-  return seg(HORIZONS.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза');
+  // С13 аудита UX: «год» среди цифр сбивал шкалу — все пункты в месяцах (12), единицы названы в подписи главного числа и для читалки
+  return seg(HORIZONS.map(([m]) => [String(m), String(m)] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза, месяцев');
 }
 
 export function renderForecastSimple(_rerender: () => void): HTMLElement {
@@ -234,7 +235,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       const pv = previewIndexed(st, today(), x.id, 36);
       qs.push(
         h('section', { class: 'warnline stack', 'aria-label': 'Рост дохода' },
-          h('strong', null, `«${x.title}» · ${fmt(x.amount)}. Его повышают каждый год вместе с ценами?`),
+          h('strong', null, `«${x.title}» · ${fmt(x.amount)}. Растёт каждый год вместе с ценами?`),
           pv.yes !== null && pv.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если да — ${fmtShort(pv.yes)}, если нет — ${fmtShort(pv.no)}`) : null,
           h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет')),
           h('details', { class: 'fold' }, h('summary', null, 'Зачем это'), h('p', { class: 'muted' }, `Траты в прогнозе дорожают на ${inflText} в год. Если доход не растёт, остаток каждый год тает.`)),
@@ -320,7 +321,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
         h(
           'section',
           { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
-          h('strong', null, 'Проверь, прежде чем верить прогнозу'),
+          h('strong', null, 'Прогноз точнее, если уточнить'),
           ...todo.map(([f, a]) => h('div', { class: 'stack tight' }, h('div', null, f.text), h('div', { class: 'chips wrap' }, a.map((x) => (x.href ? h('a', { class: 'chip', href: x.href }, x.label) : h('button', { class: 'chip', type: 'button', onclick: x.run }, x.label)))))),
         ),
       );
@@ -621,6 +622,10 @@ function monthKeyNext(t: string, ahead = 0): string {
 /** Куда человек хочет выйти (месяцев запаса) и за сколько месяцев — пока открыт экран. */
 let routeTarget: ReserveTarget | null = null;
 let routeDeadline = 6;
+/** «Путь к ступени» на «Профиле» открывает «Из А в Б» сразу с нужной целью запаса. */
+export function setRouteTarget(m: ReserveTarget): void {
+  routeTarget = m;
+}
 
 defineSheet('a-to-b', () => {
   const st = getState();

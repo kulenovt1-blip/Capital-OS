@@ -590,3 +590,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .top.sub-top .trust { max-width: none; flex: none; min-width: 44px; justify-content: center; padding: 0 12px; }
 .top.sub-top .trust span:not(.td) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .top.sub-top .trust .td { width: 12px; height: 12px; }
+
+/* Строка о надёжности уровня под названием ступени (аудит UX, К3) */
+.pos-trust { display: block; margin: 0 auto; max-width: 34em; padding: 8px 12px; border-radius: 12px; font-size: calc(14px * var(--fz)); color: var(--ink-2); text-decoration: none; text-align: center; }
+.pos-trust.warn { background: var(--warn-tint); color: var(--on-warn-tint); font-weight: 600; }

@@ -12,7 +12,7 @@
 import { categoryName } from './import/mmbackup';
 import { tiyn, type Money } from './money';
 import { addMonths, daysBetween, monthKey, monthsBetween, startOfMonth, withDay, type IsoDate } from './date';
-import { money, day } from './explain';
+import { money, day, plural } from './explain';
 import { classifyAll, type ClassificationReport, type ClassifiedOp } from './classify';
 import { classRegistry } from './classes';
 import { isCandidate, makeInstallment, obligationStatus, type Obligation, type PaymentMatch } from './obligations';
@@ -253,7 +253,7 @@ function checkObligations(state: AppState, today: IsoDate): InstallmentCheck[] {
       out.push({
         obligationId: o.id,
         kind: 'stalled',
-        text: `«${o.title}»: ${overdue.length} платежа по графику не найдены в операциях (последний ожидался ${day(overdue[overdue.length - 1]!.date)}). Если рассрочка закрыта досрочно — удали её или обнови остаток; если платишь без тега — проверь тег`,
+        text: `«${o.title}»: ${overdue.length} ${plural(overdue.length, 'платёж', 'платежа', 'платежей')} по графику не найдено в операциях (последний ожидался ${day(overdue[overdue.length - 1]!.date)}). Если рассрочка закрыта досрочно — удали её или обнови остаток; если платишь без тега — проверь тег`,
       });
       continue;
     }
