@@ -137,7 +137,8 @@ function moneyBlock(v: PositionView): HTMLElement {
             chevron: false,
           })
         : null,
-      row({ title: 'Запас денег', sub: `по обычным расходам ${mo(m.reserveLifestyleMonths)} · по необходимым ${mo(m.reserveEssentialMonths)}`, chevron: false }),
+      // один запас (этап 2, К4): на необходимых расходах — как в условиях ступени и на «Обзоре»
+      row({ title: 'Запас', sub: 'на сколько хватит денег без дохода, на необходимых расходах', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
     ),
   );
 }
@@ -257,7 +258,10 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  // один запас на «Обзоре» (К4, этап 2): та же цифра, что в условиях ступени
+  const reserve = v.money.reserveEssentialMonths > 0 ? `запас ${v.money.reserveEssentialMonths >= 600 ? 'больше 50 лет' : `${Math.floor(v.money.reserveEssentialMonths * 10 + 1e-9) / 10} мес.`.replace('.', ',')}` : '';
+  const note = !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : '';
+  return rows(row({ title: `Ступень ${v.level} · ${v.levelName}`, sub: [reserve, note].filter(Boolean).join(' · ') || undefined, href: '#/position' }));
 }
 
 export { sheetHref };
