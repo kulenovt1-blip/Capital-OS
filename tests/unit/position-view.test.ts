@@ -200,6 +200,11 @@ describe('С2 (D159): сверка не сошлась — уровень пре
     expect(view(good).reconcileOk).toBe(true);
     expect(view(bad).reconcileOk).toBe(false);
     expect(view(bad).preliminary).toBe(true);
+    // исключённый из анализа счёт со сломанной сверкой профиль не портит
+    const acc = bad.settings.accounts ?? [];
+    const rest = acc.filter((a) => a.accountId !== acc0.id);
+    const excl = { ...bad, settings: { ...bad.settings, accounts: [...rest, { accountId: acc0.id, excluded: true, liquidity: { kind: 'instant' } }] } } as typeof bad;
+    expect(view(excl).reconcileOk).toBe(true);
   });
 });
 
