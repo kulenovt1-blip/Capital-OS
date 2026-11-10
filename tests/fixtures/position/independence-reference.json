@@ -1,0 +1,17 @@
+{
+"_note": "Эталон T15a: профили независимости FI1–FI8 (расходы 400 тыс. в месяц, необходимое 300 тыс.). Значения переписаны из вывода проб v4 (exp22/exp23/exp24) в том виде, как они записаны в project docs: position-spec-v4-b.md раздел 10.9 (таблица) и model-final.md разделы 1.2–1.3 (правка V1, D = 24). Снято НЕ с кода движка. Скрипты проб лежат в project docs как текст; перезапуск не делался, поэтому точность — как в таблице: направления записаны целыми и округлены неровно (например, FI6 «Вектор» в таблице 32 при 31,5 в выводе), поэтому допуск в тесте — меньше одного очка; G записан до 0,1. before = до правки V1 (старая шкала, v1CapMonths = Infinity), after = принятая редакция (D = 24). Блок independence (C, P, вероятности успеха) нужен для T10 и сейчас не проверяется.",
+"today": "2026-11-04",
+"profiles": {
+"FI1": {"capitalMonths":311, "before":{"N":100,"V":57,"F":95,"G":81.4,"level":3,"V1":38}, "after":{"level":4}, "independence":{"deficitPctOfCapitalPerYear":0,"C":{"low":0.21,"central":0.49},"P":0,"successAtActualWithdrawal":{"base":100,"adverse":100,"central":100}}},
+"FI2": {"capitalMonths":811, "before":{"N":100,"V":56,"F":95,"G":81.0,"level":3,"V1":36}, "after":{"level":4}, "independence":{"deficitPctOfCapitalPerYear":0,"C":{"low":0.54,"central":1.28},"P":0,"successAtActualWithdrawal":{"base":100,"adverse":100,"central":100}}},
+"FI3": {"capitalMonths":987, "before":{"N":75,"V":32,"F":47,"G":48.2,"level":3}, "after":{"level":3}, "independence":{"deficitPctOfCapitalPerYear":1.12,"C":{"low":0.66,"central":1.56},"P":0.07,"successAtActualWithdrawal":{"base":94,"adverse":80,"central":100}}},
+"FI4": {"capitalMonths":387, "before":{"N":75,"V":31,"F":47,"G":47.8,"level":3}, "after":{"level":3}, "independence":{"deficitPctOfCapitalPerYear":2.87,"C":{"low":0.26,"central":0.61},"P":0.07,"successAtActualWithdrawal":{"base":14,"adverse":8,"central":72}}},
+"FI5": {"capitalMonths":320, "before":{"N":75,"V":31,"F":45,"G":47.1,"level":3}, "after":{"level":3}, "independence":{"deficitPctOfCapitalPerYear":3.66,"C":{"low":0.21,"central":0.51},"P":0.02,"successAtActualWithdrawal":{"base":4,"adverse":2,"central":26}}},
+"FI6": {"capitalMonths":492, "before":{"N":75,"V":32,"F":58,"G":51.4,"level":3}, "after":{"level":3}, "independence":{"deficitPctOfCapitalPerYear":1.46,"C":{"low":0.33,"central":0.78},"P":0.4,"successAtActualWithdrawal":{"base":80,"adverse":59,"central":100}}},
+"FI7": {"capitalMonths":142, "before":{"N":71,"V":30,"F":58,"G":49.6,"level":3}, "after":{"level":3}, "independence":{"deficitPctOfCapitalPerYear":5.08,"C":{"low":0.09,"central":0.22},"P":0.4,"successAtActualWithdrawal":{"base":0,"adverse":0,"central":0}}},
+"FI8": {"capitalMonths":1511, "before":{"N":100,"V":56,"F":95,"G":80.9,"level":3,"V1":36}, "after":{"level":4}, "independence":{"deficitPctOfCapitalPerYear":0,"C":{"low":1.01,"central":2.39},"P":0,"successAtActualWithdrawal":{"base":100,"adverse":100,"central":100}}}
+},
+"independenceConfirmedByCentralRate": ["FI2","FI3","FI6","FI8"],
+"independenceConfirmedByLowRate": ["FI8"],
+"v1AfterFixApprox": 68
+}

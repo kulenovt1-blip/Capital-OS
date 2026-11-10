@@ -392,3 +392,43 @@ export function probeProfiles(): ProbeProfile[] {
   for (const from of ['2026-09', '2026-06', '2026-03']) out.push({ name: `A (история с ${from})`, family: 'короткая история', state: build({ ...SPECS2[0]!, from }), opts: {} });
   return out;
 }
+
+// ───────────── профили независимости FI1–FI8 (эксперимент 22 пробы v4) ─────────────
+/** Расходы 400 тыс. в месяц, из них необходимое 300 тыс. (еда + жильё). Копилка на старте — капитал, кратный месячным расходам 400 тыс. */
+const FI_BASE_EXPENSES: [string, 'E_base' | 'E_fun', number][] = [['food', 'E_base', 150_000], ['rent', 'E_base', 150_000], ['fun', 'E_fun', 100_000]];
+const FI_BASE_MONTHLY = 400_000;
+
+export interface IndependenceProfile {
+  name: string;
+  title: string;
+  state: AppState;
+  /** Зарплата или пенсия в месяц, тенге. */
+  monthlyIncome: number;
+  /** Во сколько раз расходы выше базовых 400 тыс. (FI5 — перерасход ×3). */
+  expenseFactor: number;
+  /** Стартовый капитал в месяцах БАЗОВЫХ расходов (FI5: 1000, но расходы ×3, поэтому в её собственных месяцах меньше). */
+  startCapitalMonths: number;
+}
+
+const FI_SPECS: readonly { name: string; title: string; income: number; factor: number; months: number }[] = [
+  { name: 'FI1', title: 'работает, капитал 300×', income: 700_000, factor: 1, months: 300 },
+  { name: 'FI2', title: 'работает, капитал 800×', income: 700_000, factor: 1, months: 800 },
+  { name: 'FI3', title: 'живёт на капитал, 1000×', income: 30_000, factor: 1, months: 1000 },
+  { name: 'FI4', title: 'то же, капитал 400×', income: 30_000, factor: 1, months: 400 },
+  { name: 'FI5', title: 'капитал 1000× от старых расходов, расходы ×3', income: 30_000, factor: 3, months: 1000 },
+  { name: 'FI6', title: 'пенсия 40 % расходов, капитал 500×', income: 160_000, factor: 1, months: 500 },
+  { name: 'FI7', title: 'пенсия 40 % расходов, капитал 150×', income: 160_000, factor: 1, months: 150 },
+  { name: 'FI8', title: 'работает, капитал 1500×', income: 700_000, factor: 1, months: 1500 },
+];
+
+/** Восемь синтетических профилей независимости; в основной выборке независимость недостижима (спец. 10.9). Порядок — FI1…FI8. */
+export function independenceProfiles(): IndependenceProfile[] {
+  return FI_SPECS.map((p) => ({
+    name: p.name,
+    title: p.title,
+    monthlyIncome: p.income,
+    expenseFactor: p.factor,
+    startCapitalMonths: p.months,
+    state: build(mk(p.name, p.months * FI_BASE_MONTHLY, p.income, FI_BASE_EXPENSES.map(([id, cls, a]) => [id, cls, Math.round(a * p.factor)]))),
+  }));
+}
