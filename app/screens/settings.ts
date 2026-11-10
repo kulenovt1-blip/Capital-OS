@@ -297,6 +297,11 @@ defineSheet('income-item', (id) => {
       ...(origin !== 'labor' ? [h('small', { class: 'hint' }, 'Если эти деньги уже приходят на твои счета и видны в операциях MoneyManager, всё равно отметь, откуда они: так расчёт поймёт, что это не работа.')] : []),
     );
   drawOrigin();
+  // «Откуда доход» нужен тем, у кого аренда, пенсия, дивиденды: свёрнут, а для вида «зависит от работы» не показывается вовсе
+  const originFold = h('details', { class: 'fold', 'data-key': 'income:origin', ...(origin !== 'labor' ? { open: true } : {}) }, h('summary', null, 'Это не зарплата?'), originBox);
+  const syncOrigin = () => (originFold.hidden = kindSel.value === 'work' && origin === 'labor');
+  syncOrigin();
+  kindSel.addEventListener('change', syncOrigin);
   // насколько надёжен: по умолчанию приложение решает само по расписанию и событиям
   const STATUS_OPTS: [IncomeStatus | 'auto', string][] = [['auto', 'Пусть решит приложение'], ['P', 'Постоянный'], ['T', 'Временный: у него есть конец'], ['X', 'Ожидаемый: ещё не пришёл'], ['I', 'Нерегулярный: то есть, то нет']];
   const statusSel = h('select', { name: 'status', 'aria-label': 'Насколько надёжен доход' }, STATUS_OPTS.map(([v, l]) => h('option', { value: v, selected: v === (x.status ?? 'auto') }, l)));
@@ -307,7 +312,7 @@ defineSheet('income-item', (id) => {
     h('div', { class: 'grid-form' }, field('Какого числа', h('input', { name: 'day', type: 'number', min: 1, max: 31, inputmode: 'numeric', value: x.dayOfMonth })), field('Сколько в месяц, ₸', moneyInput('amount', x.amount))),
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Вид', info('incomeKind')), kindSel, kindHint),
     h('div', { class: 'grid-form' }, field('С даты', h('input', { name: 'start', type: 'date', value: x.start ?? '' })), field('По дату', h('input', { name: 'end', type: 'date', value: x.end ?? '' }))),
-    originBox,
+    originFold,
     idxBox,
     h('details', { class: 'fold', 'data-key': 'income:status' }, h('summary', null, 'Насколько доход надёжен'), h('div', { class: 'stack' }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Надёжность', info('incomeStatus')), statusSel))),
     err,
