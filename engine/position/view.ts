@@ -5,7 +5,7 @@
  */
 import type { AppState } from '../state';
 import { addDays, type IsoDate } from '../date';
-import { buildOverview } from '../overview';
+import { buildOverview, type Overview } from '../overview';
 import { liquidOn } from '../ledger';
 import { buildPositionSeries } from './series';
 import {
@@ -136,6 +136,12 @@ function actualBounds(ctx: ReturnType<typeof boundsContext>, histMonths: number,
   return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : { ...scheduleBounds(ctx), ...reserveBounds(ctx) }) };
 }
 
+/** Счёт не сошёлся с MoneyManager — но только если он учитывается: исключённый счёт ни на что не влияет. */
+function hasMismatch(overview: Overview): boolean {
+  const excluded = new Set(overview.capital.accounts.filter((p) => p.excluded).map((p) => p.accountId));
+  return overview.reconcile?.accounts.some((a) => a.status === 'mismatch' && !excluded.has(a.accountId)) ?? false;
+}
+
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const series = buildPositionSeries(state, today);
   const overview = buildOverview(state, today);
@@ -146,7 +152,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const independence = independenceOfState(state, today, pre);
   if (!series.hasData || !report || overview.capital.unrated.length) {
     return {
-      status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !(overview.reconcile?.accounts.some((a) => a.status === 'mismatch') ?? false), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
+      status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !hasMismatch(overview), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
       independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
@@ -195,13 +201,13 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
 
   return {
-    status: 'ok', unrated: [], reconcileOk: !(overview.reconcile?.accounts.some((a) => a.status === 'mismatch') ?? false), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
-    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || overview.reconcile?.accounts.some((a) => a.status === 'mismatch') === true,
+    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || hasMismatch(overview),
     independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),
   };
 }

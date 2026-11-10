@@ -1,0 +1,1140 @@
+{
+ "app": "capital-os",
+ "exportedAt": "2026-11-04",
+ "state": {
+  "adjustments": [],
+  "decisions": [],
+  "fundings": [],
+  "goals": [],
+  "imported": {
+   "accounts": [
+    {
+     "archived": false,
+     "currency": "KZT",
+     "id": "card",
+     "ignoreInBalance": false,
+     "removed": false,
+     "title": "Карта"
+    },
+    {
+     "archived": false,
+     "currency": "KZT",
+     "id": "save",
+     "ignoreInBalance": false,
+     "removed": false,
+     "title": "Заначка"
+    }
+   ],
+   "categories": [
+    {
+     "icon": "",
+     "id": "c_stip",
+     "label": "Стипендия",
+     "removed": false,
+     "title": "Стипендия",
+     "type": "income"
+    },
+    {
+     "icon": "",
+     "id": "c_ben",
+     "label": "Пособие",
+     "removed": false,
+     "title": "Пособие",
+     "type": "income"
+    },
+    {
+     "icon": "",
+     "id": "c_food",
+     "label": "Еда",
+     "removed": false,
+     "title": "Еда",
+     "type": "expense"
+    },
+    {
+     "icon": "",
+     "id": "c_fun",
+     "label": "Развлечения",
+     "removed": false,
+     "title": "Развлечения",
+     "type": "expense"
+    },
+    {
+     "icon": "",
+     "id": "c_phone",
+     "label": "Телефон",
+     "removed": false,
+     "title": "Телефон",
+     "type": "expense"
+    }
+   ],
+   "meta": {
+    "dbBytes": 0,
+    "entryName": "test",
+    "firstDate": "2025-09-01",
+    "lastDate": "2026-10-26",
+    "prefixLength": 0
+   },
+   "operations": [
+    {
+     "accountId": "card",
+     "amount": 2000000,
+     "categoryId": null,
+     "comment": "",
+     "date": "2025-09-01",
+     "id": "op-00001",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-09-03",
+     "id": "op-00004",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2025-09-12",
+     "id": "op-00003",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-09-20",
+     "id": "op-00005",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2025-09-23",
+     "id": "op-00002",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-09-26",
+     "fromAccountId": "card",
+     "fromAmount": 5000000,
+     "id": "op-00006",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 5000000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-10-03",
+     "id": "op-00009",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2025-10-12",
+     "id": "op-00008",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-10-20",
+     "id": "op-00010",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2025-10-23",
+     "id": "op-00007",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-10-26",
+     "fromAccountId": "card",
+     "fromAmount": 5000000,
+     "id": "op-00011",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 5000000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-11-03",
+     "id": "op-00014",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2025-11-12",
+     "id": "op-00013",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2025-11-17",
+     "id": "op-00016",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-11-20",
+     "id": "op-00015",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2025-11-23",
+     "id": "op-00012",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-11-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00017",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-12-03",
+     "id": "op-00020",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2025-12-12",
+     "id": "op-00019",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2025-12-17",
+     "id": "op-00022",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-12-20",
+     "id": "op-00021",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2025-12-23",
+     "id": "op-00018",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-12-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00023",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-01-03",
+     "id": "op-00026",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-01-12",
+     "id": "op-00025",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-01-17",
+     "id": "op-00028",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-01-20",
+     "id": "op-00027",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-01-23",
+     "id": "op-00024",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-01-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00029",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-02-03",
+     "id": "op-00032",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-02-12",
+     "id": "op-00031",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-02-17",
+     "id": "op-00034",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-02-20",
+     "id": "op-00033",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-02-23",
+     "id": "op-00030",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-02-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00035",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-03-03",
+     "id": "op-00038",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-03-12",
+     "id": "op-00037",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-03-17",
+     "id": "op-00040",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-03-20",
+     "id": "op-00039",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-03-23",
+     "id": "op-00036",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-03-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00041",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-04-03",
+     "id": "op-00044",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-04-12",
+     "id": "op-00043",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-04-17",
+     "id": "op-00046",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-04-20",
+     "id": "op-00045",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-04-23",
+     "id": "op-00042",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-04-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00047",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-05-03",
+     "id": "op-00050",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-05-12",
+     "id": "op-00049",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-05-17",
+     "id": "op-00052",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-05-20",
+     "id": "op-00051",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-05-23",
+     "id": "op-00048",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-05-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00053",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-06-03",
+     "id": "op-00056",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-06-12",
+     "id": "op-00055",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-06-17",
+     "id": "op-00058",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-06-20",
+     "id": "op-00057",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-06-23",
+     "id": "op-00054",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-06-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00059",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-07-03",
+     "id": "op-00062",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-07-12",
+     "id": "op-00061",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-07-17",
+     "id": "op-00064",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-07-20",
+     "id": "op-00063",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-07-23",
+     "id": "op-00060",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-07-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00065",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-08-03",
+     "id": "op-00068",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-08-12",
+     "id": "op-00067",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-08-17",
+     "id": "op-00070",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-08-20",
+     "id": "op-00069",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-08-23",
+     "id": "op-00066",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-08-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00071",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-09-03",
+     "id": "op-00074",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-09-12",
+     "id": "op-00073",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-09-17",
+     "id": "op-00076",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-09-20",
+     "id": "op-00075",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-09-23",
+     "id": "op-00072",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-09-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00077",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    },
+    {
+     "accountId": "card",
+     "amount": 3000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-10-03",
+     "id": "op-00080",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 4000000,
+     "categoryId": "c_ben",
+     "comment": "",
+     "date": "2026-10-12",
+     "id": "op-00079",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2500000,
+     "categoryId": "c_phone",
+     "comment": "",
+     "date": "2026-10-17",
+     "id": "op-00082",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 1000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-10-20",
+     "id": "op-00081",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 5000000,
+     "categoryId": "c_stip",
+     "comment": "",
+     "date": "2026-10-23",
+     "id": "op-00078",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-10-26",
+     "fromAccountId": "card",
+     "fromAmount": 2500000,
+     "id": "op-00083",
+     "kind": "transfer",
+     "toAccountId": "save",
+     "toAmount": 2500000
+    }
+   ],
+   "reportedBalances": {
+    "card": 2000000,
+    "save": 40000000
+   },
+   "tags": [],
+   "warnings": []
+  },
+  "importedAt": "2026-11-04",
+  "lastBackupAt": null,
+  "manualAccounts": [],
+  "manualMatches": {},
+  "obligations": [
+   {
+    "currency": "KZT",
+    "earlyPayoffAllowed": true,
+    "id": "ph",
+    "interestRateBp": 0,
+    "kind": "installment",
+    "owner": "self",
+    "remaining": 15000000,
+    "remainingAsOf": "2026-11-04",
+    "schedule": [
+     {
+      "amount": 2500000,
+      "date": "2026-11-17"
+     },
+     {
+      "amount": 2500000,
+      "date": "2026-12-17"
+     },
+     {
+      "amount": 2500000,
+      "date": "2027-01-17"
+     },
+     {
+      "amount": 2500000,
+      "date": "2027-02-17"
+     },
+     {
+      "amount": 2500000,
+      "date": "2027-03-17"
+     },
+     {
+      "amount": 2500000,
+      "date": "2027-04-17"
+     }
+    ],
+    "title": "Телефон"
+   }
+  ],
+  "settings": {
+   "accounts": [
+    {
+     "accountId": "card",
+     "excluded": false,
+     "kind": "spend",
+     "liquidity": {
+      "kind": "instant"
+     }
+    },
+    {
+     "accountId": "save",
+     "excluded": false,
+     "kind": "savings",
+     "liquidity": {
+      "kind": "instant"
+     }
+    }
+   ],
+   "baselineMonths": 6,
+   "categoryLabels": {},
+   "classes": {
+    "custom": [],
+    "overrides": {}
+   },
+   "classification": {
+    "familyTags": [],
+    "rules": [
+     {
+      "categoryTitle": "Накопительный счёт",
+      "class": "T_savings_out",
+      "opKind": "expense"
+     },
+     {
+      "categoryTitle": "Накопление",
+      "class": "T_savings_in",
+      "opKind": "income"
+     },
+     {
+      "categoryTitle": "Долг",
+      "class": "F_lent"
+     },
+     {
+      "categoryTitle": "Возвращают долг",
+      "class": "F_lent_back"
+     },
+     {
+      "categoryTitle": "Беру в долг",
+      "class": "F_borrowed"
+     },
+     {
+      "categoryTitle": "Возвращаю долг",
+      "class": "F_borrowed_back"
+     },
+     {
+      "categoryTitle": "Бонус",
+      "class": "I_cashback"
+     },
+     {
+      "categoryTitle": "Размен",
+      "class": "T_correction"
+     },
+     {
+      "categoryTitle": "Рассрочка",
+      "class": "E_installment_own",
+      "refine": [
+       {
+        "class": "E_installment_family",
+        "tagGroup": "family"
+       }
+      ]
+     },
+     {
+      "categoryId": "c_stip",
+      "categoryTitle": "Стипендия",
+      "class": "I_stipend",
+      "opKind": "income"
+     },
+     {
+      "categoryId": "c_ben",
+      "categoryTitle": "Пособие",
+      "class": "I_benefit",
+      "opKind": "income"
+     },
+     {
+      "categoryId": "c_food",
+      "categoryTitle": "Еда",
+      "class": "E_base",
+      "opKind": "expense"
+     },
+     {
+      "categoryId": "c_fun",
+      "categoryTitle": "Развлечения",
+      "class": "E_fun",
+      "opKind": "expense"
+     },
+     {
+      "categoryId": "c_phone",
+      "categoryTitle": "Телефон",
+      "class": "E_installment_own",
+      "opKind": "expense"
+     }
+    ]
+   },
+   "defaultIncomeHorizonDays": 30,
+   "dismissedInstallments": [],
+   "firstRunDone": true,
+   "forecastViewMonths": 12,
+   "horizonMonths": [
+    3,
+    12,
+    36
+   ],
+   "incomeKinds": [],
+   "incomeSchedule": [
+    {
+     "amount": 5000000,
+     "dayOfMonth": 23,
+     "end": "2027-06-25",
+     "id": "stip",
+     "kind": "stable",
+     "title": "Стипендия"
+    },
+    {
+     "amount": 4000000,
+     "dayOfMonth": 12,
+     "id": "ben",
+     "kind": "stable",
+     "title": "Пособие"
+    }
+   ],
+   "inflationBp": 1000,
+   "matchWindowDays": 15,
+   "openingDebts": {
+    "payable": 0,
+    "receivable": 0
+   },
+   "planStrategy": "S",
+   "plannedEvents": [],
+   "reserveMonths": 3,
+   "savingsFlows": {
+    "mode": "estimate"
+   },
+   "scenarios": [
+    {
+     "id": "base",
+     "name": "Базовый",
+     "patch": {}
+    },
+    {
+     "id": "adverse",
+     "name": "Неблагоприятный",
+     "patch": {
+      "expenseFactorBp": 11500,
+      "irregularIncomeFactorBp": 0,
+      "oneOffMonthOffset": 1,
+      "oneOffMonthsOfBaseBp": 10000,
+      "workDelayMonths": 3,
+      "workIncomeFactorBp": 8000
+     }
+    },
+    {
+     "id": "favorable",
+     "name": "Благоприятный",
+     "patch": {
+      "workIncomeFactorBp": 11500
+     }
+    }
+   ],
+   "simpleMigrated": true,
+   "simulationMonths": 36,
+   "strategy": {
+    "comfortReserveBp": 15000,
+    "cushionShareBp": 7000,
+    "mergeTolerance": 100000,
+    "requiredStep": 10000,
+    "urgencyMonths": 12
+   }
+  }
+ },
+ "version": 1
+}

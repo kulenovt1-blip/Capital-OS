@@ -5,30 +5,21 @@
    Отступы: 4 / 8 / 12 / 16 / 24. Скругления: карточки 16, кнопки 12. Мельче 13 px — только подписи осей графика. */
 
 /* ===== 1. ТОКЕНЫ ===== */
+/* D166: форма Г, палитра «Бирюза». Светлая тема одна; тёмная B1 (D152) снята. Бирюзовый — главное и выбранное,
+   оранжевый — только порог 60 на радаре и полосках. Карточки — без обводки, со скруглением 22 и лёгкой тенью. */
 :root {
-  --bg: #f4f4ef; --surface: #ffffff; --surface-sunken: #e8e8e1; --surface-inverse: #141714; --on-inverse: #ffffff; --on-inverse-muted: #c5cabf;
-  --ink: #141714; --ink-2: #3c413a; --muted: #5a5f56; --line: #dcdcd3; --line-strong: #cbcbc2; --divider: #ececE5;
-  --primary: #141714; --on-primary: #ffffff;
+  --bg: #edf1f2; --surface: #ffffff; --surface-sunken: #d3e4e6; --surface-inverse: #0b6b72; --on-inverse: #ffffff; --on-inverse-muted: #e3f4f5;
+  --ink: #10222b; --ink-2: #34505c; --muted: #4d6570; --line: #d3e4e6; --line-strong: #b4ccd0; --divider: #e3eef0;
+  --primary: #0b6b72; --on-primary: #ffffff; --accent: #0b6b72; --threshold: #c2571a;
   --good: #1f7a3a; --good-tint: #e2f0e5; --on-good-tint: #1a5e2f;
-  --warn: #8a6100; --warn-tint: #fff3cc; --on-warn-tint: #5c4700; --warn-line: #e9cf7a;
+  --warn: #8a4210; --warn-tint: #fdeedd; --on-warn-tint: #6b3208; --warn-line: #efc9a3;
   --bad: #a82a19; --bad-tint: #fbe7e3; --on-bad-tint: #7f1d10; --bad-line: #e6c3bc;
-  --focus: #2f6fdf; --scrim: rgba(20, 23, 20, 0.55); --nav: #ffffff;
-  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --band: rgba(42, 120, 214, 0.12);
+  --focus: #0b6b72; --scrim: rgba(16, 34, 43, 0.55); --nav: #ffffff;
+  --series-1: #0b6b72; --series-2: #c2571a; --series-3: #1baf7a; --band: rgba(11, 107, 114, 0.18);
+  --radius: 22px; --shadow: 0 1px 2px rgba(16, 34, 43, 0.07);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fz: 1; --bnh: 72px; --ease: cubic-bezier(0.2, 0.9, 0.3, 1.1);
   color-scheme: light;
-}
-:root[data-theme='dark'] {
-  /* B1 (D152): тёмный фон, салатовый акцент */
-  --bg: #0b110d; --surface: #131b15; --surface-sunken: #1b251e; --surface-inverse: #131b15; --on-inverse: #e8efe9; --on-inverse-muted: #a9b6ac;
-  --ink: #e8efe9; --ink-2: #c3cdc5; --muted: #98a59b; --line: #26312a; --line-strong: #344038; --divider: #1b251e;
-  --primary: #d9f99d; --on-primary: #0b1a10;
-  --good: #8fd19e; --good-tint: #16301e; --on-good-tint: #b8e8c4;
-  --warn: #f2cf5b; --warn-tint: #2e2709; --on-warn-tint: #f2cf5b; --warn-line: #5c4e1a;
-  --bad: #ff8c7a; --bad-tint: #3a1a15; --on-bad-tint: #ffb3a6; --bad-line: #5c302b;
-  --focus: #d9f99d; --scrim: rgba(0, 0, 0, 0.62); --nav: #0e1510;
-  --accent: #d9f99d;
-  --series-1: #d9f99d; --series-2: #e8774a; --series-3: #2fc08a; --band: rgba(217, 249, 157, 0.14);
 }
 :root[data-fs='1'] { --fz: 1.15; }
 
@@ -577,5 +568,24 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .pos-cols { display: flex; gap: 12px; }
 .pos-col { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .pos-col .v { font-size: 24px; font-weight: 700; }
-.row-fold summary { display: flex; justify-content: space-between; gap: 12px; min-height: 44px; align-items: center; }
+.row-fold summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; min-height: 44px; align-items: center; }
+.row-fold .dbar { position: relative; order: 3; flex: 0 0 100%; height: 8px; border-radius: 4px; background: var(--surface-sunken); margin: 2px 0 8px; }
+.row-fold .dfill { display: block; height: 8px; border-radius: 4px; background: var(--primary); }
+.row-fold .dtick { position: absolute; left: 60%; top: -5px; width: 2px; height: 18px; background: var(--threshold); }
 .row-fold .rf-val { color: var(--ink-2); }
+
+/* ===== 9. Форма Г (D166): карточки без обводки, крупное скругление ===== */
+.card, .rows, .cell, .hint-card, .attention, details.fold { border: 0; border-radius: var(--radius); box-shadow: var(--shadow); }
+.attention { border: 1px solid var(--warn-line); }
+.hero { border-radius: var(--radius); padding: 20px 20px 16px; }
+.hero .value { font-weight: 800; letter-spacing: -0.03em; }
+.top h1 { font-weight: 800; letter-spacing: -0.03em; }
+.pos-level-name { font-weight: 800; letter-spacing: -0.02em; }
+.pos-radar { display: flex; flex-direction: column; align-items: center; }
+.pos-level-card { text-align: center; }
+.pos-level-card .pos-ladder, .pos-level-card .muted { text-align: left; }
+.top .ttl-row h1 { flex: 0 1 auto; max-width: 100%; }
+/* на вложенных экранах значок доверия — только цветная точка (название экрана важнее); смысл — в aria-label и в листе по нажатию (D167) */
+.top.sub-top .trust { max-width: none; flex: none; min-width: 44px; justify-content: center; padding: 0 12px; }
+.top.sub-top .trust span:not(.td) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.top.sub-top .trust .td { width: 12px; height: 12px; }

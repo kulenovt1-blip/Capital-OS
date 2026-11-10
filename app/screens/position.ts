@@ -29,13 +29,16 @@ function explanation(v: PositionView): Explanation {
   if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
+  out.push(step('position.rule', 'Как получается ступень: общая оценка из трёх направлений (слабое тянет вниз) плюс факты — запас от 3 месяцев для «Есть подушка», от 6 месяцев и все направления от 60 для «Защищён от ударов»', { detail: true }));
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
     out.push(step(`position.dir.${d.id}`, `${d.name}: ${d.score === null ? 'оценить нечем' : `${nf(d.score)} из 100`}${d.reliable ? '' : ' (данных мало)'}`));
     for (const i of d.indicators) out.push(step(`position.ind.${i.id}`, `${i.label}: ${i.score === null ? 'пока неизвестно' : `${nf(i.score)} из 100`}`, { detail: true }));
   }
-  for (const l of v.limitsFired) out.push(step(`position.limit.${l.id}`, `Ограничитель: ${l.text}`, { level: 'warn' }));
-  if (v.range) out.push(step('position.range', `Диапазон по неизвестному: от ${nf(v.range.low)} до ${nf(v.range.high)}${v.range.showPoint ? `, ориентир ${nf(v.range.point)}` : ''}`));
+  for (const l of v.limitsFired) out.push(step(`position.limit.${l.id}`, `Оценка срезана, потому что ${l.text}`, { level: 'warn' }));
+  if (v.held) out.push(step('position.held', `${v.held}`, { level: 'warn' }));
+  if (v.next) out.push(step('position.next', `Чтобы подняться на «${v.next.name}»: ${v.next.needs.join('; ')}`));
+  if (v.range) out.push(step('position.range', `Часть данных неизвестна, поэтому оценка — от ${nf(v.range.low)} до ${nf(v.range.high)}${v.range.showPoint ? `; ближе всего к ${nf(v.range.point)}` : ''}`));
   out.push(step('position.confidence', `Достоверность данных: ${pct(v.confidence)}${v.preliminary ? ' — уровень предварительный' : ''}`));
   return out;
 }
@@ -43,7 +46,7 @@ registerExplain('position', 'Как посчитано: «Финансовый �
 
 // ───────────────────────── блоки ─────────────────────────
 
-function levelCard(v: PositionView): HTMLElement {
+function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
   const isL5 = v.basis === 'independence';
   const lines: (HTMLElement | null)[] = [];
   if (v.range && v.rangeLevels) {
@@ -60,9 +63,11 @@ function levelCard(v: PositionView): HTMLElement {
   return h(
     'div',
     { class: 'card stack pos-level-card' },
-    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
+    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, info('levels'), v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
+    // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
+    chart,
     isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
     ...lines,
     ladderFold(v),
@@ -90,18 +95,27 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   );
 }
 
-function directionsBlock(v: PositionView): HTMLElement {
+function radarBlock(v: PositionView): HTMLElement {
   const [n, vv, f] = v.directions;
   const desc = v.directions.map((d) => `${d.name}: ${d.score === null ? 'оценить нечем' : Math.round(d.score)}`).join('; ');
   return h(
     'div',
-    { class: 'stack' },
+    { class: 'pos-radar' },
     radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
     h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
+  );
+}
+
+function directionsBlock(v: PositionView): HTMLElement {
+  return h(
+    'div',
+    { class: 'stack' },
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
-          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`)),
+          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
+            // полоска с чертой порога 60 (форма Г, D166)
+            d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
           h('p', { class: 'muted' }, d.question),
           rows(...d.indicators.map((i) => row({ title: i.label, value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
       ),
@@ -234,7 +248,7 @@ export function renderPosition(): HTMLElement {
     );
     return root;
   }
-  root.append(levelCard(v));
+  root.append(levelCard(v, radarBlock(v)));
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));

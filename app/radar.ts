@@ -26,7 +26,7 @@ export function radar(axes: readonly [RadarAxis, RadarAxis, RadarAxis], descript
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'pos-radar', role: 'img', 'aria-label': description });
   svg.append(
     s('polygon', { points: poly(() => 100), fill: 'none', stroke: 'var(--line-strong)', 'stroke-width': 1 }),
-    s('polygon', { points: poly(() => 60), fill: 'none', stroke: 'var(--line-strong)', 'stroke-width': 1, 'stroke-dasharray': '4 3' }),
+    s('polygon', { points: poly(() => 60), fill: 'none', stroke: 'var(--threshold)', 'stroke-width': 1.6, 'stroke-dasharray': '5 4' }),
     ...[0, 1, 2].map((i) => s('line', { x1: cx, y1: cy, x2: pt(i, 100)[0], y2: pt(i, 100)[1], stroke: 'var(--line)', 'stroke-width': 1 })),
     s('polygon', { points: poly((i) => axes[i]!.score ?? 0), fill: 'var(--band)', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round' }),
   );
