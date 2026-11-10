@@ -19,7 +19,21 @@
   --radius: 22px; --shadow: 0 1px 2px rgba(16, 34, 43, 0.07);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fz: 1; --bnh: 72px; --ease: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --on-bad: #ffffff;
   color-scheme: light;
+}
+/* тёмная тема — тот же набор токенов (по просьбе владельца, 11.11; раньше D166 её снял). Включается в «Ещё → Вид» или следует за системой. */
+:root[data-theme='dark'] {
+  --bg: #0e1a1f; --surface: #16262d; --surface-sunken: #1f343c; --surface-inverse: #0f5d64; --on-inverse: #ffffff; --on-inverse-muted: #d4eef0;
+  --ink: #e8f1f3; --ink-2: #c3d5da; --muted: #9db5bc; --line: #26414a; --line-strong: #3a5a65; --divider: #1f343c;
+  --primary: #4fc3cb; --on-primary: #06262a; --accent: #4fc3cb; --threshold: #f08a4b;
+  --good: #5cc27a; --good-tint: #16301f; --on-good-tint: #bfe8c9;
+  --warn: #f0a064; --warn-tint: #3a2412; --on-warn-tint: #f6d3b4; --warn-line: #6b4524;
+  --bad: #ff8f7e; --bad-tint: #3d1a15; --on-bad-tint: #ffcfc7; --bad-line: #6e3028; --on-bad: #2a0b06;
+  --focus: #4fc3cb; --scrim: rgba(0, 0, 0, 0.65); --nav: #16262d;
+  --series-1: #4fc3cb; --series-2: #f08a4b; --series-3: #3ccf98; --band: rgba(79, 195, 203, 0.2);
+  --shadow: none;
+  color-scheme: dark;
 }
 :root[data-fs='1'] { --fz: 1.15; }
 
@@ -289,7 +303,7 @@ body.sheet-open { overflow: hidden; }
 }
 body.has-bar #toast { bottom: calc(var(--bnh) + 96px + env(safe-area-inset-bottom, 0px)); }
 #toast.on { opacity: 1; transform: none; pointer-events: auto; }
-#toast.error { background: var(--bad); color: #fff; }
+#toast.error { background: var(--bad); color: var(--on-bad); }
 #toast button { flex: none; min-height: 44px; padding: 0 14px; background: transparent; color: inherit; border: 2px solid currentColor; border-radius: 12px; font: inherit; font-weight: 800; cursor: pointer; }
 #toast .tp { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: var(--good); transform-origin: left; animation: tleft linear forwards; }
 @keyframes tleft { to { transform: scaleX(0); } }

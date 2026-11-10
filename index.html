@@ -12,7 +12,9 @@
     <script>
       // тема и размер текста — до отрисовки, чтобы экран не мигал (D76)
       try {
-        document.documentElement.dataset.theme = 'light';
+        var p = localStorage.getItem('capos-theme');
+        var dark = p === 'dark' || (p !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         document.documentElement.dataset.fs = localStorage.getItem('capos-fs') === '1' ? '1' : '0';
       } catch (e) {}
     </script>
