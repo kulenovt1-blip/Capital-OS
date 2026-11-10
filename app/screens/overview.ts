@@ -138,7 +138,8 @@ function historyNote(o: Overview): HTMLElement | null {
 function cushionRow(o: Overview): HTMLElement | null {
   const n = flattenTree(o.goalTree).find((x) => x.goal.role === 'safety' && x.goal.parentId === undefined && x.goal.status === 'active');
   const status = cushionStatus(n);
-  if (!n || status === 'none') return rows(row({ title: 'Подушки нет', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
+  // К4 (D157): строка говорит о цели, а не о деньгах — «Подушки нет» при запасе на полгода была неправдой; при запасе ≥ 3 мес. цель не навязывается
+  if (!n || status === 'none') return (reserveCtx()?.coverMonths ?? 0) >= 3 ? null : rows(row({ title: 'Цель «Подушка» не создана', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
   // сумму не посчитать — так и сказать, а не «0 ₸ из 0 ₸» (D103)
   if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'не хватает данных о тратах — проверь раскладку трат или задай сумму сам', href: '#/goals~cushion', cls: 'warn' }));
   const ready = status === 'ready';
@@ -166,7 +167,7 @@ function reserveRow(): HTMLElement | null {
   if (!s) return null;
   if (ov().capital.unrated.length) return null; // счёт не в тенге без курса: запас был бы неверным (D155)
   const cover = s.coverMonths.toString().replace('.', ',');
-  return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ траты и платежи', href: sheetHref('reserve-info') }));
+  return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ необходимые траты и платежи', href: sheetHref('reserve-info') }));
 }
 
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */

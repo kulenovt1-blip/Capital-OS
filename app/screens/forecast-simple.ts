@@ -704,10 +704,10 @@ defineSheet('reserve-info', () => {
       h('p', null, 'Запас — это на сколько месяцев хватит денег, если доход пропадёт. Больше ничего не учитывается: ни доходы, ни цели.'),
       sub('Как посчитано'),
       rows(
-        row({ title: 'Обычные траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
+        row({ title: 'Необходимые траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
         row({ title: '+ платежи по долгам и рассрочкам', value: fmt(s.obligationsMonthly), chevron: false }),
         row({ title: h('strong', null, '= уходит в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
-        row({ title: 'Деньги, которые можно снять сразу', value: fmt(s.liquid), chevron: false }),
+        row({ title: 'Деньги, которые можно снять сразу, за вычетом долгов людям', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),
       s.next

@@ -9,6 +9,7 @@
  * и снимок долей (регрессия, снят кодом после D151 — не независимый эталон).
  */
 import { describe, it, expect } from 'vitest';
+import { reserveNow } from '../../engine/reserve';
 import { gateLevel, levelOf, levelFromIndicators, L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type LevelInput, type Level } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
 import { build, namedProfiles, randomSpec, randomSpecDyn, stressCase, applyProbeOpts, TODAY } from '../support/position-profiles';
@@ -79,6 +80,16 @@ describe('пул проб с фактами (1120 профилей + именн�
       if (r.held) expect(r.held.byScore).toBeGreaterThan(r.level);
     }
   });
+  it('К4 (D157): «Запас» на «Обзоре» и запас в условиях ступени — одно число (с точностью до округления вниз до десятых)', () => {
+    let n = 0;
+    states.forEach((st) => {
+      const rep = computeIndicators(st, TODAY), r = reserveNow(st, TODAY);
+      if (!rep.inputs || !r) return;
+      n++;
+      expect(r.coverMonths).toBe(Math.floor(rep.inputs.reserveEssentialMonths * 10 + 1e-9) / 10);
+    });
+    expect(n).toBeGreaterThan(1000);
+  }, 120_000);
   it('К3 (D156): ступень 1 — только при дефиците и запасе < 3 мес.; иначе поднята до 2 с пометкой', () => {
     for (const { rep, lv } of rows) {
       const i = rep.inputs!, r = lv!.result;
