@@ -95,6 +95,7 @@ const ACTIONS: [RegExp, NoticeAction][] = [
   [/^import\.missing$/, { route: 'import', label: 'Загрузить бэкап' }],
   [/^(reconcile\.|import\.warnings$)/, { route: 'import', label: 'Открыть импорт' }],
   [/^accounts\.review$/, { route: 'import', section: 'review', label: 'Ответить про счета' }],
+  [/^currency\./, { route: 'settings', section: 'accounts', label: 'Указать курс' }],
   [/^accounts\.bound_invalid$/, { route: 'settings', section: 'accounts', label: 'Открыть счета' }],
   [/^unclassified$/, { route: 'classes', section: 'categories', label: 'Разметить' }],
   [/^capital\.savings/, { route: 'settings', section: 'savings', label: 'Настроить накопления' }],
@@ -214,6 +215,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     today,
     openingDebts: state.settings.openingDebts,
     savingsFlows: state.settings.savingsFlows,
+    ...(state.settings.currencyRates ? { currencyRates: state.settings.currencyRates } : {}),
   });
   const fundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
   const installments = detectInstallments(state, today, classification);
@@ -255,6 +257,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   if (state.goals.length) explanation.push(...baseline.explanation, ...resolved.explanation);
 
   if (!hasData) notices.push({ code: 'import.missing', level: 'info', text: 'Данных пока нет: загрузи бэкап MoneyManager в «Ещё → Импорт»' });
+  if (capital.unrated.length) notices.push({ code: 'currency.rate_missing', level: 'warn', text: `Счёт ${capital.unrated.map((a) => `«${a.title}» (${a.currency})`).join(', ')} не в тенге, курса нет — в капитал не входит. Укажи курс в «Ещё → Счета»` });
   if (reconcile && !reconcile.ok) notices.push({ code: 'reconcile.fail', level: 'error', text: `Сверка не сошлась по ${reconcile.accounts.filter((a) => a.status !== 'ok').length} счетам — цифры ниже неточны` });
   if (classification && !classification.complete) {
     const total = sum(classification.unclassified.map((g) => g.total));

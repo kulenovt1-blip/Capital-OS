@@ -180,6 +180,8 @@ export interface Settings {
   horizonMonths: [number, number, number];
   /** Инфляция, б.п. годовых (параметр, §12). */
   inflationBp: number;
+  /** Курсы, введённые человеком: тенге за 1 единицу валюты счёта (D155). Нет курса — счёт в иной валюте не считается. */
+  currencyRates?: Record<string, number>;
   incomeSchedule: IncomeScheduleItem[];
   /** Коэффициенты стратегий распределения (§5.2) — все здесь, без скрытых констант. */
   strategy: StrategySettings;

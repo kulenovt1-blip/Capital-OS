@@ -9,9 +9,10 @@
  * и снимок долей (регрессия, снят кодом после D151 — не независимый эталон).
  */
 import { describe, it, expect } from 'vitest';
+import { reserveNow } from '../../engine/reserve';
 import { gateLevel, levelOf, levelFromIndicators, L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type LevelInput, type Level } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
-import { build, namedProfiles, randomSpec, randomSpecDyn, stressCase, applyProbeOpts, TODAY } from '../support/position-profiles';
+import { build, SPECS2, namedProfiles, randomSpec, randomSpecDyn, stressCase, applyProbeOpts, TODAY } from '../support/position-profiles';
 
 const strong: LevelInput = { g: 90, directions: { N: 90, V: 90, F: 90 }, reliable: { N: true, V: true, F: true }, fired: [] };
 
@@ -79,10 +80,42 @@ describe('пул проб с фактами (1120 профилей + именн�
       if (r.held) expect(r.held.byScore).toBeGreaterThan(r.level);
     }
   });
+  it('К4 (D157): «Запас» на «Обзоре» и запас в условиях ступени — одно число (с точностью до округления вниз до десятых)', () => {
+    let n = 0;
+    states.forEach((st) => {
+      const rep = computeIndicators(st, TODAY), r = reserveNow(st, TODAY);
+      if (!rep.inputs || !r) return;
+      n++;
+      expect(r.coverMonths).toBe(Math.floor(rep.inputs.reserveEssentialMonths * 10 + 1e-9) / 10);
+    });
+    expect(n).toBeGreaterThan(1000);
+  }, 120_000);
+  it('К3 (D156): ступень 1 — только при дефиците и запасе < 3 мес.; иначе поднята до 2 с пометкой', () => {
+    for (const { rep, lv } of rows) {
+      const i = rep.inputs!, r = lv!.result;
+      const deficitNoReserve = i.savingRate !== null && i.savingRate < 0 && i.reserveEssentialMonths < 3;
+      if (r.level === 1) expect(deficitNoReserve).toBe(true);
+      if (r.lifted) { expect(r.level).toBe(2); expect(deficitNoReserve).toBe(false); }
+    }
+    expect(rows.filter(({ lv }) => lv!.result.lifted).length).toBe(1);
+  });
   it('снимок долей после D151 (регрессия)', () => {
     const c = [0, 0, 0, 0], by = [0, 0, 0, 0];
-    for (const { lv } of rows) { c[lv!.result.level - 1]!++; by[(lv!.result.held?.byScore ?? lv!.result.level) - 1]!++; }
+    for (const { lv } of rows) { c[lv!.result.level - 1]!++; by[(lv!.result.held?.byScore ?? lv!.result.lifted?.byScore ?? lv!.result.level) - 1]!++; }
     // 1131 профиль: по очкам 61 / 184 / 558 / 328; с фактами 144 / 110 / 550 / 327 — 83 профиля с дефицитом без запаса уходят в «Не хватает на жизнь»
-    expect({ withFacts: c, byScore: by }).toEqual({ withFacts: [144, 110, 550, 327], byScore: [61, 184, 558, 328] });
+    expect({ withFacts: c, byScore: by }).toEqual({ withFacts: [143, 111, 550, 327], byScore: [61, 184, 558, 328] });
+    // К3 (D156): «Не хватает на жизнь» — только дефицит и запас < 3 мес.; один профиль с запасом 8,85 мес. (D382) поднят с 1 до 2: 144 / 110 → 143 / 111
+  });
+});
+
+describe('С1 (D158): нет необходимых расходов — запас не определён, а не равен нулю', () => {
+  it('ограничитель «нет запаса» неизвестен, условия по запасу не проверяются, ступень не опускается из-за 0,0 мес.', () => {
+    const rep = computeIndicators(build(SPECS2[1]!), TODAY);
+    const noEss = { ...rep, inputs: { ...rep.inputs!, needEssential: 0, reserveEssentialMonths: 0 } };
+    const base = levelFromIndicators(rep)!, lv = levelFromIndicators(noEss)!;
+    expect(lv.fired).not.toContain('cover1');
+    expect(lv.result.held).toBeNull();
+    expect(lv.result.level).toBeGreaterThanOrEqual(base.result.level - 1);
+    expect(lv.g).toBeGreaterThan(39);
   });
 });

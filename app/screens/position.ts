@@ -10,6 +10,7 @@ import { positionNow } from '../ctx';
 import { radar } from '../radar';
 import { fmt, info, row, rows, sub } from '../ui';
 import { sheetHref } from '../main';
+import { currencyRatesBlock } from './settings';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
@@ -25,6 +26,7 @@ function months(m: number | null): string {
 // ───────────────────────── «Как посчитано» ─────────────────────────
 
 function explanation(v: PositionView): Explanation {
+  if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, положение оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
   out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
@@ -47,7 +49,7 @@ function levelCard(v: PositionView): HTMLElement {
   if (v.range && v.rangeLevels) {
     lines.push(
       h('p', { class: 'muted' },
-        v.range.levelsCovered === 1 && v.rangeLevels.low === v.rangeLevels.high
+        v.rangeLevels.low === v.rangeLevels.high
           ? `Часть данных неизвестна, но на уровень это не влияет: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}.`
           : `Часть данных неизвестна: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}, то есть от «${v.rangeLevels.low}» до «${v.rangeLevels.high}».${v.range.showPoint ? ` Ориентир — ${Math.round(v.range.point)}.` : ' Точнее сказать нельзя.'}`),
     );
@@ -61,7 +63,7 @@ function levelCard(v: PositionView): HTMLElement {
     h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${v.levelMeaning}.`) : null,
-    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
+    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
     ...lines,
     ladderFold(v),
   );
@@ -143,7 +145,8 @@ function moneyBlock(v: PositionView): HTMLElement {
 function runwayBlock(v: PositionView): HTMLElement | null {
   const r = v.runway;
   if (r.status === 'no_data') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), h('p', { class: 'muted' }, 'Нужно хотя бы три полных месяца истории, чтобы это посчитать.'));
-  if (r.status === 'no_deficit') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), rows(row({ title: 'Ты не тратишь больше, чем получаешь', sub: 'денег хватает, пока так продолжается', chevron: false })));
+  // С7 (D164): под этим заголовком — ответ на сам вопрос: на сколько месяцев хватит денег без дохода (запас из условий ступени)
+  if (r.status === 'no_deficit') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), rows(row({ title: `Денег хватит на ${months(v.money.reserveEssentialMonths)} без дохода`, sub: 'на необходимых расходах; сейчас ты не тратишь больше, чем получаешь', chevron: false })));
   return h(
     'div',
     { class: 'stack' },
@@ -209,7 +212,7 @@ function confidenceBlock(v: PositionView): HTMLElement {
   return rows(
     row({
       title: `Достоверность данных: ${pct(v.confidence)}`,
-      sub: v.preliminary ? 'данных пока мало, поэтому уровень предварительный' : 'данных достаточно, чтобы уровню можно было верить',
+      sub: !v.reconcileOk ? 'сверка с MoneyManager не сошлась: балансы неточны, поэтому уровень предварительный' : v.preliminary ? 'данных пока мало, поэтому уровень предварительный' : 'данных достаточно, чтобы уровню можно было верить',
       chevron: false,
       cls: v.preliminary ? 'warn' : '',
     }),
@@ -221,6 +224,13 @@ export function renderPosition(): HTMLElement {
   const root = h('div', { class: 'screen' });
   if (v.status === 'no_data') {
     root.append(h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, 'Для оценки нужны операции из MoneyManager.'), h('a', { class: 'btn primary wide', href: '#/import' }, 'Загрузить бэкап')));
+    return root;
+  }
+  if (v.status === 'needs_rate') {
+    root.append(
+      h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, `Счёт ${v.unrated.map((a) => `«${a.title}» (${a.currency})`).join(', ')} не в тенге. Без курса уровень, запас и прогноз были бы неверными — укажи курс ниже.`)),
+      currencyRatesBlock([...new Set(v.unrated.map((a) => a.currency))]),
+    );
     return root;
   }
   root.append(levelCard(v));
@@ -247,7 +257,7 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
 }
 
 export { sheetHref };

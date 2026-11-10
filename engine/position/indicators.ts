@@ -246,7 +246,8 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
 
   const inc = toT(series.income);
   const free = toT(series.free);
-  const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true ? T(i.amount) : 0), 0);
+  // только действующие сегодня строки: закончившийся или ещё не начавшийся доход в нагрузку по долгам не входит (С5, D162)
+  const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true && (!i.start || i.start <= today) && (!i.end || i.end >= today) ? T(i.amount) : 0), 0);
   const incomeMonthly = mean(inc.slice(-6)) + manualIncomeMonthly;
 
   const values: Indicators = {};
@@ -280,7 +281,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const sources = facts;
   // расписания доходов нет (ни строк, ни событий «начало дохода») — обеспеченность, опасность потери и будущая норма сбережений неизвестны, а не нули (спец. 5.1)
   const scheduleKnown = input.incomes.length > 0 || input.events.some((e) => e.kind === 'income_start');
-  values.F1 = reserveScore(troughNet, needEssential);
+  values.F1 = scheduleKnown ? reserveScore(troughNet, needEssential) : null;
   values.F2 = scheduleKnown ? reliabilityScore(sources, needEssential) : null;
   values.F3 = scheduleKnown ? exposureScore(sources) : null;
   values.F4 = scheduleKnown ? normalize(forecastSavingRate(mean(m12.map((m) => T(m.income))), mean(m12.map((m) => T(m.expenses) + T(m.obligations)))), SCALES.saving) : null;

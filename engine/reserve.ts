@@ -35,7 +35,7 @@ export interface Reserve {
   liquid: Money;
   /** Сколько уходит в обычный месяц вместе с платежами по долгам. */
   needMonthly: Money;
-  /** Из них обычные траты и платежи по долгам и рассрочкам. */
+  /** Из них необходимые траты (то, без чего не прожить; D157) — без платежей по долгам и рассрочкам. */
   usualMonthly: Money;
   obligationsMonthly: Money;
   /** Доля дохода, которая уходит на платежи по долгам и рассрочкам (0…1), null — дохода нет. */
@@ -76,8 +76,9 @@ export function liquidReachMonth(sim: SimResult, target: Money, extra: Money = Z
 export function reserveNow(state: AppState, today: IsoDate): Reserve | null {
   if (!state.imported) return null;
   const o = buildOverview(state, today);
-  const liquid = Math.max(0, o.capital.liquidNow) as Money;
-  const usualMonthly = o.spend.usualMonthly;
+  // один запас на всех экранах (К4, D157): как в условиях ступени — деньги сразу за вычетом долгов людям ÷ необходимые траты и платежи
+  const liquid = Math.max(0, o.capital.liquidNow - o.capital.liabilities.payablesFromOps) as Money;
+  const usualMonthly = o.baseline.median;
   const obligationsMonthly = o.spend.obligationsMonthly;
   const needMonthly = add(usualMonthly, obligationsMonthly);
   if (needMonthly <= 0) return null;

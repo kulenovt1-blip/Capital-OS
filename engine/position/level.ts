@@ -55,6 +55,15 @@ export function gateLevel(byScore: Level, f: LevelFacts | undefined): { level: L
   if (level >= 2 && f.savingRate !== null && f.savingRate < 0 && f.reserveMonths < L3_RESERVE_MONTHS) { level = 1; reason = 'deficit'; }
   return { level, held: reason ? { reason, byScore } : null };
 }
+/** Почему ступень 1 по очкам поднята до 2: «Не хватает на жизнь» требует дефицита и запаса меньше 3 месяцев (D156). */
+export interface LevelLifted { reason: 'reserve' | 'income' | 'unknown'; byScore: Level }
+/** Ступень 1 — только если расходы больше доходов И запас < 3 месяцев необходимых расходов; иначе её название было бы неправдой (К3 аудита 8). */
+export function liftLevel1(level: Level, f: LevelFacts | undefined): { level: Level; lifted: LevelLifted | null } {
+  if (level !== 1 || !f) return { level, lifted: null };
+  const deficit = f.savingRate !== null && f.savingRate < 0;
+  if (deficit && f.reserveMonths < L3_RESERVE_MONTHS) return { level, lifted: null };
+  return { level: 2, lifted: { reason: f.reserveMonths >= L3_RESERVE_MONTHS ? 'reserve' : f.savingRate === null ? 'unknown' : 'income', byScore: 1 } };
+}
 /** Границы L2, L3, L4 по `G` (H). */
 export const LEVEL_BOUNDS = [20, 40, 75] as const;
 /** Наименьшее значение каждого направления для L4 (H). */
@@ -105,6 +114,8 @@ export interface LevelResult {
   shortfallToNext: number | null;
   /** Уровень опущен, потому что не выполнен факт (D151); null — не опущен. */
   held: LevelHeld | null;
+  /** Ступень поднята с 1 до 2, потому что факт для «Не хватает на жизнь» не выполнен (D156); null — не поднята. */
+  lifted: LevelLifted | null;
   l4: L4Check;
 }
 
@@ -122,7 +133,9 @@ export function levelOf(i: LevelInput): LevelResult {
 
   const scoreCandidate = gOk && known.every((d) => scoreOf(d) >= L4_DIRECTION_MIN) && limitsOk;
   const byScore: Level = scoreCandidate && reliableOk ? 4 : (Math.min(levelBandOf(i.g), 3) as Level);
-  const { level, held } = gateLevel(byScore, i.facts);
+  const gated = gateLevel(byScore, i.facts);
+  const { level, lifted } = gated.held ? { level: gated.level, lifted: null } : liftLevel1(gated.level, i.facts);
+  const held = gated.held;
   const reserve6 = !i.facts || i.facts.reserveMonths >= L4_RESERVE_MONTHS;
 
   const margins: BoundaryMargin[] = [
@@ -141,6 +154,7 @@ export function levelOf(i: LevelInput): LevelResult {
     onBorder: margins.filter((m) => Math.abs(m.margin) < BORDER_MARGIN).map((m) => m.id),
     shortfallToNext,
     held,
+    lifted,
     l4: { gOk, directionsOk, limitsOk, reliableOk, weakest },
   };
 }
@@ -170,7 +184,8 @@ export function levelFromIndicators(report: IndicatorsReport): PositionLevel | n
     directions: Object.fromEntries(DIRECTIONS.map((d) => [d, directions[d].score])) as Record<Direction, number | null>,
     reliable: Object.fromEntries(DIRECTIONS.map((d) => [d, isDirectionSufficient(directions[d])])) as Record<Direction, boolean>,
     fired: agg.fired,
-    facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate },
+    // без необходимых расходов запас в месяцах не определён: условия по запасу не проверяются (С1, D158)
+    ...(report.inputs.needEssential > 0 ? { facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate } } : {}),
   });
   return { directions, g: agg.g, fired: agg.fired, result };
 }

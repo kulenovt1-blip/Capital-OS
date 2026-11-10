@@ -180,7 +180,7 @@ export function readMoneyManager(db: SqliteDb, meta: { entryName: string; prefix
   }));
   for (const a of accounts) {
     if (!a.removed && a.currency !== 'KZT') {
-      warnings.push({ code: 'account.currency', text: `Счёт «${a.title}» в валюте ${a.currency}: мультивалютность не поддерживается, суммы берутся как есть`, refs: { accountId: a.id } });
+      warnings.push({ code: 'account.currency', text: `Счёт «${a.title}» в валюте ${a.currency}: курса нет: счёт не войдёт в капитал, пока не укажешь курс в «Ещё → Счета»`, refs: { accountId: a.id } });
     }
   }
 

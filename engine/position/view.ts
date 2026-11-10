@@ -12,11 +12,11 @@ import {
   DIRECTIONS, INDICATOR_IDS, MIN_HISTORY_VECTOR, computeIndicators, type Direction, type IndicatorId, type IndicatorInputs,
 } from './indicators';
 import { directionScore, isDirectionSufficient } from './directions';
-import { limitStates, withoutForecast, type LimitId } from './limits';
+import { LIMIT_VALUES, limitStates, withoutForecast, type LimitId } from './limits';
 import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
 import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
-import { boundsContext, historyBounds, scheduleBounds, type Bounds } from './unknown';
+import { boundsContext, historyBounds, reserveBounds, scheduleBounds, type Bounds } from './unknown';
 import { computeRunway, type Runway } from './runway';
 import { spiralSigns, type SpiralSigns } from './spiral';
 import { confidenceOf, isPreliminary } from './confidence';
@@ -48,6 +48,10 @@ export const L4_WARN_BLOCKED_SHARE = 0.5;
 export interface L4Warning { id: 'reserve' | 'trough' | 'blocked'; text: string }
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
+/** Месяцы запаса — округляя вниз: «2,99» не должно превращаться в «3,0» рядом со словами «меньше 3» (С6, D163). */
+const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
+/** Запас до порога месяцев, меньше которого уровень считается «на границе» по фактам (С6, D163). */
+export const RESERVE_BORDER_MARGIN = 0.25;
 
 /**
  * Три условия (D128, утверждено 05.11): запас по необходимым расходам < 6 мес.; минимум запаса по неблагоприятному прогнозу < 3 необходимых месяцев;
@@ -76,7 +80,11 @@ export interface DirectionView {
 
 export interface PositionView {
   /** no_data — в бэкапе нет операций, показывать нечего, кроме подсказки. */
-  status: 'no_data' | 'ok';
+  status: 'no_data' | 'needs_rate' | 'ok';
+  /** Счета не в тенге без курса: уровень, запас и прогноз не оцениваются (D155). */
+  unrated: { accountId: string; title: string; currency: string }[];
+  /** Сверка балансов с MoneyManager сошлась; false — уровень посчитан по неверным балансам и предварительный (С2, D159). */
+  reconcileOk: boolean;
   level: number | null;
   levelName: string | null;
   /** score — по оценке `G`; independence — L5 по независимости; none — оценить нечем. */
@@ -125,7 +133,7 @@ const NO_SPIRAL: SpiralSigns = { status: 'no_data', overdue: null, growth: null,
 
 /** Интервалы неизвестного по реальным данным: короткая история и отсутствие расписания доходов. Остальное неизвестное — вся шкала 0–100. */
 function actualBounds(ctx: ReturnType<typeof boundsContext>, histMonths: number, scheduleKnown: boolean): Bounds {
-  return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : scheduleBounds(ctx)) };
+  return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : { ...scheduleBounds(ctx), ...reserveBounds(ctx) }) };
 }
 
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
@@ -136,9 +144,9 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const report = series.hasData ? computeIndicators(state, today, series) : null;
   const pre = { series, overview, ...(report ? { report } : {}) };
   const independence = independenceOfState(state, today, pre);
-  if (!series.hasData || !report) {
+  if (!series.hasData || !report || overview.capital.unrated.length) {
     return {
-      status: 'no_data', level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
+      status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !(overview.reconcile?.accounts.some((a) => a.status === 'mismatch') ?? false), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
       independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
@@ -180,20 +188,20 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
 
   const blockedShare = cap.gross > 0 ? Math.max(0, 1 - liquidOn(cap, addDays(today, 30)) / cap.gross) : 0;
   const level = fin.level;
-  const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs) : null;
-  const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : null;
+  const next = base && level !== null && level <= 3 && fin.basis === 'score' ? nextOf(level as Level, base.g, base.result.margins.find((m) => m.id === 'L3/L4')!.margin, inputs, base.fired) : null;
+  const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : base?.result.lifted ? liftedText(base.result.lifted.reason, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
   const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
 
   return {
-    status: 'ok', level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : LEVEL_MEANINGS[level as Level], ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', unrated: [], reconcileOk: !(overview.reconcile?.accounts.some((a) => a.status === 'mismatch') ?? false), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
-    next, onBorder: base?.result.onBorder ?? [], l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
+    next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
-    confidence, preliminary: isPreliminary(confidence),
+    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || overview.reconcile?.accounts.some((a) => a.status === 'mismatch') === true,
     independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),
   };
 }
@@ -206,25 +214,52 @@ export const L5_MEANING = 'Капитал и независимый доход �
 const factsOf = (i: IndicatorInputs): LevelFacts => ({ reserveMonths: i.reserveEssentialMonths, savingRate: i.savingRate });
 const tg = (x: number): string => formatKZT(tenge(Math.round(Math.max(0, x) / 1000) * 1000));
 const reserveNeed = (months: number, i: IndicatorInputs): string =>
-  `запас от ${months} месяцев необходимых расходов: сейчас ${nf(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
+  `запас от ${months} месяцев необходимых расходов: сейчас ${nfDown(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
 
 export function ladderOf(current: number | null): PositionView['ladder'] {
   const four: PositionView['ladder'] = ([1, 2, 3, 4] as Level[]).map((l) => ({ level: l, name: LEVEL_NAMES[l], meaning: LEVEL_MEANINGS[l], current: current === l }));
   return [...four, { level: 5, name: L5_NAME, meaning: L5_MEANING, current: current === 5 }];
 }
 
-function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i: IndicatorInputs): string {
+export function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: Level, i: IndicatorInputs): string {
   const why = reason === 'deficit' ? 'за последние месяцы расходы больше доходов, а запас меньше 3 месяцев'
-    : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`
-    : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nf(i.reserveEssentialMonths)})`;
+    : reason === 'reserve3' ? `запас меньше ${L3_RESERVE_MONTHS} месяцев необходимых расходов (${nfDown(i.reserveEssentialMonths)})`
+    : `запас меньше ${L4_RESERVE_MONTHS} месяцев необходимых расходов (${nfDown(i.reserveEssentialMonths)})`;
   return `По очкам это «${LEVEL_NAMES[byScore]}», но ${why}`;
 }
 
-function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs): PositionView['next'] {
+/** «На границе» и по очкам, и по запасу: до порога 3 или 6 месяцев меньше RESERVE_BORDER_MARGIN (С6, D163). */
+export function borderOf(byScore: BoundaryId[], i: IndicatorInputs): BoundaryId[] {
+  const out = new Set<BoundaryId>(byScore);
+  if (i.needEssential > 0) {
+    if (Math.abs(i.reserveEssentialMonths - L3_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L2/L3');
+    if (Math.abs(i.reserveEssentialMonths - L4_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L3/L4');
+  }
+  return [...out];
+}
+
+function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs): string {
+  const why = reason === 'reserve' ? `запас ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов — это не «${LEVEL_NAMES[1]}»`
+    : reason === 'income' ? 'за последние месяцы расходы не больше доходов'
+    : 'данных мало, чтобы подтвердить, что расходы больше доходов';
+  return `По очкам это «${LEVEL_NAMES[1]}», но ${why}`;
+}
+
+/** Фраза-смысл ступени: при запасе ≥ 3 мес. на ступенях 1–2 общий текст был бы неправдой — называется причина низкой оценки (К3, D156). */
+function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): string {
+  if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
+  return LEVEL_MEANINGS[level];
+}
+
+function nextOf(level: Level, g: number, l4Margin: number, i: IndicatorInputs, fired: readonly LimitId[] = []): PositionView['next'] {
   const to = (level + 1) as Level;
   const needs: string[] = [];
   const pts = to === 2 ? 20 - g : to === 3 ? 40 - g : -l4Margin;
-  if (pts > 0) needs.push(`${Math.ceil(pts)} ${plural(Math.ceil(pts))} общей оценки`);
+  // пока работает ограничитель, G выше его предела не поднимется, сколько ни прибавляй очков (С3, D160): называется само условие
+  const threshold = to === 2 ? 20 : to === 3 ? 40 : 75;
+  const blocking = fired.filter((id) => LIMIT_VALUES[id] < threshold);
+  for (const id of blocking) needs.push(`снять ограничение: ${LIMIT_TEXTS[id]}`);
+  if (pts > 0 && !blocking.length) needs.push(`${Math.ceil(pts)} ${plural(Math.ceil(pts))} общей оценки`);
   if (to === 2 && i.savingRate !== null && i.savingRate < 0 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push('чтобы доходы покрывали расходы (или запас от 3 месяцев)');
   if (to === 3 && i.reserveEssentialMonths < L3_RESERVE_MONTHS) needs.push(reserveNeed(L3_RESERVE_MONTHS, i));
   if (to === 4 && i.reserveEssentialMonths < L4_RESERVE_MONTHS) needs.push(reserveNeed(L4_RESERVE_MONTHS, i));

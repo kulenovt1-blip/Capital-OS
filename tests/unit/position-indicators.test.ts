@@ -250,6 +250,14 @@ describe('чистая ликвидность и ручной пассивный
     expect(withPassive.values.V2).toBe(plain.values.V2);
     expect(withPassive.values.V4).toBe(plain.values.V4);
   });
+  it('С5 (D162): пассивный доход вне срока (закончился или ещё не начался) в N3 не входит', () => {
+    const base = build(SPECS2[2]!);
+    const row = { id: 'rent', title: 'Аренда', dayOfMonth: 1, amount: tenge(150_000), kind: 'stable' as const, passive: true };
+    const withRow = (extra: object) => computeIndicators({ ...base, settings: { ...base.settings, incomeSchedule: [...base.settings.incomeSchedule, { ...row, ...extra }] } }, TODAY).inputs!;
+    expect(withRow({ end: '2025-01-31' }).manualIncomeMonthly).toBe(0);
+    expect(withRow({ start: '2030-01-01' }).manualIncomeMonthly).toBe(0);
+    near(withRow({ start: '2020-01-01', end: '2099-01-01' }).manualIncomeMonthly, 150_000, 6);
+  });
   it('доход без признака «не зависит от труда» второй раз не считается: он уже в операциях', () => {
     const base = build(SPECS2[1]!);
     const same = computeIndicators({ ...base, settings: { ...base.settings, incomeSchedule: base.settings.incomeSchedule.map((i) => ({ ...i })) } }, TODAY);

@@ -146,6 +146,7 @@ export function buildPositionSeries(state: AppState, today: IsoDate): PositionSe
     const cap = computeCapital({
       data: data!, classified: ops, accountSettings: state.settings.accounts, manualAccounts: [], adjustments: state.adjustments,
       obligations: [], today: d, openingDebts: state.settings.openingDebts, savingsFlows: state.settings.savingsFlows,
+      ...(state.settings.currencyRates ? { currencyRates: state.settings.currencyRates } : {}),
     });
     const people = cap.liabilities.payablesFromOps;
     const total = tiyn(add(add(obligationsNow, paidAfter(d)), people));

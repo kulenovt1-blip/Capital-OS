@@ -336,7 +336,20 @@ describe('нет расписания доходов: F2–F4 неизвестн
     const b = build(SPECS2[1]!);
     const v = computeIndicators({ ...b, settings: { ...b.settings, incomeSchedule: [] } }, TODAY).values;
     expect([v.F2, v.F3, v.F4]).toEqual([null, null, null]);
-    expect(typeof v.F1).toBe('number');
+    expect(v.F1).toBeNull(); // К1 (D154): без расписания направление «Будущее» неизвестно целиком
     expect(typeof v.N1).toBe('number');
+  });
+});
+
+describe('К1 (D154): без расписания доходов оценка лежит внутри диапазона и не опускает ступень до «Не хватает на жизнь»', () => {
+  it('профиль B без расписания: G в [low; high], ступень не ниже 3 при запасе ≥ 3 мес.', async () => {
+    const { positionViewOf } = await import('../../engine/position/view');
+    const b = build(SPECS2[1]!);
+    const v = positionViewOf({ ...b, settings: { ...b.settings, incomeSchedule: [] } }, TODAY);
+    expect(v.range).not.toBeNull();
+    expect(v.g!).toBeGreaterThanOrEqual(v.range!.low - 1e-9);
+    expect(v.g!).toBeLessThanOrEqual(v.range!.high + 1e-9);
+    expect(v.money.reserveEssentialMonths).toBeGreaterThanOrEqual(3);
+    expect(v.level!).toBeGreaterThanOrEqual(3);
   });
 });
