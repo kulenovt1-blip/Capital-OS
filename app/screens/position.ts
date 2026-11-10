@@ -11,7 +11,7 @@ import { positionNow, reserveCtx, trust } from '../ctx';
 import { radar } from '../radar';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
-import { sheetHref } from '../main';
+import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
@@ -84,6 +84,7 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${meaningOf(v)}.`) : null,
     trustLine(v),
+    v.level === 4 ? h('p', { class: 'muted' }, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
     chart,
     isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
@@ -166,6 +167,22 @@ function radarBlock(v: PositionView): HTMLElement {
   );
 }
 
+/** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
+const INDICATOR_HINTS: Readonly<Record<string, string>> = {
+  N1: 'На сколько месяцев хватит денег без дохода. 100 — запас большой, 0 — почти нет.',
+  N2: 'Какую часть дохода остаётся после трат (по последним 3 месяцам). 100 — откладываешь больше трети, 0 — всё уходит.',
+  N3: 'Сколько дохода уходит на платежи по долгам и как велик сам долг. 100 — долгов нет, 0 — долги тяжёлые.',
+  N4: 'Сколько месяцев жизни покрывает всё, что у тебя есть, минус долги. 100 — очень много, 0 — почти ничего.',
+  V1: 'Как быстро выросли деньги за последние 6 месяцев по сравнению с твоей базой. 100 — быстрый рост, 35 — стоят на месте, 0 — заметно тают.',
+  V2: 'Стало ли оставаться больше, чем раньше: свободный остаток последних 3 месяцев против предыдущих 3. 50 — без изменений.',
+  V3: 'Платишь ли по долгам быстрее графика (больше 50) или отстаёшь (меньше 50).',
+  V4: 'В скольких из последних 6 месяцев после трат осталось больше нуля. 100 — в каждом.',
+  F1: 'Хватит ли денег в плохой период по прогнозу на год. 100 — с запасом, 0 — не хватит.',
+  F2: 'Покрывают ли надёжные доходы за год необходимые расходы. 100 — с запасом, 0 — нет.',
+  F3: 'Насколько всё держится на одном источнике дохода. 100 — потеря любого переживаешь, 10 — один источник и он шаткий.',
+  F4: 'Сколько удастся откладывать в будущем по прогнозу.',
+};
+
 function directionsBlock(v: PositionView): HTMLElement {
   return h(
     'div',
@@ -177,7 +194,7 @@ function directionsBlock(v: PositionView): HTMLElement {
             // полоска с чертой порога 60 (форма Г, D166)
             d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
           h('p', { class: 'muted' }, d.question),
-          rows(...d.indicators.map((i) => row({ title: i.label, value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
+          rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
       ),
     ),
   );
@@ -283,6 +300,22 @@ function desiredBlock(v: PositionView): HTMLElement | null {
   );
 }
 
+/** Независимость нужна единицам: на экране — одна строка, подробности — по нажатию; целиком только когда она рядом (≥ 20 %) или достигнута. */
+const INDEPENDENCE_INLINE_FROM = 0.2;
+defineSheet('independence', () => {
+  const v = positionNow();
+  if (v.status !== 'ok') return null;
+  const ind = independenceBlock(v);
+  const ds = desiredBlock(v);
+  return { title: 'Могу не работать', body: h('div', { class: 'stack' }, ind, ds) };
+});
+function independenceSection(v: PositionView): HTMLElement[] {
+  const i = v.independence;
+  const near = v.level === 5 || (i.status !== 'not_assessed' && i.total.central >= INDEPENDENCE_INLINE_FROM);
+  if (i.status === 'not_assessed' || near) return [independenceBlock(v), desiredBlock(v)].filter((x): x is HTMLElement => x !== null);
+  return [rows(row({ title: `Независимость: ${pct(i.total.central)} пути`, sub: 'сколько расходов покрывают капитал и независимый доход — подробности и «а если бы тратил больше»', href: sheetHref('independence') }))];
+}
+
 export function renderPosition(): HTMLElement {
   const v = positionNow();
   const root = h('div', { class: 'screen' });
@@ -317,10 +350,7 @@ export function renderPosition(): HTMLElement {
   if (v.money.total < 0 && v.independence.status !== 'not_assessed') {
     root.append(h('p', { class: 'muted' }, 'Независимость сейчас не считается: сначала долги. Когда капитал станет положительным, здесь появится путь.'));
   } else {
-    const ind = independenceBlock(v);
-    if (ind) root.append(ind);
-    const ds = desiredBlock(v);
-    if (ds) root.append(ds);
+    root.append(...independenceSection(v));
   }
   root.append(h('div', { class: 'foot-note' }, explainLink('position')));
   return root;
