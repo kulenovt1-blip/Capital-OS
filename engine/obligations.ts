@@ -100,6 +100,16 @@ export function makeRecurring(p: { id: string; title: string; owner: 'self' | 'f
   };
 }
 
+export const OBLIGATION_TITLE_MAX = 60;
+
+/** Новое название долга или рассрочки (D150): график, остаток и привязка к платежам не меняются. */
+export function renameObligation(o: Obligation, title: string): { ok: true; value: Obligation } | { ok: false; error: string } {
+  const t = title.trim();
+  if (!t) return { ok: false, error: 'Нужно название' };
+  if (t.length > OBLIGATION_TITLE_MAX) return { ok: false, error: `Название не длиннее ${OBLIGATION_TITLE_MAX} знаков` };
+  return { ok: true, value: t === o.title ? o : { ...o, title: t } };
+}
+
 export function validateObligation(o: Obligation): string[] {
   const errs: string[] = [];
   if (!o.title.trim()) errs.push('Нужно название');

@@ -15,6 +15,7 @@ import { baselineWindow, buildOverview, type Overview } from './overview';
 import { buildSimInput, planIncome } from './plan';
 import { simulate, type SimResult } from './simulate';
 import { capitalInMonths } from './forecast-steps';
+import { NEVER_AVAILABLE } from './ledger';
 import type { CompareResult } from './allocate';
 import type { AppState } from './state';
 import type { Category, ImportedData } from './types';
@@ -682,7 +683,8 @@ export function commitSetAside(state: AppState, byGoal: Readonly<Record<string, 
  */
 export function lockedByDate(locked: readonly { balance: Money; availableFrom: IsoDate }[]): { date: IsoDate; amount: Money }[] {
   const m = new Map<IsoDate, Money>();
-  for (const x of locked) m.set(x.availableFrom, add(m.get(x.availableFrom) ?? ZERO, x.balance));
+  // жильё и заблокированное (D149) — не «деньги, которые разблокируются»: даты у них нет
+  for (const x of locked) if (x.availableFrom !== NEVER_AVAILABLE) m.set(x.availableFrom, add(m.get(x.availableFrom) ?? ZERO, x.balance));
   return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount }));
 }
 

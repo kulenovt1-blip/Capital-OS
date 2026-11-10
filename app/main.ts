@@ -75,13 +75,22 @@ interface Parsed {
   arg: string;
 }
 
+/** Браузер кодирует кириллицу в адресе («ob-tag:телефон» → «ob-tag:%D1%82…»): без раскодирования карточка платежа с русским тегом не открывалась. */
+function decodePart(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 function parseHash(): Parsed {
   const raw = location.hash.replace(/^#\/?/, '');
   const [page = '', sheetPart] = raw.split('~');
   const [path = '', ...rest] = page.split('/');
   const section = rest.join('/') || undefined;
   const [sheet, ...args] = (sheetPart ?? '').split('/');
-  return { path, ...(section ? { section } : {}), ...(sheet ? { sheet } : {}), arg: args.join('/') };
+  return { path, ...(section ? { section } : {}), ...(sheet ? { sheet } : {}), arg: decodePart(args.join('/')) };
 }
 
 /** Адрес текущего экрана без подэкрана. */

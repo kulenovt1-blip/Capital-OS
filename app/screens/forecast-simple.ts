@@ -3,7 +3,7 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { NEVER_AVAILABLE, balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, forecastTraceNow, ov, reserveCtx, verdicts } from '../ctx';
@@ -97,7 +97,7 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
     })(),
     byDebt.size ? [sub('Платежи по долгам'), rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))] : null,
     sub('Деньги сейчас'),
-    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, [d.rateBp > 0 ? `${(d.rateBp / 100).toString().replace('.', ',')} % годовых` : '', d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : ''].filter(Boolean).join(' · ') || undefined))),
+    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, [d.rateBp > 0 ? `${(d.rateBp / 100).toString().replace('.', ',')} % годовых` : '', d.availableFrom === NEVER_AVAILABLE ? 'жильё / заблокировано — не деньги' : d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : ''].filter(Boolean).join(' · ') || undefined))),
     sub('Что ещё учтено'),
     rows(
       row({ title: 'Траты дорожают', value: `${(st.settings.inflationBp / 100).toString().replace('.', ',')}% в год` }),

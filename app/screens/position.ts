@@ -114,7 +114,13 @@ function moneyBlock(v: PositionView): HTMLElement {
       row({ title: 'Всего капитал', sub: 'всё, что у тебя есть, минус долги', value: money(m.total), chevron: false }),
       // вторая цифра — только если она заметно отличается (жильё, вклады на срок, долги людям); иначе это тот же капитал второй раз
       Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1)
-        ? row({ title: 'Из них можно снять за 30 дней', sub: 'остальное — жильё, вклады на срок или долги людям', value: money(m.spendable), chevron: false })
+        ? row({
+            title: 'Деньги, которые можно потратить',
+            // «из капитала» только когда они меньше капитала; при долгах и рассрочках они бывают больше капитала: капитал уже уменьшен на то, что ещё предстоит выплатить
+            sub: m.spendable < m.total ? 'можно снять за 30 дней; остальное — жильё, вклады на срок или долги людям' : 'на счетах, доступно за 30 дней; рассрочки и долги впереди из капитала уже вычтены',
+            value: money(m.spendable),
+            chevron: false,
+          })
         : null,
       row({ title: 'Запас денег', sub: `по обычным расходам ${mo(m.reserveLifestyleMonths)} · по необходимым ${mo(m.reserveEssentialMonths)}`, chevron: false }),
     ),

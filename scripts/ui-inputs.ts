@@ -4,11 +4,13 @@
  *
  *  A. «О тебе»: неверные значения не сохраняются и показывают ошибку; верные сохраняются, переживают перезагрузку
  *     и появляются в личном сценарии «При желаемых расходах»; очищенные поля убирают сценарий.
- *  B. Ручной актив «жильё / заблокировано»: растёт «Всего капитал», появляется строка «Из них можно снять за 30 дней»,
+ *  B. Ручной актив «жильё / заблокировано»: растёт «Всего капитал», появляется строка «Деньги, которые можно потратить»,
  *     один раз задаётся вопрос про кредит; «Нет» его закрывает; при повторном сохранении вопрос не возвращается.
+ *  B5. Жильё со сроком «Сразу» не входит в «потратить», но входит в «Всего капитал» (D149).
  *  C. Ручной актив «деньги»: вопроса про кредит нет, оба числа растут на одну сумму.
  *  D. Заблокированные деньги: при сроке снятия дольше месяца предлагается «жильё / заблокировано».
  *  E. Ошибки формы актива: без названия и без суммы актив не добавляется.
+ *  F. Переименование рассрочки в карточке платежа (D150): пустое название — ошибка, новое — сохраняется и видно в списке.
  * Код выхода 1, если хоть одна проверка не прошла.
  */
 // @ts-nocheck — служебный скрипт для Bun
@@ -109,7 +111,7 @@ await put(page, serializeState(STATES.configured(), TODAY));
 // ── B. жильё: заблокировано на срок, вопрос про кредит ──
 const readSpendable = async () => {
   const t = await body();
-  const m = t.match(/Из них можно снять за 30 дней[\s\S]*?(−?\d[\d ]*) ₸/);
+  const m = t.match(/Деньги, которые можно потратить[\s\S]*?(−?\d[\d ]*) ₸/);
   return m ? digits(m[1]!) : null;
 };
 {
@@ -133,7 +135,7 @@ const readSpendable = async () => {
   const after = await totalCapital();
   check('B2. «Всего капитал» вырос ровно на 30 млн', after - before === 30_000_000, `${before} → ${after}`);
   const spendAfter = await readSpendable();
-  check('B2. появилась строка «Из них можно снять за 30 дней»', spendAfter !== null);
+  check('B2. появилась строка «Деньги, которые можно потратить»', spendAfter !== null);
   check('B3. «Деньги, которые можно потратить» от жилья не выросли', spendAfter !== null && spendAfter <= spendBefore + 1, `${spendBefore} → ${spendAfter}`);
 
   // повторное сохранение того же жилья вопроса не возвращает (спрашиваем один раз)
@@ -144,12 +146,11 @@ const readSpendable = async () => {
   check('B4. повторное сохранение — вопроса про кредит нет', (await page.locator('[role=dialog]').count()) === 0);
 }
 
-// ── B5. ОТКРЫТЫЙ ВОПРОС (не ошибка скрипта): «жильё / заблокировано» при сроке «Сразу» ──
-// Форма оставляет срок «Сразу», если его не менять. Тогда актив лежит в «Всего капитал» и в «Деньги, которые можно потратить» одинаково,
-// хотя в D138 жильё в «потратить» не входит (исключено только из независимости). Расчёт не менялся — записка владельцу.
+// ── B5. жильё со сроком «Сразу» — не деньги (D149, решение владельца 10.11) ──
 {
   await open('#/position');
   const spendBefore = (await readSpendable()) ?? (await totalCapital());
+  const totalBefore = await totalCapital();
   await open('#/accounts~manual/new');
   await page.locator('#manual-form input[name=title]').fill('Гараж');
   await page.locator('#manual-form input[name=balance]').fill('5000000');
@@ -158,7 +159,11 @@ const readSpendable = async () => {
   if ((await page.locator('[role=dialog]').count()) === 1) await page.getByRole('button', { name: 'Нет', exact: true }).click();
   await open('#/position');
   const spendAfter = (await readSpendable()) ?? (await totalCapital());
-  console.log(spendAfter - spendBefore >= 5_000_000 ? `⚠ ОТКРЫТО: жильё со сроком «Сразу» вошло в «Деньги, которые можно потратить» (+${spendAfter - spendBefore} ₸)` : '✓ B5. жильё со сроком «Сразу» не входит в «потратить»');
+  check('B5. жильё со сроком «Сразу» не вошло в «потратить»', spendAfter <= spendBefore + 1, `${spendBefore} → ${spendAfter}`);
+  check('B5. но в «Всего капитал» вошло', (await totalCapital()) - totalBefore === 5_000_000);
+  await open('#/overview');
+  const ov = await body();
+  check('B5. на «Обзоре» нет даты 9999', !/9999/.test(ov));
 }
 
 // ── C. деньги: вопроса про кредит нет ──
@@ -204,6 +209,27 @@ const readSpendable = async () => {
   const e2 = (await page.locator('.error-box').first().textContent().catch(() => '')) ?? '';
   check('E2. без суммы — ошибка про тенге', /тенге/.test(e2), e2);
   check('E3. ничего не добавилось', (await stateOnDisk()).manualAccounts.length === countBefore);
+}
+
+// ── F. переименование платежа ──
+{
+  const before = (await stateOnDisk()).obligations;
+  const first = before[0];
+  await open('#/debts');
+  await page.locator('a[href*="~debt/"]').first().click();
+  await page.waitForTimeout(400);
+  const input = page.locator('#debt-name-form input[name=title]');
+  await input.fill('   ');
+  await page.getByRole('button', { name: 'Переименовать' }).click();
+  await page.waitForTimeout(300);
+  check('F1. пустое название — ошибка, окно открыто', /Нужно название/.test((await page.locator('.error-box').first().textContent().catch(() => '')) ?? '') && (await input.count()) === 1);
+  await input.fill('Мои духи');
+  await page.getByRole('button', { name: 'Переименовать' }).click();
+  await page.waitForTimeout(500);
+  const after = (await stateOnDisk()).obligations.find((o) => o.id === first.id);
+  check('F2. название сохранено, остальное то же', after?.title === 'Мои духи' && JSON.stringify({ ...after, title: first.title }) === JSON.stringify(first));
+  await open('#/debts');
+  check('F3. новое название видно в списке', /Мои духи/.test(await body()));
 }
 
 check('Нет ошибок страницы', pageErrors.length === 0, pageErrors.join(' | '));

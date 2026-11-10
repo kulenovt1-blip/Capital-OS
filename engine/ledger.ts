@@ -122,7 +122,12 @@ export interface AccountPosition {
   liquidity: Liquidity;
   /** С какой даты деньги доступны. */
   availableFrom: IsoDate;
+  /** Жильё, машина, заблокированное (assetKind = non_investable): капитал, но не деньги — не доступно никогда (D149). */
+  nonInvestable?: boolean;
 }
+
+/** Дата «никогда»: актив из капитала, который нельзя потратить (жильё), не становится деньгами ни на какую дату прогноза. */
+export const NEVER_AVAILABLE: IsoDate = '9999-12-31';
 
 export interface Liabilities {
   installmentsOwn: Money;
@@ -199,7 +204,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
   }
 
   const accounts: AccountPosition[] = [];
-  const push = (p: Omit<AccountPosition, 'availableFrom'>) => accounts.push({ ...p, availableFrom: availableFrom(p.liquidity, today) });
+  const push = (p: Omit<AccountPosition, 'availableFrom'>) => accounts.push({ ...p, availableFrom: p.nonInvestable ? NEVER_AVAILABLE : availableFrom(p.liquidity, today) });
 
   for (const a of [...data.accounts].sort((x, y) => (x.id < y.id ? -1 : 1))) {
     if (a.removed) continue;
@@ -222,7 +227,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
       }
     }
     const s = settingsById.get(m.id);
-    push({ accountId: m.id, title: m.title, source: 'manual', balance, excluded: s?.excluded ?? false, liquidity: m.liquidity });
+    push({ accountId: m.id, title: m.title, source: 'manual', balance, excluded: s?.excluded ?? false, liquidity: m.liquidity, ...(m.assetKind === 'non_investable' ? { nonInvestable: true } : {}) });
   }
 
   if (sf.mode === 'ignore') {
@@ -292,7 +297,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
     step('capital.liabilities', total === 0 ? 'Долгов и рассрочек нет' : `Долги и рассрочки ${money(total)} = ${formula([['свои рассрочки', installmentsOwn, 1], ['семейные рассрочки', installmentsFamily, 1], ['долги вручную', debtsManual, 1], ['долги по операциям', payables, 1]])}`, { amount: total }),
     step('capital.net', total === 0 ? `Капитал ${money(net)} = всё, что есть (долгов нет)` : `Капитал ${money(net)} = ${money(gross)} всего − ${money(total)} долгов и рассрочек`, { amount: net }),
     step('capital.receivables', `Тебе должны ${money(receivables)} — показано отдельно, в капитал не входит`, { amount: receivables, ...(receivables === 0 ? { detail: true } : {}) }),
-    step('capital.liquid', `На руках ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
+    step('capital.liquid', `На руках ${money(liquidNow)}: ${locked.map((p) => `«${p.title}» ${p.nonInvestable ? 'жильё / заблокировано, не деньги' : liquidityLabel(p.liquidity)}`).join(', ') || 'все счета доступны сразу'}`, { amount: liquidNow, ...(locked.length ? {} : { detail: true }) }),
   );
   return { asOf: today, accounts, gross, liabilities, receivables, net, netWithReceivables, liquidNow, explanation };
 }

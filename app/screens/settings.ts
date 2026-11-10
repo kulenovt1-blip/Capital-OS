@@ -5,7 +5,7 @@
  */
 import {
   DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_PATTERN_LABELS, accountsNeedingReview, classRegistry, createIncomeKind, deleteIncomeKind,
-  emptyState, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, makeInstallment, makeRecurring, parseState, remainingFromLastDate, remainingFromTerm,
+  emptyState, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, makeInstallment, makeRecurring, renameObligation, OBLIGATION_TITLE_MAX, parseState, remainingFromLastDate, remainingFromTerm,
   serializeState, suggestionToObligation, tenge, updateIncomeKind, validateAdjustment, validateClassification, validateIncomeItem, validateObligation,
   type AccountSettings, type AppState, type CategoryRule, type IncomeKind, type IncomeKindDef, type IncomePattern, type InstallmentSuggestion, type Liquidity, type ManualAccount,
   type Obligation, type Overview, type RemainingResult, type StrategyId,
@@ -85,7 +85,7 @@ export function renderAccounts(section?: string): HTMLElement {
   const line = (p: (typeof counted)[number]) =>
     row({
       title: p.title,
-      sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
+      sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.nonInvestable ? 'жильё / заблокировано — не деньги' : p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
       value: fmt(p.balance),
       href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId),
       mark: bad.has(p.accountId),
@@ -517,11 +517,28 @@ defineSheet('debt', (id) => {
     await act((s) => ({ ...s, obligations: s.obligations.filter((x) => x.id !== id) }), `«${ob.title}» удалена`);
   };
   const up = status?.effectiveUpcoming ?? [];
+  const nameErr = h('div');
+  const nameForm = h(
+    'form',
+    { class: 'stack', id: 'debt-name-form' },
+    field('Название', h('input', { name: 'title', value: ob.title, maxlength: OBLIGATION_TITLE_MAX, autocomplete: 'off' })),
+    nameErr,
+    h('button', { class: 'btn wide', type: 'submit' }, 'Переименовать'),
+  );
+  nameForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = renameObligation(ob, readStr(nameForm, 'title'));
+    nameErr.replaceChildren(r.ok ? '' : (errorsBox([r.error]) ?? ''));
+    if (!r.ok) return;
+    closeSheet();
+    await act((s) => ({ ...s, obligations: s.obligations.map((x) => (x.id === id ? r.value : x)) }), 'Название сохранено');
+  });
   return {
     title: ob.title,
     body: h(
       'div',
       { class: 'stack' },
+      nameForm,
       rows(
         row({ title: 'Что это', value: `${OB_KIND[ob.kind]}${ob.owner === 'family' ? ', семейная' : ''}` }),
         ob.kind !== 'recurring' ? row({ title: 'Осталось', value: fmt(status?.remainingNow ?? ob.remaining) }) : null,
