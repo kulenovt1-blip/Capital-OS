@@ -233,7 +233,7 @@ export function applyProbeOpts(state0: AppState, opts: ProbeOpts = {}): AppState
   return {
     ...state0,
     manualAccounts: [...state0.manualAccounts, ...(opts.manual ?? [])],
-    settings: { ...state0.settings, incomeSchedule: [...state0.settings.incomeSchedule, ...(opts.manualIncome ?? []).map((x) => ({ id: x.id, title: x.title, dayOfMonth: 1, amount: tenge(x.amount), kind: 'stable' as const }))] },
+    settings: { ...state0.settings, incomeSchedule: [...state0.settings.incomeSchedule, ...(opts.manualIncome ?? []).map((x) => ({ id: x.id, title: x.title, dayOfMonth: 1, amount: tenge(x.amount), kind: 'stable' as const, passive: true as const }))] },
   };
 }
 
