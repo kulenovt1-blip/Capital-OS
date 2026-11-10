@@ -2,11 +2,12 @@
 import { h } from '../dom';
 import { getState, today } from '../store';
 import { ov, progress, steps } from '../ctx';
-import { fmtDay, nWord, row, rows, toggle } from '../ui';
+import { fmt, fmtDay, nWord, row, rows, toggle } from '../ui';
 import { act } from '../store';
 import { isInstalled } from '../install';
 import { themePref } from '../theme';
-import { daysBetween } from '../../engine/index';
+import { daysBetween, essentialMarkupMissing } from '../../engine/index';
+import { sheetHref } from '../main';
 
 export const APP_VERSION = '0.5.0';
 
@@ -39,6 +40,7 @@ export function renderMore(): HTMLElement {
       setupOpen ? tile('#/setup', 'Настройка', o.hasData ? `сделано ${p.done} из ${p.total}` : 'шаг 1 — загрузить бэкап', 'warn') : null,
       tile('#/help', 'Как пользоваться', 'что умеет приложение и когда его открывать'),
       tile('#/data', 'Данные', `${imp} · ${bak}`, reconcileBad ? 'bad' : backupAge === null || backupAge > 30 ? 'warn' : ''),
+      o.hasData && essentialMarkupMissing(o) ? tile('#/markup', 'Что обязательно?', 'отметь траты «без этого не прожить» — иначе запас посчитан неточно', 'warn') : null,
       tile('#/accounts', 'Счета', !o.hasData ? 'после импорта' : review && !review.done && !review.locked ? 'ждут ответа' : nWord(accounts, 'счёт', 'счёта', 'счетов'), review && !review.done && !review.locked ? 'warn' : ''),
       tile('#/incomes', 'Доходы', st.settings.incomeSchedule.length ? `доходов: ${st.settings.incomeSchedule.length}` : 'не заданы', st.settings.incomeSchedule.length ? '' : 'warn'),
       tile('#/debts', 'Долги и рассрочки', found ? `найдено в операциях: ${found}` : st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', found ? 'warn' : ''),
@@ -72,6 +74,7 @@ export function renderPrefs(): HTMLElement {
   const theme = { auto: 'как в телефоне', light: 'светлая', dark: 'тёмная' }[themePref()];
   const st = getState();
   const details = !!st.settings.showDetails;
+  const p = st.settings.position;
   return h(
     'div',
     { class: 'screen' },
@@ -85,6 +88,7 @@ export function renderPrefs(): HTMLElement {
       st.imported ? row({ title: 'Пройти первую настройку заново', sub: 'доходы, копилки, цели — три шага', href: '#/start' }) : null,
     ),
     rows(
+      row({ title: 'О тебе', sub: p?.age || p?.desiredMonthly ? [p.age ? `${p.age} лет` : '', p.desiredMonthly ? `хочу тратить ${fmt(p.desiredMonthly)} в месяц` : ''].filter(Boolean).join(' · ') : 'возраст и сколько хочешь тратить в месяц', href: sheetHref('you') }),
       row({ title: 'Вид', sub: `тема: ${theme}`, href: '#/view' }),
       isInstalled() ? null : row({ title: 'Установить как приложение', sub: 'значок на экране, работает без интернета', href: '#/install' }),
       row({ title: 'Редкое', sub: 'долги на начало учёта, ручные счета, поправки', href: '#/rare' }),

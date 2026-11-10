@@ -9,11 +9,13 @@ import {
   serializeState, suggestionToObligation, tenge, updateIncomeKind, validateAdjustment, validateClassification, validateIncomeItem, validateObligation,
   type AccountSettings, type AppState, type CategoryRule, type IncomeKind, type IncomeKindDef, type IncomePattern, type InstallmentSuggestion, type Liquidity, type ManualAccount,
   type Obligation, type Overview, type RemainingResult, type StrategyId,
+  assetChoiceOf, incomeOriginChoice, positionInputErrors, setIncomeOrigin, setIncomeStatus, shouldAskAboutLoan, suggestLockedAsset, withAssetChoice, withPositionInput,
+  type AssetChoice, type IncomeOrigin, type IncomeStatus,
 } from '../../engine/index';
 import { ask, download, field, h, toast } from '../dom';
 import { act, getState, replaceState, today, update } from '../store';
 import { errorsBox, fmt, fmtDate, info, moneyInput, newId, nWord, readChecked, readMoney, readStr, row, rows, seg, stickyBar, sub, toggle, typeLabel, whenAvailable } from '../ui';
-import { closeSheet, defineSheet, sheetHref } from '../main';
+import { closeSheet, defineSheet, go, sheetHref } from '../main';
 import { installBlock } from '../install';
 import { accountsReview, catName, incomeQuickForm } from '../blocks';
 import { badAccounts, ov } from '../ctx';
@@ -85,7 +87,7 @@ export function renderAccounts(section?: string): HTMLElement {
       title: p.title,
       sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
       value: fmt(p.balance),
-      href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId),
+      href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId),
       mark: bad.has(p.accountId),
     });
   const spend = group('spend');
@@ -98,19 +100,23 @@ export function renderAccounts(section?: string): HTMLElement {
     sub(`Копилки · ${fmt(total(savings) as never)}`),
     savings.length ? rows(savings.map(line)) : h('p', { class: 'muted' }, 'Копилок нет. Открой счёт и включи «Копилка».'),
   );
-  if (excluded.length) root.append(sub('Не учитываются'), rows(excluded.map((p) => row({ title: p.title, sub: 'технический счёт', value: h('span', { class: 'muted' }, fmt(p.balance)), href: p.source === 'manual' ? '#/rare/manual' : sheetHref('account', p.accountId) }))));
+  if (excluded.length) root.append(sub('Не учитываются'), rows(excluded.map((p) => row({ title: p.title, sub: 'технический счёт', value: h('span', { class: 'muted' }, fmt(p.balance)), href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId) }))));
   const hasSavings = o.capital.accounts.some((p) => p.source === 'savings_flow') || st.settings.savingsFlows.mode !== 'estimate';
+  // актив, которого нет в MoneyManager, добавляется отсюда, на виду (D138): жильё, машина, вклад в другом банке, деньги у родителей
   root.append(
-    h(
-      'details',
-      { class: 'fold', 'data-key': 'accounts:more', open: st.settings.showDetails ? true : undefined },
-      h('summary', null, 'Подробнее'),
-      rows(
-        hasSavings ? row({ title: 'Сбережения вне MoneyManager', sub: { estimate: 'считаются по сумме переводов', manual: 'прибавляются к ручному счёту', ignore: 'уже в балансах счетов' }[st.settings.savingsFlows.mode], href: '#/accounts/savings' }) : null,
-        row({ title: 'Ручные счета', sub: 'депозит в другом банке, деньги у родителей', value: st.manualAccounts.length ? String(st.manualAccounts.length) : undefined, href: '#/rare/manual' }),
-      ),
-    ),
+    sub('Чего нет в MoneyManager'),
+    h('p', { class: 'one-line' }, 'Квартира, машина, вклад в другом банке, деньги у родителей — добавь, и они войдут в капитал.'),
+    h('a', { class: 'btn wide', href: sheetHref('manual', 'new') }, '＋ Актив'),
   );
+  if (hasSavings)
+    root.append(
+      h(
+        'details',
+        { class: 'fold', 'data-key': 'accounts:more', open: st.settings.showDetails ? true : undefined },
+        h('summary', null, 'Подробнее'),
+        rows(row({ title: 'Сбережения вне MoneyManager', sub: { estimate: 'считаются по сумме переводов', manual: 'прибавляются к ручному счёту', ignore: 'уже в балансах счетов' }[st.settings.savingsFlows.mode], href: '#/accounts/savings' })),
+      ),
+    );
   return root;
 }
 
@@ -275,6 +281,25 @@ defineSheet('income-item', (id) => {
         : '',
     );
   drawIdx();
+  // откуда доход: три ответа (T13); не отвечал — работа, как раньше
+  let origin: IncomeOrigin = incomeOriginChoice(x);
+  const originBox = h('div', { class: 'stack' });
+  const ORIGIN_HINT: Record<IncomeOrigin, string> = {
+    labor: 'Пропадёт, если пропадёт работа.',
+    from_assets: 'Проценты и дивиденды с денег, которые уже учтены в твоём капитале: второй раз в расчёт не берутся.',
+    independent: 'Приходит, даже если не работать, и не с твоих накоплений: пенсия, аренда, пособие. Считается независимым доходом.',
+  };
+  const drawOrigin = () =>
+    originBox.replaceChildren(
+      h('span', { class: 'field-label' }, 'Откуда этот доход', info('incomeOrigin')),
+      seg([['labor', 'Работа'], ['from_assets', 'С моих накоплений'], ['independent', 'Не зависит от меня']] as const, origin, (v) => ((origin = v), drawOrigin()), 'Откуда этот доход'),
+      h('small', { class: 'hint' }, ORIGIN_HINT[origin]),
+      ...(origin !== 'labor' ? [h('small', { class: 'hint' }, 'Если эти деньги уже приходят на твои счета и видны в операциях MoneyManager, всё равно отметь, откуда они: так расчёт поймёт, что это не работа.')] : []),
+    );
+  drawOrigin();
+  // насколько надёжен: по умолчанию приложение решает само по расписанию и событиям
+  const STATUS_OPTS: [IncomeStatus | 'auto', string][] = [['auto', 'Пусть решит приложение'], ['P', 'Постоянный'], ['T', 'Временный: у него есть конец'], ['X', 'Ожидаемый: ещё не пришёл'], ['I', 'Нерегулярный: то есть, то нет']];
+  const statusSel = h('select', { name: 'status', 'aria-label': 'Насколько надёжен доход' }, STATUS_OPTS.map(([v, l]) => h('option', { value: v, selected: v === (x.status ?? 'auto') }, l)));
   const form = h(
     'form',
     { class: 'stack', id: 'income-item-form' },
@@ -282,7 +307,9 @@ defineSheet('income-item', (id) => {
     h('div', { class: 'grid-form' }, field('Какого числа', h('input', { name: 'day', type: 'number', min: 1, max: 31, inputmode: 'numeric', value: x.dayOfMonth })), field('Сколько в месяц, ₸', moneyInput('amount', x.amount))),
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Вид', info('incomeKind')), kindSel, kindHint),
     h('div', { class: 'grid-form' }, field('С даты', h('input', { name: 'start', type: 'date', value: x.start ?? '' })), field('По дату', h('input', { name: 'end', type: 'date', value: x.end ?? '' }))),
+    originBox,
     idxBox,
+    h('details', { class: 'fold', 'data-key': 'income:status' }, h('summary', null, 'Насколько доход надёжен'), h('div', { class: 'stack' }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Надёжность', info('incomeStatus')), statusSel))),
     err,
   );
   form.addEventListener('submit', async (e) => {
@@ -296,7 +323,7 @@ defineSheet('income-item', (id) => {
     const start = readStr(form, 'start');
     const end = readStr(form, 'end');
     const { start: _s, end: _e, indexed: _i, indexMonth: _m, ...base } = x;
-    const item = { ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}), ...(indexed === 'yes' && indexMonth ? { indexMonth } : {}) };
+    const item = setIncomeStatus(setIncomeOrigin({ ...base, title: readStr(form, 'title'), dayOfMonth: day, amount: amount ?? (0 as never), kind: readStr(form, 'kind') as IncomeKind, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(indexed ? { indexed: indexed === 'yes' } : {}), ...(indexed === 'yes' && indexMonth ? { indexMonth } : {}) }, origin), readStr(form, 'status') as IncomeStatus | 'auto');
     if (!errs.length) errs.push(...validateIncomeItem(item, reg));
     err.replaceChildren(errorsBox(errs) ?? '');
     if (errs.length) return;
@@ -791,11 +818,11 @@ function manualAccounts(st: AppState): HTMLElement {
   return h(
     'div',
     { class: 'stack' },
-    gray('Депозит в другом банке, деньги у родителей — то, чего нет в MoneyManager. Задаётся остатком на дату.'),
+    gray('Жильё, машина, депозит в другом банке, деньги у родителей — то, чего нет в MoneyManager. Задаётся остатком на дату.'),
     st.manualAccounts.length
-      ? rows(st.manualAccounts.map((m) => row({ title: m.title, sub: `на ${fmtDate(m.balanceDate)} · снять ${liqLabel(m.liquidity)}${m.deposit ? ` · ${(m.deposit.rateBp / 100).toLocaleString('ru-RU')} % годовых` : ''}`, value: fmt(m.balance), href: sheetHref('manual', m.id) })))
+      ? rows(st.manualAccounts.map((m) => row({ title: m.title, sub: `${assetChoiceOf(m) === 'locked' ? 'жильё / заблокировано · ' : ''}на ${fmtDate(m.balanceDate)} · снять ${liqLabel(m.liquidity)}${m.deposit ? ` · ${(m.deposit.rateBp / 100).toLocaleString('ru-RU')} % годовых` : ''}`, value: fmt(m.balance), href: sheetHref('manual', m.id) })))
       : null,
-    h('a', { class: 'btn wide', href: sheetHref('manual', 'new') }, '＋ Ручной счёт'),
+    h('a', { class: 'btn wide', href: sheetHref('manual', 'new') }, '＋ Актив'),
   );
 }
 
@@ -804,13 +831,26 @@ defineSheet('manual', (id) => {
   const m = id === 'new' ? null : st.manualAccounts.find((x) => x.id === id);
   if (id !== 'new' && !m) return null;
   let liq: Liquidity = m?.liquidity ?? { kind: 'instant' };
+  // вопрос о виде — один и с двумя ответами; не отвечал — «деньги» (D138). Если снять нельзя дольше месяца — предлагаем «жильё / заблокировано».
+  let choice: AssetChoice = m ? assetChoiceOf(m) : 'money';
+  const assetBox = h('div', { class: 'stack' });
+  const drawAsset = () =>
+    assetBox.replaceChildren(
+      h('span', { class: 'field-label' }, 'Что это', info('assetKind')),
+      seg([['money', 'Деньги'], ['locked', 'Жильё / заблокировано']] as const, choice, (v) => ((choice = v), drawAsset()), 'Что это за актив'),
+      ...(suggestLockedAsset({ liquidity: liq, assetKind: choice === 'locked' ? 'non_investable' : undefined }, today())
+        ? [h('div', { class: 'warnline' }, 'Снять можно не раньше чем через месяц. Это жильё или заблокированные деньги? ', h('button', { class: 'btn link', type: 'button', onclick: () => ((choice = 'locked'), drawAsset()) }, 'Да, жильё / заблокировано'))]
+        : []),
+    );
+  drawAsset();
   const err = h('div');
   const form = h(
     'form',
     { class: 'stack', id: 'manual-form' },
     field('Название', h('input', { name: 'title', required: true, value: m?.title ?? '', placeholder: 'Депозит в другом банке', autocomplete: 'off' })),
     h('div', { class: 'grid-form' }, field('Остаток, ₸', moneyInput('balance', m?.balance)), field('На дату', h('input', { name: 'date', type: 'date', value: m?.balanceDate ?? today() }))),
-    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Когда можно снять'), liquidityPicker(liq, (l) => (liq = l))),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Когда можно снять'), liquidityPicker(liq, (l) => ((liq = l), drawAsset()))),
+    assetBox,
     h(
       'details',
       { class: 'fold', 'data-key': 'manual:more' },
@@ -842,7 +882,7 @@ defineSheet('manual', (id) => {
     err.replaceChildren(errorsBox(errs) ?? '');
     if (errs.length) return;
     const { deposit: _d, ...prev } = m ?? ({} as Partial<ManualAccount>);
-    const acc: ManualAccount = {
+    const acc: ManualAccount = withAssetChoice({
       ...prev,
       id: m?.id ?? newId('man'),
       title,
@@ -851,9 +891,14 @@ defineSheet('manual', (id) => {
       liquidity: liq,
       comment: readStr(form, 'comment'),
       ...(rateBp !== null ? { deposit: { rateBp, capitalization: readStr(form, 'cap') as 'monthly' | 'daily' } } : {}),
-    };
+    }, choice);
     closeSheet();
-    await act((s) => ({ ...s, manualAccounts: m ? s.manualAccounts.map((x) => (x.id === m.id ? acc : x)) : [...s.manualAccounts, acc] }), m ? 'Счёт сохранён' : 'Счёт добавлен');
+    await act((s) => ({ ...s, manualAccounts: m ? s.manualAccounts.map((x) => (x.id === m.id ? acc : x)) : [...s.manualAccounts, acc] }), m ? 'Актив сохранён' : 'Актив добавлен');
+    // жильё или машина: один раз спрашиваем про кредит или ипотеку (долги заводятся отдельно, связи «актив — кредит» нет)
+    if (shouldAskAboutLoan(m ?? null, acc)) {
+      const i = await ask({ title: 'Есть кредит или ипотека на это?', text: 'Если да — заведи его в «Долги и рассрочки»: платежи и остаток войдут в расчёт. Спрашиваю один раз.', actions: [{ label: 'Да, завести долг' }], cancel: 'Нет' });
+      if (i === 0) go('#/debts~debt-new');
+    }
   });
   const remove = m
     ? h('button', {
@@ -864,9 +909,45 @@ defineSheet('manual', (id) => {
           closeSheet();
           await act((s) => ({ ...s, manualAccounts: s.manualAccounts.filter((x) => x.id !== m.id) }), `«${m.title}» удалён`);
         },
-      }, 'Удалить счёт')
+      }, 'Удалить актив')
     : null;
-  return { title: m ? m.title : 'Ручной счёт', body: h('div', { class: 'stack' }, form, remove), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'manual-form' }, m ? 'Сохранить' : 'Добавить')) };
+  return { title: m ? m.title : 'Новый актив', body: h('div', { class: 'stack' }, form, remove), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'manual-form' }, m ? 'Сохранить' : 'Добавить')) };
+});
+
+/** «О тебе» (T13): возраст и желаемые траты. Оба поля необязательны; пусто = как раньше. */
+defineSheet('you', () => {
+  const st = getState();
+  const cur = st.settings.position;
+  const err = h('div');
+  const form = h(
+    'form',
+    { class: 'stack', id: 'you-form' },
+    sub('Зачем это', info('aboutYou')),
+    field('Сколько тебе лет', h('input', { name: 'age', type: 'number', min: 14, max: 100, step: 1, inputmode: 'numeric', value: cur?.age ?? '', placeholder: 'можно не указывать' }), 'Нужно только затем, чтобы понять, на сколько лет должен хватить капитал. Не скажешь — считаю на 50 лет.'),
+    field('Хочу тратить в месяц, ₸', moneyInput('desired', cur?.desiredMonthly), 'Только для личного расчёта «а если бы я тратил столько». На твой уровень это не влияет.'),
+    err,
+  );
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ageStr = readStr(form, 'age').trim();
+    const desStr = readStr(form, 'desired').trim();
+    const errs: string[] = [];
+    const age = ageStr === '' ? null : Number(ageStr);
+    const desired = desStr === '' ? null : readMoney(form, 'desired');
+    if (age !== null && !Number.isFinite(age)) errs.push('Возраст — число');
+    if (desStr !== '' && desired === null) errs.push('Желаемые траты: введи сумму в тенге');
+    if (!errs.length) errs.push(...positionInputErrors({ age, desiredMonthly: desired }));
+    err.replaceChildren(errorsBox(errs) ?? '');
+    if (errs.length) return;
+    const next = withPositionInput(cur, { age, desiredMonthly: desired });
+    closeSheet();
+    await act((s) => {
+      const { position: _old, ...rest } = s.settings;
+      void _old;
+      return { ...s, settings: next ? { ...rest, position: next } : rest };
+    }, 'Сохранено');
+  });
+  return { title: 'О тебе', body: h('div', { class: 'stack' }, form), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'you-form' }, 'Сохранить')) };
 });
 
 function adjustments(st: AppState): HTMLElement {
