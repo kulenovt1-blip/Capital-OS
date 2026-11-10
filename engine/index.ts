@@ -25,7 +25,7 @@ export * from './installment-detect';
 export * from './income-kinds';
 export * from './simple';
 export * from './sanity';
-export * from './stage';
+export * from './reserve';
 export * from './saving';
 export * from './route';
 export * from './roadmap';

@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { baseForecast, baseForecastTrace, buildOverview, personStage, positionViewOf, type PositionView, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
+import { baseForecast, baseForecastTrace, buildOverview, reserveNow, positionViewOf, type PositionView, type Reserve, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -25,7 +25,7 @@ export const ov = (): Overview => compute().o;
 // прогноз «как сейчас», вердикты целей и запас прочности — тяжелее Обзора, считаются по запросу (D96)
 let fcState: AppState | null = null;
 let fcKey = '';
-let fc: { sim?: SimResult; simTrace?: SimResult; verdicts?: Map<string, GoalVerdict>; noIncome?: ReturnType<typeof monthsWithoutIncome> | undefined; noIncomeDone?: boolean; stage?: PersonStage | null; stageDone?: boolean } = {};
+let fc: { sim?: SimResult; simTrace?: SimResult; verdicts?: Map<string, GoalVerdict>; noIncome?: ReturnType<typeof monthsWithoutIncome> | undefined; noIncomeDone?: boolean; reserve?: Reserve | null; reserveDone?: boolean } = {};
 function fcMemo() {
   const st = getState();
   const k = today();
@@ -50,14 +50,14 @@ export function verdicts(): Map<string, GoalVerdict> {
   if (!getState().imported) return new Map();
   return (m.verdicts ??= goalVerdicts(getState(), today(), forecastNow()));
 }
-/** «Твой этап» (D115) — считается по запросу и один раз на состояние. */
-export function stageNow(): PersonStage | null {
+/** Запас в месяцах (D115, D143) — считается по запросу и один раз на состояние. */
+export function reserveCtx(): Reserve | null {
   const m = fcMemo();
-  if (!m.stageDone) {
-    m.stage = personStage(getState(), today());
-    m.stageDone = true;
+  if (!m.reserveDone) {
+    m.reserve = reserveNow(getState(), today());
+    m.reserveDone = true;
   }
-  return m.stage ?? null;
+  return m.reserve ?? null;
 }
 export function monthsWithoutIncomeNow(): ReturnType<typeof monthsWithoutIncome> {
   const m = fcMemo();

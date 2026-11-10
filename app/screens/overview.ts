@@ -5,7 +5,7 @@
 import { addDays, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
-import { badAccounts, ov, progress, stageNow } from '../ctx';
+import { badAccounts, ov, progress, reserveCtx } from '../ctx';
 import { attentionItems } from '../attention';
 import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
@@ -84,7 +84,7 @@ defineSheet('excluded', () => {
 });
 
 export type OverviewBuilder = () => Overview;
-/** Совместимость: раньше этап 2 подменял построитель обзора. */
+/** Совместимость: раньше вторая стадия разработки подменяла построитель обзора. */
 export function setOverviewBuilder(_b: OverviewBuilder): void {}
 
 /** Месячная сумма → в день (как «обычно уходит»: × 12 ÷ 365). */
@@ -125,7 +125,7 @@ function heroBlock(o: Overview): HTMLElement {
   return hero(label, fmt(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
-/** Истории меньше 3 полных месяцев — числа приблизительные (этап 4 аудита, D105). */
+/** Истории меньше 3 полных месяцев — числа приблизительные (шаг 4 аудита, D105). */
 function historyNote(o: Overview): HTMLElement | null {
   const n = o.baseline.months.length;
   // меньше месяцев, чем просил человек в настройках, — значит, данных мало (а не настройка «считать по 2 мес.»)
@@ -160,12 +160,12 @@ function cushionRow(o: Overview): HTMLElement | null {
   );
 }
 
-/** «Твой этап» — одной строкой: на какой ступени и на чём это основано (D123). Лесенка и арифметика — в листе `stage-info`. */
-function stageRow(): HTMLElement | null {
-  const s = stageNow();
+/** Запас в месяцах — одной строкой: на сколько хватит денег без дохода и на чём это основано (D123, D143). Арифметика — в листе `reserve-info`. */
+function reserveRow(): HTMLElement | null {
+  const s = reserveCtx();
   if (!s) return null;
   const cover = s.coverMonths.toString().replace('.', ',');
-  return rows(row({ title: `Этап ${s.stage} из 5 · ${s.title}`, sub: `без дохода денег хватит на ${cover} мес.`, href: sheetHref('stage-info') }));
+  return rows(row({ title: `Запас хватит на ${cover} мес.`, sub: 'если доход пропадёт: деньги сразу ÷ траты и платежи', href: sheetHref('reserve-info') }));
 }
 
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
@@ -285,7 +285,7 @@ export function renderOverview(): HTMLElement {
     ),
     newIncomeLine(),
     positionRow(),
-    stageRow(),
+    reserveRow(),
     cushionRow(o),
     o.upcoming30.length
       ? h(

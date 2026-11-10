@@ -3,10 +3,10 @@
  * в месяцах; по строке на цель; «Планирую…» — готовые события и своё событие, каждое можно посчитать и добавить в план.
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
-import { balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherStages, routeTo, stageDef, stageRange, STAGE_LIST, ROUTE_DEADLINES, type StageNo, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
-import { forecastNow, forecastTraceNow, ov, stageNow, verdicts } from '../ctx';
+import { forecastNow, forecastTraceNow, ov, reserveCtx, verdicts } from '../ctx';
 import { attention, fmt, info, fmtDay, fmtShort, monthGen, monthTo, monthWord, newId, nWord, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
@@ -204,7 +204,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   })();
   const onHand = bal ? bal.assets : null;
   const debtThen = bal ? bal.liabilities : (0 as Money);
-  const stg = stageNow();
+  const stg = reserveCtx();
   const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
   root.append(
     horizonSeg(k),
@@ -362,7 +362,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     // одна группа строк вместо четырёх отдельных карточек (D121)
     root.append(
       rows(
-        row({ title: 'Из А в Б', sub: stg ? `сейчас этап ${stg.stage} из 5 · выбери, куда выйти` : 'выбери этап и путь к нему', href: sheetHref('a-to-b') }),
+        row({ title: 'Из А в Б', sub: stg ? `сейчас запас на ${stg.coverMonths.toString().replace('.', ',')} мес. · выбери, куда выйти` : 'выбери нужный запас и путь к нему', href: sheetHref('a-to-b') }),
         row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что это даст', href: sheetHref('save-where') }),
         row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') }),
         row({ title: 'Если станет хуже или лучше', sub: 'сценарии', href: '#/forecast-more' }),
@@ -618,31 +618,31 @@ function monthKeyNext(t: string, ahead = 0): string {
 
 // ───────────────────────── «Из А в Б» (D123) ─────────────────────────
 
-/** Куда человек хочет выйти и за сколько месяцев — пока открыт экран. */
-let routeStage: StageNo | null = null;
+/** Куда человек хочет выйти (месяцев запаса) и за сколько месяцев — пока открыт экран. */
+let routeTarget: ReserveTarget | null = null;
 let routeDeadline = 6;
 
 defineSheet('a-to-b', () => {
   const st = getState();
   const t = today();
-  const stg = stageNow();
+  const stg = reserveCtx();
   if (!stg) return { title: 'Из А в Б', body: h('p', { class: 'muted' }, 'Чтобы построить путь, нужны загруженные данные и размеченные траты.') };
-  const ups = higherStages(stg.stage);
-  const months = (x: number) => nWord(Math.floor(x), 'месяц', 'месяца', 'месяцев');
+  const ups = higherTargets(stg.coverMonths);
   const here = h(
     'section',
     { class: 'card stack tight', 'aria-label': 'Где ты сейчас' },
     h('div', { class: 'muted' }, 'А — сейчас'),
-    h('strong', null, `Этап ${stg.stage} из 5 · ${stg.title}`),
+    h('strong', null, `Запас на ${stg.coverMonths.toString().replace('.', ',')} мес.`),
     h('p', null, `Денег хватит без дохода на ${stg.coverMonths.toString().replace('.', ',')} мес.: ${fmt(stg.liquid)} ÷ ${fmt(stg.needMonthly)} в месяц.`),
-    h('a', { class: 'link', href: sheetHref('stage-info'), style: 'display:flex;align-items:center;min-height:44px' }, 'Все этапы и почему ты здесь ›'),
+    h('a', { class: 'link', href: sheetHref('reserve-info'), style: 'display:flex;align-items:center;min-height:44px' }, 'Как посчитан запас ›'),
   );
   if (!ups.length) {
-    return { title: 'Из А в Б', body: h('div', { class: 'stack' }, here, h('div', { class: 'okline' }, 'Это верхний этап: запас на год и больше. Дальше — не про запас, а про цели: как делить остаток между ними, решаешь ты.'), h('a', { class: 'btn wide', href: '#/goals' }, 'К целям')) };
+    return { title: 'Из А в Б', body: h('div', { class: 'stack' }, here, h('div', { class: 'okline' }, 'Запас на год и больше: дальше — не про запас, а про цели. Как делить остаток между ними, решаешь ты.'), h('a', { class: 'btn wide', href: '#/goals' }, 'К целям')) };
   }
-  const to = (routeStage !== null && routeStage > stg.stage ? routeStage : stg.next!.toStage) as StageNo;
+  const to = (routeTarget !== null && ups.includes(routeTarget) ? routeTarget : stg.next!.months) as ReserveTarget;
   const r = routeTo(st, t, to)!;
-  const pick = rows(ups.map((d) => row({ title: `Этап ${d.no} · ${d.title}`, sub: `запас ${stageRange(d)}`, value: d.no === to ? h('strong', null, '✓') : undefined, onClick: () => ((routeStage = d.no), refresh()), chevron: false })));
+  const pick = rows(ups.map((m) => row({ title: m === 12 ? 'Запас на год' : `Запас на ${m} ${m === 1 ? 'месяц' : m < 5 ? 'месяца' : 'месяцев'}`, sub: RESERVE_NOTES[m], value: m === to ? h('strong', null, '✓') : undefined, onClick: () => ((routeTarget = m), refresh()), chevron: false })));
+  const toText = to === 12 ? 'запаса на год' : `запаса на ${to} ${to === 1 ? 'месяц' : to < 5 ? 'месяца' : 'месяцев'}`;
 
   const dl = r.deadlines.find((d) => d.months === routeDeadline) ?? r.deadlines[0];
   const dm = dl ? dl.month : null;
@@ -653,10 +653,10 @@ defineSheet('a-to-b', () => {
       : h(
           'div',
           { class: 'card stack tight' },
-          h('strong', null, `Чтобы выйти на этап «${r.to.title}» к ${monthTo(dm)}`),
+          h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
           h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
           h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
-          h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents, cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `К этапу «${r.to.title}» к ${monthTo(dm)}`)] } }), `В плане: на ${fmt(dl.extraMonthly)} в месяц больше, чтобы выйти на этап «${r.to.title}» к ${monthTo(dm)}`) }, 'Добавить в план'),
+          h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents, cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `Набрать ${toText} к ${monthTo(dm)}`)] } }), `В плане: на ${fmt(dl.extraMonthly)} в месяц больше, чтобы набрать ${toText} к ${monthTo(dm)}`) }, 'Добавить в план'),
         )
     : null;
 
@@ -666,12 +666,12 @@ defineSheet('a-to-b', () => {
       'div',
       { class: 'stack' },
       here,
-      sub('Б — куда хочешь выйти'),
+      sub('Б — какой запас нужен'),
       pick,
       sub('Что для этого нужно'),
       rows(
         row({ title: 'Уходит в обычный месяц', sub: 'траты и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
-        row({ title: `Нужно денег: ${r.to.fromMonths} ${r.to.fromMonths === 1 ? 'месяц' : 'мес.'}`, sub: `${r.to.fromMonths} × ${fmt(r.from.needMonthly)}`, value: fmt(r.target), chevron: false }),
+        row({ title: `Нужно денег: ${r.to} ${r.to === 1 ? 'месяц' : 'мес.'}`, sub: `${r.to} × ${fmt(r.from.needMonthly)}`, value: fmt(r.target), chevron: false }),
         row({ title: 'Есть сейчас', sub: 'можно снять сразу', value: fmt(r.from.liquid), chevron: false }),
         row({ title: h('strong', null, 'Не хватает'), value: h('strong', null, fmt(r.missing)), chevron: false }),
       ),
@@ -679,7 +679,7 @@ defineSheet('a-to-b', () => {
       h('p', null, r.by ? h('strong', null, `Как сейчас — к ${monthTo(r.by)}.`) : 'Как сейчас — за пять лет прогноза не набирается: при нынешних доходах и тратах запас не вырастет до нужного.'),
       r.debtFree ? h('p', { class: 'muted' }, `Платежи по долгам кончатся к ${monthTo(r.debtFree.from)}: освободится ≈ ${fmt(r.debtFree.freed)} в месяц — это уже учтено.`) : null,
       r.steps.length > 1
-        ? h('div', { class: 'stack tight' }, sub('По пути'), rows(r.steps.map((x) => row({ title: `Этап ${x.stage.no} · ${x.stage.title}`, sub: `нужно ${fmt(x.target)}`, value: x.by ? monthWord(x.by) : 'не набирается', chevron: false }))))
+        ? h('div', { class: 'stack tight' }, sub('По пути'), rows(r.steps.map((x) => row({ title: `Запас на ${x.months} ${x.months === 1 ? 'месяц' : x.months < 5 ? 'месяца' : 'месяцев'}`, sub: `нужно ${fmt(x.target)}`, value: x.by ? monthWord(x.by) : 'не набирается', chevron: false }))))
         : null,
       sub('Хочу быстрее'),
       seg(ROUTE_DEADLINES.map((n) => [String(n), n === 12 ? 'год' : n === 24 ? '2 года' : `${n} мес`] as const), String(dl?.months ?? routeDeadline), (v) => ((routeDeadline = Number(v)), refresh()), 'За сколько месяцев'),
@@ -691,17 +691,17 @@ defineSheet('a-to-b', () => {
   };
 });
 
-/** Все этапы, границы и «почему ты здесь» — арифметика по шагам (D123). */
-defineSheet('stage-info', () => {
-  const s = stageNow();
+/** Запас в месяцах и «почему столько» — арифметика по шагам (D123, D143). */
+defineSheet('reserve-info', () => {
+  const s = reserveCtx();
   if (!s) return null;
   const cover = s.coverMonths.toString().replace('.', ',');
   return {
-    title: 'Этапы и почему ты здесь',
+    title: 'Запас и почему столько',
     body: h(
       'div',
       { class: 'stack' },
-      h('p', null, 'Этап — это на сколько месяцев хватит денег, если доход пропадёт. Больше ничего не учитывается: ни доходы, ни цели.'),
+      h('p', null, 'Запас — это на сколько месяцев хватит денег, если доход пропадёт. Больше ничего не учитывается: ни доходы, ни цели.'),
       sub('Как посчитано'),
       rows(
         row({ title: 'Обычные траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
@@ -710,12 +710,13 @@ defineSheet('stage-info', () => {
         row({ title: 'Деньги, которые можно снять сразу', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),
-      sub('Все этапы'),
-      rows(STAGE_LIST.map((d) => row({ title: `${d.no}. ${d.title}`, sub: `запас ${stageRange(d)} · ${d.portrait}`, value: d.no === s.stage ? h('strong', null, 'ты здесь') : undefined, chevron: false }))),
-      h('p', { class: 'muted' }, `Ты в этапе ${s.stage}, потому что ${cover} мес. — ${stageRange(stageDef(s.stage))}.`),
-      h('p', { class: 'muted' }, `Отдельно от этапа: остаётся в месяц ${s.surplusMonthly >= 0 ? '+' : '−'}${fmt(Math.abs(s.surplusMonthly) as Money)} (в среднем за ближайшие полгода) — запас ${s.surplusMonthly >= 0 ? 'растёт' : 'тает'}.`),
-      h('a', { class: 'btn wide', href: sheetHref('a-to-b') }, 'Как выйти на следующий этап ›'),
-      h('p', { class: 'muted' }, 'Не видны наличные и долги вне MoneyManager — если они есть, этап может быть другим.'),
+      s.next
+        ? h('p', { class: 'muted' }, s.next.text)
+        : h('p', { class: 'muted' }, 'Запас на год и больше — выше цели «Из А в Б» нет.'),
+      h('p', { class: 'muted' }, `Отдельно от запаса: остаётся в месяц ${s.surplusMonthly >= 0 ? '+' : '−'}${fmt(Math.abs(s.surplusMonthly) as Money)} (в среднем за ближайшие полгода) — запас ${s.surplusMonthly >= 0 ? 'растёт' : 'тает'}.`),
+      s.debtShare !== null && s.debtShare > 0 ? h('p', { class: 'muted' }, `На платежи по долгам и рассрочкам уходит ${Math.round(s.debtShare * 100)} % дохода.`) : null,
+      h('a', { class: 'btn wide', href: sheetHref('a-to-b') }, 'Как набрать больше запаса ›'),
+      h('p', { class: 'muted' }, 'Не видны наличные и долги вне MoneyManager — если они есть, запас может быть другим.'),
     ),
   };
 });
