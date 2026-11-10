@@ -9,6 +9,7 @@ import { badAccounts, ov, progress, stageNow } from '../ctx';
 import { attentionItems } from '../attention';
 import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
+import { positionRow } from './position';
 import { defineSheet, go, refresh, sheetHref } from '../main';
 import { helpSeen, markHelpSeen } from './help';
 
@@ -283,6 +284,7 @@ export function renderOverview(): HTMLElement {
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmt(sp.inSavings))),
     ),
     newIncomeLine(),
+    positionRow(),
     stageRow(),
     cushionRow(o),
     o.upcoming30.length

@@ -86,7 +86,7 @@ export const SCREENS: [string, string][] = [
   ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-trip'], ['goal-fund', '#/goals~goal-fund/goal-trip'], ['goal-edit', '#/goals~goal-edit/goal-trip'],
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
-  ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'], ['you', '#/prefs~you'],
+  ['position', '#/position'], ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'], ['you', '#/prefs~you'],
   ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],

@@ -38,11 +38,11 @@ const FORBIDDEN: [RegExp, string][] = [
 /** Предельная высота главных экранов в экранах телефона (D121). */
 const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6 };
 
-const CONFIGURED = ['plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'cushion-fill', 'distribute', 'a-to-b', 'to-date', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'manual-new', 'income-item', 'you', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
+const CONFIGURED = ['plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'cushion-fill', 'distribute', 'a-to-b', 'to-date', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'manual-new', 'income-item', 'you', 'position', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
   ['imported', ['start', 'start-savings', 'start-goals', 'overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],
-  ['empty', ['overview', 'setup', 'goals', 'income', 'forecast', 'import', 'more']],
+  ['empty', ['overview', 'position', 'setup', 'goals', 'income', 'forecast', 'import', 'more']],
   ['broken', ['overview', 'goals', 'income', 'forecast', 'more', 'import']],
 ];
 const TRUST_SCREENS = new Set(['overview', 'goals', 'income', 'forecast', 'more']);

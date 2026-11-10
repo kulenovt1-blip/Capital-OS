@@ -31,6 +31,7 @@ export * from './roadmap';
 export * from './hidden';
 export * from './position/settings';
 export * from './position/inputs';
+export * from './position/view';
 export * from './position/series';
 export * from './position/sources';
 export * from './position/indicators';

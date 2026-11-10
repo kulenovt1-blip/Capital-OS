@@ -2,7 +2,7 @@
  * Общие вычисления для всех экранов одной отрисовки: «Обзор» движка, шаги настройки, доверие к цифрам.
  * Считается один раз на состояние (состояние неизменяемо — новое на каждое изменение).
  */
-import { baseForecast, buildOverview, personStage, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
+import { baseForecast, buildOverview, personStage, positionViewOf, type PositionView, type PersonStage, unconfirmedCategories, goalVerdicts, monthsWithoutIncome, setupProgress, setupSteps, type AppState, type GoalVerdict, type Overview, type SetupStep, type SimResult } from '../engine/index';
 import { getState, today } from './store';
 import { fmtExact, fmtDay, nWord, plural } from './ui';
 
@@ -122,3 +122,17 @@ function sheetHrefFor(screen: string, sheet: string, arg: string): string {
 }
 
 export { plural };
+
+// «Положение» v4 (T11): модель экрана считается один раз на состояние и дату, как «Обзор»
+let posState: AppState | null = null;
+let posToday = '';
+let posView: PositionView | null = null;
+export function positionNow(): PositionView {
+  const st = getState();
+  const t = today();
+  if (posView && posState === st && posToday === t) return posView;
+  posState = st;
+  posToday = t;
+  posView = positionViewOf(st, t);
+  return posView;
+}

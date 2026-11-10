@@ -561,3 +561,15 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .top.sub-top .ttl-row { flex-wrap: nowrap; }
 .top.sub-top h1 { font-size: calc(22px * var(--fz)); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top.sub-top .trust { flex-shrink: 1; min-width: 0; max-width: 48%; }
+
+/* «Положение» (T11) */
+.pos-level-card { text-align: center; }
+.pos-level-code { font-size: 44px; font-weight: 700; line-height: 1.1; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.pos-level-name { font-size: 20px; font-weight: 600; }
+.pos-radar-wrap { display: flex; justify-content: center; }
+.pos-radar { width: 100%; max-width: 360px; height: auto; }
+.pos-cols { display: flex; gap: 12px; }
+.pos-col { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.pos-col .v { font-size: 24px; font-weight: 700; }
+.row-fold summary { display: flex; justify-content: space-between; gap: 12px; min-height: 44px; align-items: center; }
+.row-fold .rf-val { color: var(--ink-2); }
