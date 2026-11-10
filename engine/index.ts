@@ -41,3 +41,4 @@ export * from './position/confidence';
 export * from './position/level';
 export * from './position/runway';
 export * from './position/spiral';
+export * from './position/independence';

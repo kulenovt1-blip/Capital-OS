@@ -4,7 +4,7 @@
  * Эталон — tests/fixtures/position/independence-reference.json: значения из вывода проб v4 (спец. 10.9, model-final 1.2–1.3), НЕ с кода движка.
  * Что проверяется уже сейчас (T05/T06): запас в месяцах, направления N/V/F и `G` до правки V1 (v1CapMonths = Infinity, как в пробе)
  * и после неё (D = 24); условия L4 как числа, потому что функции уровня ещё нет (T07).
- * Уровни L1–L4 на этих профилях проверяет position-level.test.ts (T07). Что ждёт следующих задач, помечено `it.todo`: C и P, вероятности успеха изъятия (T10).
+ * Уровни L1–L4 на этих профилях проверяет position-level.test.ts (T07). C и P, устойчивость потока и L5 — position-independence.test.ts (T10).
  */
 import { describe, it, expect } from 'vitest';
 import { computeIndicators, type IndicatorsReport } from '../../engine/position/indicators';
@@ -104,7 +104,9 @@ describe('после правки V1 (D = 24)', () => {
   });
 });
 
-describe('ждут следующих задач', () => {
-  it.todo('T10: C и P по центральной и низкой ставке — подтверждены FI2, FI3, FI6, FI8 (центральная), только FI8 (низкая)');
-  it.todo('T10: устойчивость потока — пропускает FI3 и FI6, отклоняет FI4, FI5, FI7');
+describe('закрыто в T10', () => {
+  // C и P по центральной и низкой ставке, устойчивость потока и уровни L5 на FI1–FI8 проверяет position-independence.test.ts (раздел «FI1–FI8»).
+  it('ссылка на проверки T10 (чтобы не потерять при переименовании)', () => {
+    expect(REF.independenceConfirmedByCentralRate).toEqual(['FI2', 'FI3', 'FI6', 'FI8']);
+  });
 });
