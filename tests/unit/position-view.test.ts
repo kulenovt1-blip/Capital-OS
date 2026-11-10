@@ -11,7 +11,8 @@ import { emptyState } from '../../engine/state';
 import { INDEPENDENCE_TEXTS, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
 import { levelFromIndicators } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
-import { applyProbeOpts, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
+import { applyProbeOpts, build, SPECS2, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
+import { computeBalances } from '../../engine/ledger';
 
 const view = (state: Parameters<typeof positionViewOf>[0]) => positionViewOf(state, TODAY);
 const named = (n: string) => { const p = namedProfiles().find((x) => x.name === n)!; return applyProbeOpts(p.state, p.opts); };
@@ -187,5 +188,17 @@ describe('инвариант: ни одного NaN на всех профиля
       bad.push(...nonFinite(v).map((s) => `${p.name}: ${s}`));
     }
     expect(bad).toEqual([]);
+  });
+});
+
+describe('С2 (D159): сверка не сошлась — уровень предварительный', () => {
+  it('расхождение на 1 тиын в одном счёте: reconcileOk = false, preliminary = true; при совпадении — как обычно', () => {
+    const st = build(SPECS2[1]!);
+    const acc0 = st.imported!.accounts.find((a) => !a.removed)!;
+    const good = { ...st, imported: { ...st.imported!, reportedBalances: Object.fromEntries(st.imported!.accounts.map((a) => [a.id, computeBalances(st.imported!.operations).get(a.id) ?? 0])) as never } };
+    const bad = { ...good, imported: { ...good.imported!, reportedBalances: { ...good.imported!.reportedBalances, [acc0.id]: ((good.imported!.reportedBalances[acc0.id] ?? 0) + 1) as never } } };
+    expect(view(good).reconcileOk).toBe(true);
+    expect(view(bad).reconcileOk).toBe(false);
+    expect(view(bad).preliminary).toBe(true);
   });
 });

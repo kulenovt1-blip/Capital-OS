@@ -211,7 +211,7 @@ function confidenceBlock(v: PositionView): HTMLElement {
   return rows(
     row({
       title: `Достоверность данных: ${pct(v.confidence)}`,
-      sub: v.preliminary ? 'данных пока мало, поэтому уровень предварительный' : 'данных достаточно, чтобы уровню можно было верить',
+      sub: !v.reconcileOk ? 'сверка с MoneyManager не сошлась: балансы неточны, поэтому уровень предварительный' : v.preliminary ? 'данных пока мало, поэтому уровень предварительный' : 'данных достаточно, чтобы уровню можно было верить',
       chevron: false,
       cls: v.preliminary ? 'warn' : '',
     }),
@@ -256,7 +256,7 @@ export function renderPosition(): HTMLElement {
 export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
-  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
+  return rows(row({ title: `Финансовый профиль: ${v.levelName}`, sub: !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : v.weak ? `слабое место — ${v.weak.directionName}` : undefined, href: '#/position' }));
 }
 
 export { sheetHref };
