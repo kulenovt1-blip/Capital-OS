@@ -29,3 +29,5 @@ export * from './saving';
 export * from './route';
 export * from './roadmap';
 export * from './hidden';
+export * from './position/settings';
+export * from './position/series';

@@ -27,6 +27,7 @@ export interface Decision {
   userNote: string;
 }
 import { DEFAULT_SETTINGS, SAVINGS_TITLE_RE, normalizeIncomeKind, type Adjustment, type ManualAccount, type Settings } from './settings';
+import { normalizePositionSettings } from './position/settings';
 
 export const STATE_VERSION = 1;
 export const APP_ID = 'capital-os';
@@ -125,9 +126,13 @@ export function parseState(json: string): ParseResult {
   };
   if (legacy) state.settings.simpleMigrated = false;
   migrateState(state);
+  // T01: необязательные настройки «Положения»; недопустимое отбрасывается с предупреждением, пустое — без ключа
+  const position = normalizePositionSettings(state.settings.position);
+  if (position.value) state.settings.position = position.value;
+  else delete state.settings.position;
   const errs = validateState(state);
   if (errs.length) return fail(`Бэкап повреждён: ${errs.slice(0, 5).join('; ')}${errs.length > 5 ? ` и ещё ${errs.length - 5}` : ''}`);
-  return { ok: true, value: state, explanation: [{ code: 'state.loaded', text: `Бэкап версии ${raw.version} загружен` }] };
+  return { ok: true, value: state, explanation: [{ code: 'state.loaded', text: `Бэкап версии ${raw.version} загружен` }, ...position.warnings] };
 }
 
 /**

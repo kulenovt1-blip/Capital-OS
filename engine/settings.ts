@@ -10,6 +10,7 @@ import { DEFAULT_STRATEGY_SETTINGS, type StrategyId, type StrategySettings } fro
 import { DEFAULT_SCENARIOS, type LifeEvent, type Scenario } from './simulate';
 import type { IncomeKindDef } from './income-kinds';
 import { DEFAULT_CLASS_SETTINGS, type ClassSettings } from './classes';
+import type { PositionSettings } from './position/settings';
 
 export type Liquidity = { kind: 'instant' } | { kind: 'days'; days: number } | { kind: 'locked_until'; date: IsoDate };
 
@@ -219,6 +220,8 @@ export interface Settings {
   repeatAnswered?: string[];
   /** Первый запуск (3 шага) пройден или пропущен (D96). */
   firstRunDone?: boolean;
+  /** Необязательные настройки расчёта «Положения» v4: возраст и «хочу тратить в месяц». Нет значения — нет ключа. */
+  position?: PositionSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
