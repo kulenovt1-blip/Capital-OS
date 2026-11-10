@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
@@ -106,12 +106,29 @@ function rareLine(): HTMLElement | null {
   return h('a', { href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `+ редкие траты ≈ ${fmt(total)} в месяц (${names.join(', ')}${rare.length > 2 ? '…' : ''}) ›`);
 }
 
+/** Карточка «Пришли деньги» (аудит UX): вкладки «Доход» больше нет — вопрос возникает на «Обзоре» ровно тогда, когда в бэкапе появился новый приход. */
+function arrivedCard(): HTMLElement | null {
+  const st = getState();
+  const found = arrivedIncomes(st, today(), ov());
+  if (!found.length) return null;
+  const x = found[0]!;
+  return rows(row({ title: `Пришло ${fmtShort(x.amount)}: ${x.title}`, sub: `${fmtDay(x.date)} · распределить на цели и жизнь?${found.length > 1 ? ` Ещё ${found.length - 1}` : ''}`, href: '#/income', cls: 'warn' }));
+}
+
 function heroBlock(o: Overview): HTMLElement {
   const sp = o.spend;
+  // К4 аудита UX: при нехватке «Можно тратить −1,96 млн» звучит абсурдно и пугает без выхода — говорим прямо и даём шаг
+  if (sp.canSpend < 0) {
+    const till = o.nextIncome.source === 'schedule' ? `до ${fmtDay(o.nextIncome.date)}` : 'на 30 дней';
+    return hero(h('span', null, `Не хватает ${till}`, info('free')), fmtShort((-sp.canSpend) as never), h('span', null, 'чтобы дожить до дохода и заплатить по платежам'), {
+      extra: h('div', { class: 'stack tight' }, h('a', { class: 'link', href: '#/forecast~save-where' }, 'Что можно сделать ›'), h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')),
+    });
+  }
   const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
-  // этап 2: под числом одна строка; «обычно уходит», редкие траты и непроверенное — в «Как посчитано»
-  const subline = sp.canSpend < 0 ? h('span', null, `до дохода не хватает ${fmtShort((-sp.canSpend) as never)}`) : h('span', null, `≈ ${fmtShort(sp.perDay)} в день на всё`);
-  return hero(label, fmtShort(sp.canSpend), subline, { neg: sp.canSpend < 0, extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+  // С8: рядом с «≈ 29 тыс в день» — сколько обычно уходит, чтобы лимит не читался как разрешение тратить всё
+  const usual = sp.usualPerDay > 0 ? ` · обычно уходит ~${fmtShort(sp.usualPerDay)}` : '';
+  const subline = h('span', null, `≈ ${fmtShort(sp.perDay)} в день, если тратить всё${usual}`);
+  return hero(label, fmtShort(sp.canSpend), subline, { extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
 /** Истории меньше 3 полных месяцев — числа приблизительные (шаг 4 аудита, D105). */
@@ -132,20 +149,14 @@ function cushionRow(o: Overview): HTMLElement | null {
   // сумму не посчитать — так и сказать, а не «0 ₸ из 0 ₸» (D103)
   if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'не хватает данных о тратах — проверь раскладку трат или задай сумму сам', href: '#/goals~cushion', cls: 'warn' }));
   const ready = status === 'ready';
+  // К6 аудита UX: деньги есть, но не закреплены за подушкой — одна понятная строка с действием, без формулы (она — на карточке цели)
+  const notPinned = !ready && o.spend.onHand >= n.goal.targetMin;
   return rows(
     row({
-      title: ready ? 'Подушка готова' : `Подушка: осталось ${fmt(n.remainingMin)}`,
-      // деньги есть, но отложены на другие цели — сказать прямо (D107, аудит №4 К1)
-      sub: [
-        `${fmt(n.progress)} из ${fmt(n.goal.targetMin)}`,
-        !ready && o.spend.onHand >= n.goal.targetMin ? 'деньги на счетах есть, но отложены на другие цели' : '',
-        // из чего подушка (D119, решение владельца): жизнь + платежи по рассрочкам — рассрочки кончатся, подушка станет меньше
-        n.goal.targetRule?.kind === 'months_of_base' && n.goal.targetRule.basis === 'essential' && o.spend.obligationsMonthly > 0
-          ? `${n.goal.targetRule.months ?? getState().settings.reserveMonths} мес. × (жизнь ${fmt(o.baseline.median)} + рассрочки ${fmt(o.spend.obligationsMonthly)})`
-          : '',
-      ].filter(Boolean).join(' · '),
+      title: ready ? 'Подушка готова' : notPinned ? 'Подушка: деньги есть, но не закреплены' : `Подушка: осталось ${fmtShort(n.remainingMin)}`,
+      sub: notPinned ? `Закрепить ${fmtShort(n.remainingMin)}` : `${fmtShort(n.progress)} из ${fmtShort(n.goal.targetMin)}`,
       value: ready ? h('span', { class: 'good' }, '✓') : undefined,
-      href: '#/goals',
+      href: notPinned ? '#/goals~cushion-fill' : '#/goals',
     }),
   );
 }
@@ -273,6 +284,7 @@ export function renderOverview(): HTMLElement {
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
+    arrivedCard(),
     historyNote(o),
     h(
       'div',

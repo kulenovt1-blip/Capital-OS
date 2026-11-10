@@ -24,7 +24,7 @@ import { INDEPENDENCE_TEXTS, L5_NAME, desiredScenarioOf, independenceOfState, le
 import { essentialMarkupMissing } from './inputs';
 
 export const DIRECTION_NAMES: Readonly<Record<Direction, string>> = { N: 'Здесь и сейчас', V: 'Динамика', F: 'Безопасность будущего' };
-export const DIRECTION_QUESTIONS: Readonly<Record<Direction, string>> = { N: 'Каково положение сегодня?', V: 'Как оно менялось за полгода?', F: 'Выдержит ли оно будущее и удар?' };
+export const DIRECTION_QUESTIONS: Readonly<Record<Direction, string>> = { N: 'Каково положение сегодня?', V: 'Как оно менялось за полгода?', F: 'Переживёшь ли ты, если доход упадёт или пропадёт?' };
 
 /** Названия показателей простыми словами (на экране коды N1, V2 и т. п. не показываются). */
 export const INDICATOR_LABELS: Readonly<Record<IndicatorId, string>> = {

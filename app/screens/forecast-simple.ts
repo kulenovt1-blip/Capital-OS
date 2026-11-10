@@ -12,6 +12,8 @@ import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { HORIZONS, warningItems } from './forecast';
 import { KINDS, PLAN_CHIPS, eventLine } from './plan';
+import { levelShiftLine, futureSummary, futureTrack, plansCount, unknownNote } from '../future';
+import { reserveChart } from '../chart';
 
 /** Траты в прогнозе теми же частями, что на «Обзоре» (D109). */
 function spendParts(): HTMLElement | null {
@@ -177,7 +179,8 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
 let qSkip = 0;
 
 function horizonSeg(k: number): HTMLElement {
-  return seg(HORIZONS.map(([m, l]) => [String(m), l] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза');
+  // С13 аудита UX: «год» среди цифр сбивал шкалу — все пункты в месяцах (12), единицы названы в подписи главного числа и для читалки
+  return seg(HORIZONS.map(([m]) => [String(m), String(m)] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза, месяцев');
 }
 
 export function renderForecastSimple(_rerender: () => void): HTMLElement {
@@ -219,6 +222,22 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     ),
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
+  // ступень по запасу в будущем (аудит UX): вывод одной фразой, график с порогами, честно — что учтено и что нет
+  {
+    const ft = futureTrack(sim, k);
+    if (ft && ft.months.length >= 2) {
+      const sm = futureSummary(ft);
+      const width = Math.min(720, document.documentElement.clientWidth - 56);
+      root.append(
+        h('section', { class: `card stack${sm.changed ? ' warn' : ''}`, 'aria-label': 'Запас в будущем' },
+          h('strong', null, sm.headline),
+          h('div', { class: 'muted' }, sm.detail),
+          reserveChart(ft.months, ft.money, ft.need, `Деньги сразу и пороги запаса: ${sm.headline}`, width),
+          h('p', { class: 'muted' }, unknownNote(plansCount())),
+        ),
+      );
+    }
+  }
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
   const found = sanityCheck(st, today()).findings;
@@ -234,7 +253,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       const pv = previewIndexed(st, today(), x.id, 36);
       qs.push(
         h('section', { class: 'warnline stack', 'aria-label': 'Рост дохода' },
-          h('strong', null, `«${x.title}» · ${fmt(x.amount)}. Его повышают каждый год вместе с ценами?`),
+          h('strong', null, `«${x.title}» · ${fmt(x.amount)}. Растёт каждый год вместе с ценами?`),
           pv.yes !== null && pv.no !== null ? h('div', { class: 'muted' }, `Через 3 года: если да — ${fmtShort(pv.yes)}, если нет — ${fmtShort(pv.no)}`) : null,
           h('div', { class: 'chips wrap' }, h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, true) }, 'Да, вместе с ценами'), h('button', { class: 'chip', type: 'button', onclick: () => setIdx(x.id, false) }, 'Нет')),
           h('details', { class: 'fold' }, h('summary', null, 'Зачем это'), h('p', { class: 'muted' }, `Траты в прогнозе дорожают на ${inflText} в год. Если доход не растёт, остаток каждый год тает.`)),
@@ -292,6 +311,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   // порядок — по важности: что меняет вывод сильнее, то выше
   const ORDER = ['income_drop_flat_spend', 'negative_months', 'cushion_ignores_money', 'labels_exceed_money', 'one_sided_inflation', 'baseline_other_income', 'expense_mismatch'];
   const sane = found
+    .filter((f) => !(f.id === 'negative_months' && (st.settings.sanityAnswered ?? []).includes(`negative_months:${f.months?.[0]}`)))
     .filter((f) => ORDER.includes(f.id) && !drops.includes(f) && f !== infl && f !== short && !(bPv && f.id === 'baseline_other_income') && !asked.shown.has(f))
     .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   if (sane.length) {
@@ -301,7 +321,13 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     const action = (f: SanityFinding): Act[] => {
       if (f.id === 'negative_months' && f.months?.[0]) {
         const d = `${f.months[0]}-01`;
-        return [{ label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) }];
+        // аудит UX: у плашки был один выход — «урезать траты»; человек, который знает про минус и так и задумал, не мог её убрать.
+        // Ответ привязан к первому «минусовому» месяцу: сдвинулся месяц — плашка вернётся.
+        const key = `negative_months:${f.months[0]}`;
+        return [
+          { label: 'Урежу траты', href: sheetHref('plan', `cut@${d > today() ? d : today()}`) },
+          { label: 'Знаю, скрыть', run: () => void act((s) => ({ ...s, settings: { ...s.settings, sanityAnswered: [...new Set([...(s.settings.sanityAnswered ?? []), key])] } }), 'Скрыто. Вернётся, если минус сдвинется на другой месяц') },
+        ];
       }
       if (f.id === 'cushion_ignores_money') {
         return [
@@ -320,7 +346,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
         h(
           'section',
           { class: 'warnline stack', 'aria-label': 'Проверь допущения' },
-          h('strong', null, 'Проверь, прежде чем верить прогнозу'),
+          h('strong', null, 'Прогноз точнее, если уточнить'),
           ...todo.map(([f, a]) => h('div', { class: 'stack tight' }, h('div', null, f.text), h('div', { class: 'chips wrap' }, a.map((x) => (x.href ? h('a', { class: 'chip', href: x.href }, x.label) : h('button', { class: 'chip', type: 'button', onclick: x.run }, x.label)))))),
         ),
       );
@@ -504,6 +530,7 @@ function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement
       h('div', null, amount > 0 ? `Урежу на ${fmt(amount as Money)} в месяц с ${monthGen(endMonth)}` : 'Если ничего не менять'),
       c.with !== null ? h('div', null, h('strong', null, `Через год: ${fmtShort(c.with)}`), amount > 0 && c.without !== null ? ` (без этого — ${fmtShort(c.without)})` : '') : null,
       ...(amount > 0 ? (pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]) : []),
+      amount > 0 ? (() => { const l = levelShiftLine(pv.base, pv.with); return l ? h('div', null, l) : null; })() : null,
     ];
     out.replaceChildren(...(lines.filter(Boolean) as HTMLElement[]));
     apply.disabled = amount <= 0;
@@ -585,6 +612,7 @@ defineSheet('save-cat', (catId) => {
       h('div', null, h('strong', null, `Тратить на ${fmt(amount as Money)} меньше в месяц`), ` (${Math.round((amount / x.monthly) * 100)} % статьи)`),
       ...(c.with !== null && c.without !== null ? [h('div', null, `Через год: ${fmtShort(c.with)} вместо ${fmtShort(c.without)}`)] : []),
       ...(pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]),
+      ...((l) => (l ? [h('div', null, l)] : []))(levelShiftLine(pv.base, pv.with)),
     );
     apply.disabled = false;
   };
@@ -621,6 +649,10 @@ function monthKeyNext(t: string, ahead = 0): string {
 /** Куда человек хочет выйти (месяцев запаса) и за сколько месяцев — пока открыт экран. */
 let routeTarget: ReserveTarget | null = null;
 let routeDeadline = 6;
+/** «Путь к ступени» на «Профиле» открывает «Из А в Б» сразу с нужной целью запаса. */
+export function setRouteTarget(m: ReserveTarget): void {
+  routeTarget = m;
+}
 
 defineSheet('a-to-b', () => {
   const st = getState();

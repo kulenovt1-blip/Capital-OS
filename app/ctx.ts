@@ -98,7 +98,7 @@ export function trust(): Trust {
   const bad = (o.reconcile?.accounts ?? []).filter((a) => a.status !== 'ok');
   const reasons: TrustReason[] = [];
   for (const a of bad) {
-    reasons.push({ text: `Сверка: «${a.title}» ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)} — цифрам по этому счёту нельзя верить`, href: '#/import', bad: true });
+    reasons.push({ text: a.status === 'no_reference' ? `«${a.title}»: в MoneyManager нет баланса, сверить не с чем` : `Сверка: «${a.title}» ${fmtExact(a.diff, true)} — цифрам по этому счёту нельзя верить`, href: '#/import', bad: true });
   }
   const open = steps().filter((s) => !s.optional && !s.done && !s.locked && s.id !== 'import');
   for (const s of open) reasons.push({ text: `${s.title}: ${s.status}`, href: `#/setup/${s.id}` });
@@ -115,7 +115,7 @@ export function trust(): Trust {
   if (o.baseline.months.length < 3 && o.baseline.months.length < st.settings.baselineMonths) notes.push({ text: `Истории трат ${nWord(o.baseline.months.length, 'полный месяц', 'полных месяца', 'полных месяцев')} — «обычно уходит» и прогноз приблизительные`, href: '#/baskets' });
   if (bad.length) {
     const a = bad[0]!;
-    return { level: 'bad', label: `Сверка: ${a.title} ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
+    return { level: 'bad', label: `${a.status === 'no_reference' ? `${a.title}: нечем сверить` : `Сверка: ${a.title} ${fmtExact(a.diff, true)}`}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
   }
   if (reasons.length) return { level: 'warn', label: `Проверь · ${nWord(reasons.length, 'вопрос', 'вопроса', 'вопросов')}`, reasons, notes };
   return { level: 'ok', label: `Данные от ${fmtDay(st.importedAt ?? today())} ✓`, reasons: [], notes };

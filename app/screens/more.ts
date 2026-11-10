@@ -38,6 +38,7 @@ export function renderMore(): HTMLElement {
       'div',
       { class: 'tiles' },
       setupOpen ? tile('#/setup', 'Настройка', o.hasData ? `сделано ${p.done} из ${p.total}` : 'шаг 1 — загрузить бэкап', 'warn') : null,
+      tile('#/income', 'Пришли деньги', 'зарплата или стипендия: сколько отложить и на что'),
       tile('#/help', 'Как пользоваться', 'что умеет приложение и когда его открывать'),
       tile('#/data', 'Данные', `${imp} · ${bak}`, reconcileBad ? 'bad' : backupAge === null || backupAge > 30 ? 'warn' : ''),
       o.hasData && essentialMarkupMissing(o) ? tile('#/markup', 'Что обязательно?', 'отметь траты «без этого не прожить» — иначе запас посчитан неточно', 'warn') : null,

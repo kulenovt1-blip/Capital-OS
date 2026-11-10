@@ -14,6 +14,7 @@ import { act, getState, today } from '../store';
 import { ov } from '../ctx';
 import { errorsBox, fmt, fmtShort, monthGen, monthTo, monthWord, moneyInput, newId, nWord, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
+import { levelShiftLine } from '../future';
 
 type Kind = 'job' | 'study' | 'loss' | 'change' | 'cut' | 'move' | 'buy' | 'inst' | 'payoff';
 
@@ -237,6 +238,7 @@ function resultCard(res: WhatIfResult, event: LifeEvent): HTMLElement {
     payoff
       ? h('p', { class: 'gs' }, `Всего у тебя почти не меняется: деньги уходят на долг, но и долг исчезает. На счетах сразу после — ${liquid(0) < 0 ? `на ${fmt(-liquid(0) as Money)} меньше` : 'столько же'}, а дальше платежи по этому долгу больше не нужны.`)
       : null,
+    ((l) => (l ? h('p', { class: 'gs' }, l) : null))(levelShiftLine(res.base, res.with)),
     sub('Цели'),
     goals.length ? rows(goals) : h('p', { class: 'gs' }, 'Сроки целей не меняются.'),
     gap

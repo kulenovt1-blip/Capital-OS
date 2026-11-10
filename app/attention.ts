@@ -55,7 +55,7 @@ export function attentionItems(): AttentionItem[] {
   const out: AttentionItem[] = [];
   if (!o.hasData) return [{ title: 'Загрузить бэкап MoneyManager', href: '#/import' }];
   for (const a of (o.reconcile?.accounts ?? []).filter((x) => x.status !== 'ok')) {
-    out.push({ title: `Сверка: «${a.title}» ${a.status === 'no_reference' ? 'без эталона' : fmtExact(a.diff, true)} — цифрам нельзя верить`, href: '#/import', bad: true });
+    out.push({ title: a.status === 'no_reference' ? `«${a.title}»: в MoneyManager нет баланса, сверить не с чем` : `Сверка: «${a.title}» ${fmtExact(a.diff, true)} — цифрам нельзя верить`, href: '#/import', bad: true });
   }
   // отмечен перевод на копилку, а в свежем бэкапе его нет (D96, D105)
   for (const r of setAsideReminders(getState(), o)) {

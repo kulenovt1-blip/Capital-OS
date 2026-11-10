@@ -12,7 +12,7 @@ import { recoveryScreen, storageBanner } from './recovery';
 import { trust } from './ctx';
 import { initTheme } from './theme';
 
-export type NavId = 'overview' | 'goals' | 'income' | 'forecast' | 'more';
+export type NavId = 'overview' | 'goals' | 'position' | 'forecast' | 'more';
 
 export interface Route {
   path: string;
@@ -127,14 +127,14 @@ function current(p: Parsed): Route {
 const ICONS: Record<NavId, string> = {
   overview: 'M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z',
   goals: 'M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5M12 11a1 1 0 1 0 1 1M14 10l6-6M17 4h3v3',
-  income: 'M12 4v10m0 0-4-4m4 4 4-4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3',
+  position: 'M12 4 20 18H4zM12 10l4 6H8z',
   forecast: 'M4 19h16M5 15l4-5 4 3 6-8',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
 };
 const NAV: [NavId, string][] = [
   ['overview', 'Обзор'],
   ['goals', 'Цели'],
-  ['income', 'Доход'],
+  ['position', 'Профиль'],
   ['forecast', 'Прогноз'],
   ['more', 'Ещё'],
 ];
