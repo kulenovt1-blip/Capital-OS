@@ -10,6 +10,9 @@ import { daysBetween, essentialMarkupMissing } from '../../engine/index';
 import { sheetHref } from '../main';
 
 export const APP_VERSION = '0.5.0';
+declare const __BUILD__: { sha: string; date: string } | undefined;
+/** «сборка a1b2c3d · 11.11» — по хэшу видно, какая версия открыта; в разработке — «разработка». */
+export const buildLabel = (): string => (typeof __BUILD__ === 'undefined' ? 'разработка' : `сборка ${__BUILD__.sha} · ${__BUILD__.date.slice(8, 10)}.${__BUILD__.date.slice(5, 7)}`);
 
 function tile(href: string, title: string, status: string, level: '' | 'warn' | 'bad' = ''): HTMLElement {
   return h('a', { class: `tile${level ? ` ${level}` : ''}`, href }, h('span', { class: 'tt' }, title), h('span', { class: 'ts' }, status));
@@ -47,7 +50,7 @@ export function renderMore(): HTMLElement {
       tile('#/debts', 'Долги и рассрочки', found ? `найдено в операциях: ${found}` : st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', found ? 'warn' : ''),
       tile('#/prefs', 'Настройки', `текст: ${text}`),
     ),
-    h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION}`),
+    h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );
 }
 
