@@ -578,3 +578,68 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .pos-col .v { font-size: 24px; font-weight: 700; }
 .row-fold summary { display: flex; justify-content: space-between; gap: 12px; min-height: 44px; align-items: center; }
 .row-fold .rf-val { color: var(--ink-2); }
+
+/* ===== 99. ДЕЛОВОЙ СТИЛЬ (прототип, ветка design/business) =====
+   Цвета из иконки: тёмно-зелёный #14532d — фирменный (шапка, главные кнопки, активная вкладка, главная карточка),
+   салатовый #d9f99d — только акцент. Фон холодно-серый, углы меньше, вкладки без «пилюль», цифры крупнее и строже.
+   Смысловые цвета (хорошо / внимание / ошибка) прежние. */
+:root {
+  --bg: #f2f4f2; --surface: #ffffff; --surface-sunken: #e7ebe7; --surface-inverse: #14532d; --on-inverse: #ffffff; --on-inverse-muted: #c3e3cc;
+  --ink: #0f1a12; --ink-2: #33403a; --muted: #56625a; --line: #dce2dc; --line-strong: #c4ccc5; --divider: #e9ede9;
+  --primary: #14532d; --on-primary: #ffffff; --accent: #d9f99d; --on-accent: #14532d;
+  --series-1: #1d6b3b; --series-2: #64748b; --series-3: #65a30d; --band: rgba(29, 107, 59, 0.12);
+  --nav: #ffffff; --bar: #14532d; --on-bar: #ffffff; --on-bar-muted: #c3e3cc;
+}
+:root[data-theme='dark'] {
+  --bg: #0b110d; --surface: #131b15; --surface-sunken: #1c261f; --surface-inverse: #173d24; --on-inverse: #eef5ef; --on-inverse-muted: #a9cdb3;
+  --ink: #e8efe9; --ink-2: #c3cdc5; --muted: #98a59b; --line: #26312a; --line-strong: #344038; --divider: #1c261f;
+  --primary: #d9f99d; --on-primary: #0b1a10; --accent: #d9f99d; --on-accent: #0b1a10;
+  --series-1: #8fd19e; --series-2: #94a3b8; --series-3: #bef264; --band: rgba(143, 209, 158, 0.16);
+  --nav: #0f1611; --bar: #0f2a18; --on-bar: #eef5ef; --on-bar-muted: #a9cdb3;
+}
+/* шапка — фирменная полоса */
+.top, .top.sub-top { background: var(--bar); color: var(--on-bar); padding-bottom: 12px; margin-bottom: 10px; border-bottom: 0; }
+.top h1 { font-size: calc(24px * var(--fz)); font-weight: 700; letter-spacing: -0.01em; }
+.top .date { color: var(--on-bar-muted); }
+.top .back { color: var(--on-bar); }
+.top .back:active { background: rgba(255, 255, 255, 0.12); }
+.top .trust { background: transparent; color: var(--on-bar); border-color: rgba(255, 255, 255, 0.35); }
+.top .trust .td { background: var(--accent); }
+/* поверхности: углы меньше, плотнее */
+.card, .rows, .cell, .attention { border-radius: 8px; }
+.card { padding: 14px; }
+.hero { border-radius: 10px; }
+.hero .value { font-size: calc(34px * var(--fz)); font-weight: 700; letter-spacing: -0.01em; }
+.hero .label { letter-spacing: 0.06em; }
+details.add, details.fold { border-radius: 8px; }
+.okline, .badline, .warnline, .error-box { border-radius: 8px; }
+.pos-col { border-radius: 6px; }
+.screen { gap: 10px; }
+/* строки: цифры справа — как в выписке */
+.row .val { font-weight: 700; font-size: calc(17px * var(--fz)); letter-spacing: -0.01em; }
+.row .title { font-weight: 600; }
+/* заголовки разделов: строже, с линией */
+.sub { font-size: calc(13px * var(--fz)); font-weight: 700; color: var(--ink-2); letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); margin: 20px 0 6px; }
+.sub:first-child { margin-top: 6px; }
+/* кнопки и чипы — прямоугольные */
+.btn, button.btn, a.btn { border-radius: 6px; }
+.btn.big { border-radius: 8px; }
+.chip { border-radius: 6px; }
+.chip.on { background: var(--primary); color: var(--on-primary); }
+.seg { border-radius: 8px; } .seg button { border-radius: 6px; }
+.tag, .badge { border-radius: 4px; }
+input, select, textarea { border-radius: 6px; }
+/* нижняя панель: активная вкладка — цвет и полоса сверху, без заливки */
+.bn a { border-radius: 0; }
+.bn a.on { background: transparent; color: var(--primary); box-shadow: inset 0 3px 0 var(--primary); }
+@media (min-width: 900px) {
+  .bn { background: var(--bar); border-right: 0; }
+  .bn a, .bn .brand { color: var(--on-bar); }
+  .bn a.on { background: rgba(255, 255, 255, 0.1); color: var(--on-bar); box-shadow: inset 3px 0 0 var(--accent); border-radius: 4px; }
+}
+/* «Положение»: название ступени — главное, лесенка — фирменный цвет */
+.pos-level-card { text-align: left; border-top: 4px solid var(--primary); }
+.pos-level-code { justify-content: flex-start; text-transform: uppercase; letter-spacing: 0.08em; font-size: calc(13px * var(--fz)); }
+.pos-level-name { font-size: calc(28px * var(--fz)); }
+.pos-ladder-list li.is-current { border-left-color: var(--primary); background: var(--surface-sunken); }
+.pos-ladder-list li.is-current .chip { min-height: 24px; padding: 0 8px; background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-size: calc(13px * var(--fz)); }
