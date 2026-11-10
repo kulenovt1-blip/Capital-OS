@@ -206,6 +206,7 @@ input, select, textarea {
   border-radius: 12px; background: var(--surface); color: var(--ink); outline: 0;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+input[type='range'] { accent-color: var(--primary); }
 input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; min-height: 0; accent-color: var(--primary); flex: none; margin: 0; }
 input[type='file'] { min-height: 52px; padding: 10px; }
 input.big-num { font-size: calc(30px * var(--fz)); font-weight: 800; min-height: 64px; }
