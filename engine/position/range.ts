@@ -12,16 +12,15 @@
 import { directionScore } from './directions';
 import { DIRECTIONS, type Indicators } from './indicators';
 import { aggregateG, type LimitId, type LimitStates } from './limits';
+import { LEVEL_BOUNDS, levelBandOf } from './level';
 import { fillHigh, fillLow, fillMiddle, type Bounds } from './unknown';
 
 /** Наибольшая ширина диапазона `G` (очков), при которой ориентир показывается (решение владельца 6; H). */
 export const RANGE_MAX_WIDTH = 20;
 /** Наибольшее число соседних уровней, которое может охватывать диапазон, чтобы ориентир показывался (H). */
 export const RANGE_MAX_LEVELS = 2;
-/** Границы L2, L3, L4 по `G` (H; условия L4 по направлениям и ограничителям — отдельно, T07). */
-export const LEVEL_BOUNDS = [20, 40, 75] as const;
-/** Уровень по одному `G` (1–4) без дополнительных условий L4 — для оценки близости границ диапазона. */
-export const levelBandOf = (g: number): number => 1 + LEVEL_BOUNDS.filter((t) => g >= t).length;
+// Границы уровней и полоса по одному `G` определены в level.ts (T07); здесь — для обратной совместимости импортов.
+export { LEVEL_BOUNDS, levelBandOf };
 
 export interface PositionRange {
   low: number;
