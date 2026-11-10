@@ -465,3 +465,12 @@ describe('формулировки: нет слов «безопасно», «г
     expect(notAssessedLine(['history', 'expenses'])).toContain(', ');
   });
 });
+
+describe('защита чистой функции от противоречивого входа', () => {
+  it('дефицит неизвестен, а пометки «мало истории» нет — всё равно «не оценена», а не «подтверждено» (T15b)', () => {
+    const r = computeIndependence(base({ capital: 900 * M, deficit: null, missing: [] }));
+    expect(r.status).toBe('not_assessed');
+    expect(r.missing).toEqual(['history']);
+    expect(r.sustain.ok).toBeNull();
+  });
+});

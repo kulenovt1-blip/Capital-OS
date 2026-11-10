@@ -127,6 +127,8 @@ const EPS = 1e-9;
 export function computeIndependence(i: IndependenceInput): IndependenceResult {
   const missing: IndependenceMissing[] = [...i.missing];
   if (!(i.need > 0) && !missing.includes('no_data') && !missing.includes('expenses')) missing.push('expenses');
+  // дефицит неизвестен — устойчивость потока проверить нельзя, значит вывод о независимости сделать нельзя
+  if (i.deficit === null && !missing.includes('no_data') && !missing.includes('history')) missing.push('history');
   const rates: Record<RateSet, number> = { central: withdrawalRate('central', i.horizon), conservative: withdrawalRate('conservative', i.horizon) };
   const capital = Math.max(0, i.capital);
   const c = (r: number): number => (i.need > 0 ? (capital * r) / (12 * i.need) : 0);
