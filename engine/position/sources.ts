@@ -11,10 +11,14 @@
  * Объём — сумма выплат строго после сегодняшнего дня и не позже чем через 12 месяцев. «Обрыв» — поток из расписания,
  * заканчивающийся в ближайшие 6 месяцев.
  *
- * Отличие от пробы: границы +12 и +6 месяцев считаются `addMonths` (прижимаются к концу месяца, как везде в движке),
- * а не через `Date.setUTCMonth`, который переносит 29–31-е число в следующий месяц.
+ * Отличия от пробы:
+ *  1. границы +12 и +6 месяцев считаются `addMonths` (прижимаются к концу месяца, как везде в движке),
+ *     а не через `Date.setUTCMonth`, который переносит 29–31-е число в следующий месяц;
+ *  2. (D131) смена суммы дохода (`income_change`) — это продолжение источника, а не его конец: исходный поток, у которого есть продолжение
+ *     «со следующего дня», получает статус и «обрыв» по концу всей цепочки (проба считала его временным и «обрывом»).
+ *     Сам новый поток остаётся ожидаемым (X), объёмы не меняются.
  */
-import { addMonths, startOfMonth, withDay, type IsoDate } from '../date';
+import { addDays, addMonths, startOfMonth, withDay, type IsoDate } from '../date';
 import { assembleIncomeStreams, type SimInput } from '../simulate';
 import { buildSimInput } from '../plan';
 import { ZERO, add, type Money } from '../money';
@@ -43,7 +47,16 @@ export function incomeSources(input: Pick<SimInput, 'incomes' | 'events'>, today
   const hEnd = addMonths(today, SOURCE_HORIZON_MONTHS);
   const h6 = addMonths(today, SOURCE_CLIFF_MONTHS);
   const out: IncomeSource[] = [];
+  // D131: конец цепочки «исходный поток → продолжения после income_change»; undefined — цепочка не кончается
+  const chainEnd = (s: (typeof streams)[number]): IsoDate | undefined => {
+    if (s.origin !== 'schedule' || !s.end) return s.end;
+    const next = streams.filter((x) => x.origin === 'event' && x.id.startsWith(`${s.id}@`) && x.start === addDays(s.end!, 1));
+    if (!next.length) return s.end;
+    const ends = streams.filter((x) => x.origin === 'event' && x.id.startsWith(`${s.id}@`)).map((x) => x.end);
+    return ends.some((e) => !e) ? undefined : ends.reduce((a, b) => (a! > b! ? a : b));
+  };
   for (const s of streams) {
+    const end = chainEnd(s);
     let volume: Money = ZERO;
     for (let k = 0; k <= SOURCE_HORIZON_MONTHS; k++) {
       const date = withDay(addMonths(startOfMonth(today), k), s.dayOfMonth);
@@ -52,11 +65,11 @@ export function incomeSources(input: Pick<SimInput, 'incomes' | 'events'>, today
       volume = add(volume, s.amount);
     }
     if (volume <= 0) continue;
-    const derived: IncomeStatus = s.origin === 'event' ? 'X' : s.kind === 'irregular' ? 'I' : s.end && s.end <= hEnd ? 'T' : 'P';
+    const derived: IncomeStatus = s.origin === 'event' ? 'X' : s.kind === 'irregular' ? 'I' : end && end <= hEnd ? 'T' : 'P';
     const overridden = s.origin === 'schedule' && s.status !== undefined;
     out.push({
       id: s.id, title: s.title, monthly: s.amount, status: overridden ? s.status! : derived, volume,
-      endsWithin6m: !!(s.end && s.end <= h6 && s.origin === 'schedule'), overridden,
+      endsWithin6m: !!(end && end <= h6 && s.origin === 'schedule'), overridden,
     });
   }
   return out;

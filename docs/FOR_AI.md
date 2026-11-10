@@ -6,7 +6,7 @@ Capital OS — PWA к MoneyManager (Android). Загружает бэкап `.mm
 
 1. `README.md` — запуск и состав проекта.
 2. `docs/simplify/spec.md` — что реализовано сейчас и как считаются числа.
-3. `docs/DECISIONS.md` — почему так (D1–D102). Новое решение — следующий номер.
+3. `docs/DECISIONS.md` — почему так (D1–D131). Новое решение — следующий номер.
 4. `docs/simplify/README.md` — цель: приложение понятно без финансовой подготовки.
 5. `docs/BLOCKERS.md` — ограничения среды.
 

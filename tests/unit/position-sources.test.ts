@@ -43,7 +43,12 @@ describe('статусы и объёмы совпадают с пробой до
   for (const p of all) {
     it(p.name, () => {
       const { input } = buildSimInput(p.state, TODAY);
-      expect(incomeSources(input, TODAY).map(strip)).toEqual(REF.profiles[p.name]);
+      const got = incomeSources(input, TODAY).map(strip);
+      const ref = REF.profiles[p.name]!;
+      // D131: у потоков с продолжением после income_change статус и «обрыв» намеренно отличаются от пробы (см. отдельные тесты ниже)
+      const bridged = new Set(got.filter((x) => got.some((y) => y.id.startsWith(`${x.id}@`))).map((x) => x.id));
+      const norm = (xs: typeof ref) => xs.map((x) => (bridged.has(x.id) ? { ...x, status: 'D131', endsWithin6m: false } : x));
+      expect(norm(got)).toEqual(norm(ref));
     });
   }
 });
@@ -151,9 +156,10 @@ describe('события', () => {
     expect(r[0]!.volume).toBe(m100(4)); // 05.11, 05.12.2026, 05.01, 05.02.2027
   });
 
-  it('income_change: старый поток — временный, новый — ожидаемый с новой суммой (так же, как в пробе)', () => {
+  it('income_change без срока (D131): старый поток остаётся постоянным и не «обрыв», новый — ожидаемый с новой суммой', () => {
     const r = one(stream({ id: 'job' }), [ev({ id: 'e1', kind: 'income_change', date: '2027-02-01', target: 'job', amount: tenge(150_000) })]);
-    expect(r.map((s) => [s.id, s.status, s.monthly])).toEqual([['job', 'T', tenge(100_000)], ['job@2027-02-01', 'X', tenge(150_000)]]);
+    expect(r.map((s) => [s.id, s.status, s.monthly, s.endsWithin6m])).toEqual([['job', 'P', tenge(100_000), false], ['job@2027-02-01', 'X', tenge(150_000), false]]);
+    expect(r[0]!.volume).toBe(m100(3)); // 05.11, 05.12.2026, 05.01.2027 — объём до смены не меняется
     expect(r[1]!.volume).toBe(tenge(150_000 * 9)); // 05.02 … 05.10.2027
   });
 });
@@ -249,5 +255,38 @@ describe('переопределение в состоянии и в распи�
 
   it('пустое состояние: источников нет', () => {
     expect(incomeSourcesOf(emptyState(), TODAY)).toEqual([]);
+  });
+});
+
+describe('D131: смена суммы — продолжение источника, а не его конец', () => {
+  const chg = (id: string, date: string, extra: Partial<LifeEvent> = {}) => ev({ id, kind: 'income_change', date, target: 'job', amount: tenge(150_000), ...extra });
+  it('смена на срок: цепочка кончается в until — исходный поток «временный» по концу цепочки, «обрыв» по нему же', () => {
+    const r = one(stream({ id: 'job' }), [chg('e1', '2027-02-01', { until: '2027-03-31' })]);
+    expect(r[0]!.status).toBe('T'); // цепочка кончается 31.03.2027 — внутри 12 месяцев
+    expect(r[0]!.endsWithin6m).toBe(true); // и внутри 6 месяцев (до 04.05.2027)
+  });
+  it('смена на срок, цепочка кончается позже 6 месяцев — не «обрыв»', () => {
+    const r = one(stream({ id: 'job' }), [chg('e1', '2027-02-01', { until: '2027-07-31' })]);
+    expect(r[0]!.status).toBe('T');
+    expect(r[0]!.endsWithin6m).toBe(false);
+  });
+  it('смена, затем прекращение: «обрыв» определяется концом цепочки (прекращение 01.06.2027 — позже 04.05.2027, не «обрыв»)', () => {
+    const r = one(stream({ id: 'job' }), [chg('e1', '2027-01-01'), ev({ id: 'e2', kind: 'income_stop', date: '2027-06-01', target: 'job' })]);
+    expect(r[0]!.endsWithin6m).toBe(false);
+    expect(r[0]!.status).toBe('T');
+  });
+  it('смена, затем прекращение внутри 6 месяцев — «обрыв» у исходного потока', () => {
+    const r = one(stream({ id: 'job' }), [chg('e1', '2027-01-01'), ev({ id: 'e2', kind: 'income_stop', date: '2027-03-01', target: 'job' })]);
+    expect(r[0]!.endsWithin6m).toBe(true);
+  });
+  it('прекращение без смены остаётся «обрывом» (не затронуто)', () => {
+    const r = one(stream({ id: 'job' }), [ev({ id: 'e2', kind: 'income_stop', date: '2027-03-01', target: 'job' })]);
+    expect(r[0]!.endsWithin6m).toBe(true);
+    expect(r[0]!.status).toBe('T');
+  });
+  it('собственный конец исходного потока раньше смены — не продолжение: остаётся «обрывом»', () => {
+    const r = one(stream({ id: 'job', end: '2027-01-31' }), [chg('e1', '2027-03-01')]);
+    expect(r[0]!.endsWithin6m).toBe(true);
+    expect(r[0]!.status).toBe('T');
   });
 });
