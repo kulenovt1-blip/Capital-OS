@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeIndicators, emptyIndicators, normalize, SCALES, INDICATOR_IDS, INDICATOR_WEIGHTS, KEY_INDICATORS, V1_CAPITAL_CAP_MONTHS, V3_MIN_DEVIATION,
   reserveScore, n1Score, savingScore, debtLoadScore, capitalScore, growthScore, flowTrendScore, debtDeviationScore, keepScore, reliabilityScore, exposureScore,
-  forecastSavingRate, monthRate, median, type IndicatorId, type Indicators,
+  forecastSavingRate, monthRate, medianOf, type IndicatorId, type Indicators,
 } from '../../engine/position/indicators';
 import { emptyState } from '../../engine/state';
 import { tenge } from '../../engine/money';
@@ -121,9 +121,9 @@ describe('формулы показателей', () => {
     expect(monthRate(100, 20)).toBe(0.2);
   });
   it('медиана', () => {
-    expect(median([3, 1, 2])).toBe(2);
-    expect(median([4, 1, 2, 3])).toBe(2.5);
-    expect(median([])).toBe(0);
+    expect(medianOf([3, 1, 2])).toBe(2);
+    expect(medianOf([4, 1, 2, 3])).toBe(2.5);
+    expect(medianOf([])).toBe(0);
   });
   it('V2: разовая премия не двигает тренд (медианы), устойчивый рост — двигает', () => {
     expect(flowTrendScore([100, 100, 100, 100, 100, 100], 100)).toBe(50);

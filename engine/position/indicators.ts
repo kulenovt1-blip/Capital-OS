@@ -120,7 +120,7 @@ export const SOURCE_LOSS_PROBABILITY: Readonly<Record<IncomeStatus, number>> = {
 // ───────────────────────── чистые формулы показателей (в тенге и долях, не в тиынах) ─────────────────────────
 
 const mean = (xs: readonly number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
-export const median = (xs: readonly number[]): number => {
+export const medianOf = (xs: readonly number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length ? (s.length % 2 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2) : 0;
 };
@@ -156,7 +156,7 @@ export function growthScore(netNow: number, netAgo: number, needLifestyle: numbe
 /** V2: разность медиан остатка за последние 3 и за предыдущие 3 месяца в месячных образах жизни. */
 export function flowTrendScore(freeLast6: readonly number[], needLifestyle: number): number {
   const f = freeLast6.slice(-6);
-  return normalize(needLifestyle > 0 ? (median(f.slice(-3)) - median(f.slice(0, f.length - 3))) / needLifestyle : 0, SCALES.flowTrend);
+  return normalize(needLifestyle > 0 ? (medianOf(f.slice(-3)) - medianOf(f.slice(0, f.length - 3))) / needLifestyle : 0, SCALES.flowTrend);
 }
 /** V3: отклонение долга от графика; null — не применим (долга нет или отклонение меньше 2 %). */
 export function debtDeviationScore(debtThen: number, scheduledPaid: number, debtNow: number): number | null {
@@ -250,7 +250,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const values: Indicators = {};
   // I. Здесь и сейчас
   values.N1 = n1Score(netLiquid, needEssential, needLifestyle);
-  values.N2 = H >= MIN_HISTORY_N2 ? normalize(median(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))), SCALES.saving) : null;
+  values.N2 = H >= MIN_HISTORY_N2 ? normalize(medianOf(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))), SCALES.saving) : null;
   values.N3 = debtLoadScore(obligationsMonthly, debtTotal, incomeMonthly);
   values.N4 = capitalScore(net, needLifestyle);
   // II. Вектор
