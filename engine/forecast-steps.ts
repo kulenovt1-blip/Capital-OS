@@ -9,7 +9,7 @@
  */
 import { add, sub, ZERO, type Money } from './money';
 import { addMonths, type IsoDate } from './date';
-import type { SimTrace, SimTraceItem } from './simulate';
+import type { SimResult, SimTrace, SimTraceItem } from './simulate';
 
 /** Дата прогноза: сегодня + N месяцев; день прижимается к концу месяца. */
 export function forecastDate(today: IsoDate, months: number): IsoDate {
@@ -37,6 +37,13 @@ export function balanceOn(trace: SimTrace, date: IsoDate): BalanceOn {
   }
   const d = days[lo]!;
   return { date: d.date, assets: d.assets, liabilities: d.liabilities };
+}
+
+/** Капитал (деньги на руках минус обязательства) на дату; null — если прогон без трассы. */
+export function capitalOn(r: SimResult, date: IsoDate): Money | null {
+  if (!r.trace) return null;
+  const b = balanceOn(r.trace, date);
+  return sub(b.assets, b.liabilities);
 }
 
 export interface StepLine {

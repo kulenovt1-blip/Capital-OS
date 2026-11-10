@@ -3,8 +3,8 @@
  * Главное свойство: «на руках сейчас» + сумма строк = итог, ровно до тиына, для любой даты.
  */
 import { describe, it, expect } from 'vitest';
-import { simulate, type SimInput } from '../../engine/simulate';
-import { balanceOn, forecastDate, stepsTo } from '../../engine/forecast-steps';
+import { simulate, whatIf, BASE_SCENARIO, type SimInput } from '../../engine/simulate';
+import { balanceOn, capitalOn, forecastDate, stepsTo } from '../../engine/forecast-steps';
 import { addDays, addMonths } from '../../engine/date';
 import { DEFAULT_STRATEGY_SETTINGS } from '../../engine/allocate';
 import { tenge } from '../../engine/money';
@@ -189,5 +189,39 @@ describe('цепочка слагаемых', () => {
     const s = stepsTo(r.trace!, addMonths(TODAY, 24));
     expect(s.from + s.lines.reduce((a, l) => a + l.amount, 0)).toBe(s.total);
     expect(s.until <= addDays(TODAY, 120)).toBe(true);
+  });
+});
+
+describe('«Что если» считает на ту же дату, что «Прогноз» (D142)', () => {
+  const buy = (date: string, amount = 300_000) => [{ id: 'buy', title: 'Ноутбук', kind: 'one_off' as const, date, amount: tenge(amount) }];
+
+  it('капитал на дату = деньги на руках − обязательства; без трассы — null', () => {
+    const r = simulate(rich(), undefined, { trace: true });
+    const b = balanceOn(r.trace!, '2027-05-05');
+    expect(capitalOn(r, '2027-05-05')).toBe(b.assets - b.liabilities);
+    expect(capitalOn(simulate(rich()), '2027-05-05')).toBeNull();
+  });
+
+  it('whatIf с трассой: покупка до даты срока уменьшает капитал на её сумму, покупка после даты срока — не влияет', () => {
+    const until = forecastDate(TODAY, 6); // 2027-05-05
+    const [early] = whatIf(world(), buy('2027-03-10'), [BASE_SCENARIO], { trace: true });
+    expect(capitalOn(early!.base, until)! - capitalOn(early!.with, until)!).toBe(tenge(300_000));
+    const [late] = whatIf(world(), buy('2027-05-20'), [BASE_SCENARIO], { trace: true });
+    // 20 мая — после 5 мая: на дату срока разницы нет, хотя «на конец мая» (старый способ) она была бы
+    expect(capitalOn(late!.base, until)).toBe(capitalOn(late!.with, until));
+    expect(late!.base.months[6]!.capital - late!.with.months[6]!.capital).toBe(tenge(300_000));
+  });
+
+  it('без флага результат whatIf прежний: трассы нет', () => {
+    const [r] = whatIf(world(), buy('2027-03-10'), [BASE_SCENARIO]);
+    expect(r!.base.trace).toBeUndefined();
+    expect(r!.with.trace).toBeUndefined();
+  });
+
+  it('база «Что если» на дату срока равна числу «Прогноза» на ту же дату', () => {
+    const until = forecastDate(TODAY, 12);
+    const fc = simulate(world(), undefined, { trace: true });
+    const [w] = whatIf(world(), buy('2027-03-10'), [BASE_SCENARIO], { trace: true });
+    expect(capitalOn(w!.base, until)).toBe(capitalOn(fc, until));
   });
 });

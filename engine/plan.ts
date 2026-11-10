@@ -158,7 +158,7 @@ export function runForecast(state: AppState, today: IsoDate): SimResult[] {
 }
 
 export function runWhatIf(state: AppState, today: IsoDate, decision: LifeEvent[]): WhatIfResult[] {
-  return whatIf(buildSimInput(state, today).input, decision, state.settings.scenarios);
+  return whatIf(buildSimInput(state, today).input, decision, state.settings.scenarios, { trace: true });
 }
 
 export function runAlternatives(state: AppState, today: IsoDate, alts: { id: string; title: string; events: LifeEvent[] }[]): AlternativeResult[] {

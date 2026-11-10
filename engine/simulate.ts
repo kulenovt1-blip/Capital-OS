@@ -632,10 +632,10 @@ function compareRuns(base: SimResult, w: SimResult): Omit<WhatIfResult, 'scenari
 }
 
 /** «Что если»: базовый вариант и вариант с решением для каждого сценария (§6.4). */
-export function whatIf(input: SimInput, decision: readonly LifeEvent[], scenarios: readonly Scenario[]): WhatIfResult[] {
+export function whatIf(input: SimInput, decision: readonly LifeEvent[], scenarios: readonly Scenario[], opts: { trace?: boolean } = {}): WhatIfResult[] {
   return scenarios.map((sc) => {
-    const base = simulate(input, sc);
-    const w = simulate({ ...input, events: [...input.events, ...decision] }, sc);
+    const base = simulate(input, sc, opts);
+    const w = simulate({ ...input, events: [...input.events, ...decision] }, sc, opts);
     return { scenarioId: sc.id, scenarioName: sc.name, base, with: w, ...compareRuns(base, w) };
   });
 }

@@ -6,7 +6,7 @@
  *  - «Добавить в план» — событие входит в прогноз; следующие события сравниваются уже с планом, так они складываются.
  */
 import {
-  addDays, addMonths, formatDateRu, runWhatIf,
+  addDays, addMonths, capitalOn, forecastDate, formatDateRu, runWhatIf,
   type LifeEvent, type Money, type MonthKey, type WhatIfResult,
 } from '../../engine/index';
 import { field, h } from '../dom';
@@ -191,12 +191,14 @@ function kindForm(kind: Kind): { form: HTMLFormElement; read: () => { event?: Li
 
 // ───────────────────────── результат словами ─────────────────────────
 
-function capitalLine(res: WhatIfResult, k: number, word: string): HTMLElement | null {
-  const b = res.base.months[k];
-  const w = res.with.months[k];
-  if (!b || !w) return null;
-  const d = w.capital - b.capital;
-  const text = d === 0 ? 'столько же' : `${fmtShort(w.capital)} вместо ${fmtShort(b.capital)}`;
+/** «Через полгода / Через год» — на дату «сегодня + N месяцев», как в «Прогнозе» (D142), а не на конец месяца. */
+function capitalLine(res: WhatIfResult, months: number, word: string): HTMLElement | null {
+  const until = forecastDate(today(), months);
+  const b = capitalOn(res.base, until);
+  const w = capitalOn(res.with, until);
+  if (b === null || w === null) return null;
+  const d = w - b;
+  const text = d === 0 ? 'столько же' : `${fmtShort(w)} вместо ${fmtShort(b)}`;
   return row({ title: word, sub: text, value: d === 0 ? 'без изменений' : h('span', { class: d < 0 ? 'neg' : 'good' }, `${d > 0 ? '+' : '−'}${fmt(Math.abs(d) as Money)}`) });
 }
 
