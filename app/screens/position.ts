@@ -111,8 +111,11 @@ function moneyBlock(v: PositionView): HTMLElement {
     { class: 'stack' },
     sub('Деньги', info('capitalTwo')),
     rows(
-      row({ title: 'Всего капитал', sub: 'всё, что у тебя есть, минус долги — вместе с жильём и машиной', value: money(m.total), chevron: false }),
-      row({ title: 'Деньги, которые можно потратить', sub: `доступно сразу ${money(m.instant)} · за 30 дней ${money(m.spendable)}${m.blockedShare > 0.01 ? ` · в ближайшие 30 дней недоступно: ${pct(m.blockedShare)}` : ''}`, value: money(m.spendable), chevron: false }),
+      row({ title: 'Всего капитал', sub: 'всё, что у тебя есть, минус долги', value: money(m.total), chevron: false }),
+      // вторая цифра — только если она заметно отличается (жильё, вклады на срок, долги людям); иначе это тот же капитал второй раз
+      Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1)
+        ? row({ title: 'Из них можно снять за 30 дней', sub: 'остальное — жильё, вклады на срок или долги людям', value: money(m.spendable), chevron: false })
+        : null,
       row({ title: 'Запас денег', sub: `по обычным расходам ${mo(m.reserveLifestyleMonths)} · по необходимым ${mo(m.reserveEssentialMonths)}`, chevron: false }),
     ),
   );
