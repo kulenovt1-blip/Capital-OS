@@ -19,13 +19,13 @@ import { renderAccounts, renderAdvanced, renderBackup, renderDebts, renderIncome
 
 addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
 addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
-addRoute({ path: 'income', title: 'Доход', nav: 'income', render: (r) => renderArrived(r) });
-addRoute({ path: 'income-more', title: 'Другие способы', nav: 'income', parent: 'income', render: (r) => renderIncome(r) });
+addRoute({ path: 'income', title: 'Пришли деньги', nav: 'more', parent: 'more', render: (r) => renderArrived(r) });
+addRoute({ path: 'income-more', title: 'Другие способы', nav: 'more', parent: 'income', render: (r) => renderIncome(r) });
 addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecastSimple(r) });
 addRoute({ path: 'forecast-more', title: 'Хуже или лучше', nav: 'forecast', parent: 'forecast', render: (r) => renderForecast(r) });
 addRoute({ path: 'start', title: 'Настроим за минуту', nav: 'overview', lock: true, render: (r, sec) => renderStart(r, sec) });
 addRoute({ path: 'baskets', title: 'Раскладка трат', nav: 'more', parent: 'data', render: (r) => renderBaskets(r) });
-addRoute({ path: 'position', title: 'Финансовый профиль', nav: 'overview', parent: 'overview', render: () => renderPosition() });
+addRoute({ path: 'position', title: 'Финансовый профиль', nav: 'position', render: () => renderPosition() });
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'help', title: 'Как пользоваться', nav: 'more', parent: 'more', render: () => renderHelp() });

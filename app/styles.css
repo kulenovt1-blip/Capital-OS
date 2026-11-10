@@ -594,3 +594,5 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 /* Строка о надёжности уровня под названием ступени (аудит UX, К3) */
 .pos-trust { display: block; margin: 0 auto; max-width: 34em; padding: 8px 12px; border-radius: 12px; font-size: calc(14px * var(--fz)); color: var(--ink-2); text-decoration: none; text-align: center; }
 .pos-trust.warn { background: var(--warn-tint); color: var(--on-warn-tint); font-weight: 600; }
+.rc-t3,.rc-t6{fill:none;stroke:var(--muted,#6b7280);stroke-width:1.5;stroke-dasharray:5 4}
+.rc-t6{stroke-dasharray:2 3}

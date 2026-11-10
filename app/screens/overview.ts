@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
@@ -104,6 +104,15 @@ function rareLine(): HTMLElement | null {
   if (total <= 0) return null;
   const names = [...rare].sort((a, b) => b.monthly - a.monthly).slice(0, 2).map((e) => e.title.split(' (')[0]!.toLowerCase());
   return h('a', { href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:block' }, `+ редкие траты ≈ ${fmt(total)} в месяц (${names.join(', ')}${rare.length > 2 ? '…' : ''}) ›`);
+}
+
+/** Карточка «Пришли деньги» (аудит UX): вкладки «Доход» больше нет — вопрос возникает на «Обзоре» ровно тогда, когда в бэкапе появился новый приход. */
+function arrivedCard(): HTMLElement | null {
+  const st = getState();
+  const found = arrivedIncomes(st, today(), ov());
+  if (!found.length) return null;
+  const x = found[0]!;
+  return rows(row({ title: `Пришло ${fmtShort(x.amount)}: ${x.title}`, sub: `${fmtDay(x.date)} · распределить на цели и жизнь?${found.length > 1 ? ` Ещё ${found.length - 1}` : ''}`, href: '#/income', cls: 'warn' }));
 }
 
 function heroBlock(o: Overview): HTMLElement {
@@ -275,6 +284,7 @@ export function renderOverview(): HTMLElement {
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
+    arrivedCard(),
     historyNote(o),
     h(
       'div',

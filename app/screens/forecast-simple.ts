@@ -12,6 +12,8 @@ import { closeSheet, defineSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { HORIZONS, warningItems } from './forecast';
 import { KINDS, PLAN_CHIPS, eventLine } from './plan';
+import { levelShiftLine, futureSummary, futureTrack, plansCount, unknownNote } from '../future';
+import { reserveChart } from '../chart';
 
 /** Траты в прогнозе теми же частями, что на «Обзоре» (D109). */
 function spendParts(): HTMLElement | null {
@@ -220,6 +222,22 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     ),
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
+  // ступень по запасу в будущем (аудит UX): вывод одной фразой, график с порогами, честно — что учтено и что нет
+  {
+    const ft = futureTrack(sim, k);
+    if (ft && ft.months.length >= 2) {
+      const sm = futureSummary(ft);
+      const width = Math.min(720, document.documentElement.clientWidth - 56);
+      root.append(
+        h('section', { class: `card stack${sm.changed ? ' warn' : ''}`, 'aria-label': 'Запас в будущем' },
+          h('strong', null, sm.headline),
+          h('div', { class: 'muted' }, sm.detail),
+          reserveChart(ft.months, ft.money, ft.need, `Деньги сразу и пороги запаса: ${sm.headline}`, width),
+          h('p', { class: 'muted' }, unknownNote(plansCount())),
+        ),
+      );
+    }
+  }
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
   const found = sanityCheck(st, today()).findings;
@@ -512,6 +530,7 @@ function dropCard(text: string, endMonth: string, incomeId: string): HTMLElement
       h('div', null, amount > 0 ? `Урежу на ${fmt(amount as Money)} в месяц с ${monthGen(endMonth)}` : 'Если ничего не менять'),
       c.with !== null ? h('div', null, h('strong', null, `Через год: ${fmtShort(c.with)}`), amount > 0 && c.without !== null ? ` (без этого — ${fmtShort(c.without)})` : '') : null,
       ...(amount > 0 ? (pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]) : []),
+      amount > 0 ? (() => { const l = levelShiftLine(pv.base, pv.with); return l ? h('div', null, l) : null; })() : null,
     ];
     out.replaceChildren(...(lines.filter(Boolean) as HTMLElement[]));
     apply.disabled = amount <= 0;
@@ -593,6 +612,7 @@ defineSheet('save-cat', (catId) => {
       h('div', null, h('strong', null, `Тратить на ${fmt(amount as Money)} меньше в месяц`), ` (${Math.round((amount / x.monthly) * 100)} % статьи)`),
       ...(c.with !== null && c.without !== null ? [h('div', null, `Через год: ${fmtShort(c.with)} вместо ${fmtShort(c.without)}`)] : []),
       ...(pv.shifts.length ? shiftLines(pv.shifts) : [h('div', { class: 'muted' }, 'Даты целей не меняются')]),
+      ...((l) => (l ? [h('div', null, l)] : []))(levelShiftLine(pv.base, pv.with)),
     );
     apply.disabled = false;
   };

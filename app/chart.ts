@@ -216,3 +216,51 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
   const legend = h('div', { class: 'legend' }, h('span', null, h('span', { class: 'sw s1' }), 'Так же, как сейчас'), h('span', null, h('span', { class: 'sw band' }), 'от «Хуже» до «Лучше»'));
   return h('figure', { class: 'viz-root' }, h('figcaption', { class: 'visually-hidden' }, title), legend, h('div', { class: 'chart-wrap' }, svg, tip));
 }
+
+/**
+ * График запаса: деньги сразу (линия) против порогов «3 месяца» и «6 месяцев» необходимых расходов (пунктир).
+ * Ось от нуля, без сглаживания; смысл — видно, когда линия пересекает порог, то есть когда меняется ступень по запасу.
+ */
+export function reserveChart(months: MonthKey[], money: Money[], need: Money[], title: string, width = 640): HTMLElement {
+  const W = Math.max(280, Math.min(720, Math.round(width)));
+  const narrow = W < 480;
+  const H = narrow ? 150 : 190;
+  const t3 = need.map((v) => v * 3);
+  const t6 = need.map((v) => v * 6);
+  const hi0 = Math.max(...money, ...t3, 100);
+  const ticks = niceTicks(0, hi0);
+  const hi = Math.max(hi0, ticks[ticks.length - 1]!);
+  const longest = Math.max(...ticks.map((t) => compact(t).length));
+  const pad = { l: 14 + longest * 7, r: 56, t: 14, b: 26 };
+  const n = months.length;
+  const x = (i: number) => pad.l + (i * (W - pad.l - pad.r)) / Math.max(1, n - 1);
+  const y = (v: number) => pad.t + ((hi - v) * (H - pad.t - pad.b)) / hi;
+  const path = (a: number[]) => a.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': title });
+  for (const t of ticks) {
+    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(t), y2: y(t), class: t === 0 ? 'zero' : 'grid' }));
+    const lab = s('text', { x: pad.l - 6, y: y(t) + 4, 'text-anchor': 'end', class: 'axis' });
+    lab.textContent = compact(t);
+    svg.append(lab);
+  }
+  const every = Math.max(1, Math.ceil((76 * (n - 1)) / Math.max(1, W - pad.l - pad.r)));
+  months.forEach((m, i) => {
+    if (i % every !== 0 && i !== n - 1) return;
+    if (i === n - 1 && i % every !== 0 && i - Math.floor(i / every) * every < every * 0.9) return;
+    const lab = s('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', class: 'axis' });
+    lab.textContent = formatMonthRu(m);
+    svg.append(lab);
+  });
+  const show6 = Math.max(...t6) <= hi * 1.0001;
+  svg.append(s('path', { d: path(t3), class: 'rc-t3' }));
+  if (show6) svg.append(s('path', { d: path(t6), class: 'rc-t6' }));
+  svg.append(s('path', { d: path(money), class: 'line s1' }));
+  const lab = (txt: string, yy: number) => {
+    const t = s('text', { x: W - pad.r + 4, y: yy + 4, class: 'end-label' });
+    t.textContent = txt;
+    svg.append(t);
+  };
+  lab('3 мес.', y(t3[n - 1]!));
+  if (show6) lab('6 мес.', y(t6[n - 1]!));
+  return h('div', { class: 'chart-wrap' }, svg as unknown as HTMLElement);
+}

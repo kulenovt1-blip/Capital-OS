@@ -36,7 +36,8 @@ const FORBIDDEN: [RegExp, string][] = [
 ];
 
 /** Предельная высота главных экранов в экранах телефона (D121). */
-const HEIGHT_LIMIT: Record<string, number> = { forecast: 2.5, overview: 1.6, position: 4 };
+// forecast: 2.5 → 3.2: добавлен блок «запас в будущем» с графиком (аудит UX); остальное — вопросы и цели, сжимать их дальше нечем
+const HEIGHT_LIMIT: Record<string, number> = { forecast: 3.2, overview: 1.6, position: 4 };
 
 /**
  * Что обязано быть на экране «Финансовый профиль» в каждом состоянии (T16), без учёта регистра: так ловится пропавший блок,
