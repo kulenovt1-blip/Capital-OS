@@ -1,8 +1,8 @@
-/** «Ещё» (D81): плитки 2×N со статусом — всё, что нужно не каждый день. */
+/** «Ещё»: что ждёт внимания → главное действие → мои данные → приложение. */
 import { h } from '../dom';
 import { getState, today } from '../store';
 import { ov, progress, steps } from '../ctx';
-import { fmt, fmtDay, nWord, row, rows, toggle } from '../ui';
+import { fmt, fmtDay, nWord, row, rows, sub, toggle } from '../ui';
 import { act } from '../store';
 import { isInstalled } from '../install';
 import { fontPref, themePref } from '../theme';
@@ -14,18 +14,14 @@ declare const __BUILD__: { sha: string; date: string } | undefined;
 /** «сборка a1b2c3d · 11.11» — по хэшу видно, какая версия открыта; в разработке — «разработка». */
 export const buildLabel = (): string => (typeof __BUILD__ === 'undefined' ? 'разработка' : `сборка ${__BUILD__.sha} · ${__BUILD__.date.slice(8, 10)}.${__BUILD__.date.slice(5, 7)}`);
 
-function tile(href: string, title: string, status: string, level: '' | 'warn' | 'bad' = ''): HTMLElement {
-  return h('a', { class: `tile${level ? ` ${level}` : ''}`, href }, h('span', { class: 'tt' }, title), h('span', { class: 'ts' }, status));
-}
-
 export function renderMore(): HTMLElement {
   const st = getState();
   const o = ov();
   const p = progress();
   const all = steps();
   const setupOpen = p.done < p.total;
-  const unclassified = o.classification?.unclassified.length ?? 0;
   const review = all.find((s) => s.id === 'accounts');
+  const accountsWait = !!review && !review.done && !review.locked;
   const accounts = (st.imported?.accounts ?? []).filter((a) => !a.removed).length + st.manualAccounts.length;
   const found = o.installments.suggestions.length;
   const backupAge = st.lastBackupAt ? daysBetween(st.lastBackupAt, today()) : null;
@@ -33,22 +29,39 @@ export function renderMore(): HTMLElement {
   const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const imp = !o.hasData ? 'данных нет' : `импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`;
   const bak = st.lastBackupAt ? `бэкап ${fmtDay(st.lastBackupAt)}` : 'бэкап не скачивался';
-  // 6 плиток (D96): разметка — в «Данные → Раскладка трат»
+  const noIncome = !st.settings.incomeSchedule.length;
+  const markup = o.hasData && essentialMarkupMissing(o);
+  // «Требует внимания» — только то, что реально ждёт; остальное разложено по назначению: действие, мои данные, приложение (аудит UX: семь одинаковых плиток)
+  const attention = [
+    setupOpen ? row({ title: 'Настройка', sub: o.hasData ? `сделано ${p.done} из ${p.total}` : 'шаг 1 — загрузить бэкап', href: '#/setup', cls: 'warn' }) : null,
+    markup ? row({ title: 'Что обязательно?', sub: 'отметь траты «без этого не прожить» — иначе запас посчитан неточно', href: '#/markup', cls: 'warn' }) : null,
+    reconcileBad ? row({ title: 'Сверка не сошлась', sub: 'цифры могут расходиться с MoneyManager', href: '#/data', cls: 'bad' }) : null,
+    accountsWait ? row({ title: 'Счета ждут ответа', sub: 'нужно подтвердить, что считать деньгами', href: '#/accounts', cls: 'warn' }) : null,
+    noIncome ? row({ title: 'Доходы не заданы', sub: 'без них прогноз неполный', href: '#/incomes', cls: 'warn' }) : null,
+    found ? row({ title: 'Найдены долги и рассрочки', sub: `в операциях: ${found} — проверь и заведи`, href: '#/debts', cls: 'warn' }) : null,
+    o.hasData && (backupAge === null || backupAge > 30) ? row({ title: 'Бэкап давно не скачивался', sub: st.lastBackupAt ? `последний ${fmtDay(st.lastBackupAt)}` : 'ещё ни разу', href: '#/backup', cls: 'warn' }) : null,
+  ].filter(Boolean) as HTMLElement[];
   return h(
     'div',
     { class: 'screen' },
+    attention.length ? h('div', { class: 'stack' }, sub('Требует внимания'), rows(...attention)) : null,
+    h('a', { class: 'tile primary-tile', href: '#/income' }, h('span', { class: 'tt' }, 'Пришли деньги'), h('span', { class: 'ts' }, 'зарплата или стипендия: сколько отложить и на что')),
     h(
       'div',
-      { class: 'tiles' },
-      setupOpen ? tile('#/setup', 'Настройка', o.hasData ? `сделано ${p.done} из ${p.total}` : 'шаг 1 — загрузить бэкап', 'warn') : null,
-      tile('#/income', 'Пришли деньги', 'зарплата или стипендия: сколько отложить и на что'),
-      tile('#/help', 'Как пользоваться', 'что умеет приложение и когда его открывать'),
-      tile('#/data', 'Данные', `${imp} · ${bak}`, reconcileBad ? 'bad' : backupAge === null || backupAge > 30 ? 'warn' : ''),
-      o.hasData && essentialMarkupMissing(o) ? tile('#/markup', 'Что обязательно?', 'отметь траты «без этого не прожить» — иначе запас посчитан неточно', 'warn') : null,
-      tile('#/accounts', 'Счета', !o.hasData ? 'после импорта' : review && !review.done && !review.locked ? 'ждут ответа' : nWord(accounts, 'счёт', 'счёта', 'счетов'), review && !review.done && !review.locked ? 'warn' : ''),
-      tile('#/incomes', 'Доходы', st.settings.incomeSchedule.length ? `доходов: ${st.settings.incomeSchedule.length}` : 'не заданы', st.settings.incomeSchedule.length ? '' : 'warn'),
-      tile('#/debts', 'Долги и рассрочки', found ? `найдено в операциях: ${found}` : st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', found ? 'warn' : ''),
-      tile('#/prefs', 'Настройки', `текст: ${text}`),
+      { class: 'stack' },
+      sub('Мои данные'),
+      rows(
+        row({ title: 'Данные', sub: `${imp} · ${bak}`, href: '#/data' }),
+        row({ title: 'Счета', sub: !o.hasData ? 'после импорта' : nWord(accounts, 'счёт', 'счёта', 'счетов'), href: '#/accounts' }),
+        row({ title: 'Доходы', sub: noIncome ? 'не заданы' : `доходов: ${st.settings.incomeSchedule.length}`, href: '#/incomes' }),
+        row({ title: 'Долги и рассрочки', sub: st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', href: '#/debts' }),
+      ),
+    ),
+    h(
+      'div',
+      { class: 'stack' },
+      sub('Приложение'),
+      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и когда его открывать', href: '#/help' })),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );

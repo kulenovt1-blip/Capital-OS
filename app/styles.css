@@ -669,3 +669,8 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .rc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .rc-sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid var(--line-strong); }
 .rc-sw.rc-z-low { background: var(--warn-tint); } .rc-sw.rc-z-mid { background: var(--surface-sunken); } .rc-sw.rc-z-ok { background: var(--good-tint); }
+.primary-tile { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 16px; background: var(--primary); color: var(--on-primary); text-decoration: none; }
+.primary-tile .tt { font-weight: 800; font-size: calc(19px * var(--fz)); }
+.primary-tile .ts { color: inherit; opacity: 1; font-size: calc(15px * var(--fz)); }
+.row.warn { box-shadow: inset 4px 0 0 var(--warn); }
+.row.bad { box-shadow: inset 4px 0 0 var(--bad); }
