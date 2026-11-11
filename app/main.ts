@@ -10,6 +10,7 @@ import { h, clear, hideToast, type Child } from './dom';
 import { getHealth, loadState, subscribe, today } from './store';
 import { recoveryScreen, storageBanner } from './recovery';
 import { trust } from './ctx';
+import { accuracyNow, accuracyPanel, meter } from './accuracy-ui';
 import { initTheme } from './theme';
 
 export type NavId = 'overview' | 'goals' | 'position' | 'forecast' | 'more';
@@ -172,14 +173,21 @@ function dateLine(): string {
   return `${WEEKDAYS[wd]}, ${d} ${MONTHS[m! - 1]}`;
 }
 
-/** Значок доверия к цифрам: серый / жёлтый / красный; нажатие — причины со ссылками (D80). */
+/**
+ * Значок доверия к цифрам в шапке каждого экрана: серый / жёлтый / красный; нажатие — причины со ссылками (D80).
+ * «Точность расчётов» живёт здесь же (аудит UX): это свойство всех цифр, а не одного экрана. Ошибки сверки важнее точности.
+ */
 export function trustChip(): HTMLElement {
   const t = trust();
+  const a = accuracyNow();
+  const lowAcc = t.level !== 'bad' && (a.level === 'low' || a.level === 'mid');
+  const cls = t.level === 'bad' ? 'bad' : lowAcc || t.level === 'warn' ? 'warn' : t.level === 'ok' ? 'ok' : '';
+  const label = lowAcc ? `Точность: ${a.label.toLowerCase()}` : t.label;
   return h(
     'a',
-    { class: `trust ${t.level === 'bad' ? 'bad' : t.level === 'warn' ? 'warn' : t.level === 'ok' ? 'ok' : ''}`, href: sheetHref('trust'), 'aria-label': `Доверие к цифрам: ${t.label}` },
-    h('span', { class: 'td' }),
-    h('span', null, t.label),
+    { class: `trust ${cls}`, href: sheetHref('trust'), 'aria-label': `Доверие к цифрам: ${label}` },
+    lowAcc ? meter(a.level) : h('span', { class: 'td' }),
+    h('span', null, label),
   );
 }
 
@@ -193,6 +201,7 @@ defineSheet('trust', () => {
     body: h(
       'div',
       { class: 'stack' },
+      accuracyPanel(),
       t.level === 'bad' ? null : h('div', { class: 'okline' }, '✓ Данные загружены и сверены с MoneyManager'),
       t.reasons.length ? [h('h3', { class: 'sub' }, h('span', null, t.level === 'bad' ? 'Что не так' : 'Что стоит проверить')), h('div', { class: 'rows' }, t.reasons.map(link))] : h('div', { class: 'okline' }, '✓ Предположений приложения нет — всё проверено тобой'),
       t.notes.length ? [h('h3', { class: 'sub' }, h('span', null, 'Что основано на оценке')), h('div', { class: 'rows' }, t.notes.map(link))] : null,
