@@ -9,7 +9,6 @@ import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { radar } from '../radar';
-import { accuracyBlock, accuracyNow } from '../accuracy-ui';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
@@ -96,7 +95,6 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     caption,
     ...key,
     trustLine(v),
-    accuracyBlock(),
     more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про этот уровень'), h('div', { class: 'stack' }, ...more)) : null,
     ladderFold(v),
   );

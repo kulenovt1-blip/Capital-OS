@@ -4,7 +4,6 @@
  */
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
-import { accuracyChip } from '../accuracy-ui';
 import { loadDemo } from './import';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
@@ -302,7 +301,6 @@ export function renderOverview(): HTMLElement {
     firstTimeHint(),
     heroBlock(o),
     firstRunCard(),
-    accuracyChip(),
     arrivedCard(),
     historyNote(o),
     h(
