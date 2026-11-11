@@ -238,6 +238,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       );
     }
   }
+  const tuneStart = root.children.length;
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
   const found = sanityCheck(st, today()).findings;
@@ -354,6 +355,12 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     if (info.length) root.append(h('details', { class: 'fold' }, h('summary', null, `Что ещё стоит знать (${info.length})`), h('div', { class: 'stack' }, ...info.map(([f]) => h('p', { class: 'muted' }, f.text)))));
   }
 
+  // аудит UX: вопросы и предупреждения одного оранжевого веса теснили главное — собираем их в одну свёрнутую строку
+  const tune = [...root.children].slice(tuneStart);
+  if (tune.length) {
+    tune.forEach((n) => n.remove());
+    root.append(h('details', { class: 'fold tune', 'data-key': 'forecast:tune' }, h('summary', null, `Уточнить прогноз · ${tune.length}`), h('div', { class: 'stack' }, ...(tune as HTMLElement[]))));
+  }
   const vd = verdicts();
   const lastMonth = sim.months[sim.months.length - 1]?.month;
   const when = (x: MonthKey | null | undefined) => (x ? monthWord(x) : lastMonth ? `позже ${monthGen(lastMonth)}` : '—');
@@ -387,6 +394,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
     // одна группа строк вместо четырёх отдельных карточек (D121)
     root.append(
+      sub('Проверить и посчитать'),
       rows(
         row({ title: 'Из А в Б', sub: stg ? `сейчас запас на ${stg.coverMonths.toString().replace('.', ',')} мес. · выбери, куда выйти` : 'выбери нужный запас и путь к нему', href: sheetHref('a-to-b') }),
         row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что это даст', href: sheetHref('save-where') }),

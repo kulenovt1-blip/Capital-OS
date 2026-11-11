@@ -318,7 +318,8 @@ defineSheet('independence', () => {
 });
 function independenceSection(v: PositionView): HTMLElement[] {
   const i = v.independence;
-  const near = v.level === 5 || (i.status !== 'not_assessed' && i.total.central >= INDEPENDENCE_INLINE_FROM);
+  // человек сам задал «желаемые траты» — сценарий показываем сразу, он за ним и пришёл
+  const near = v.level === 5 || v.desired !== null || (i.status !== 'not_assessed' && i.total.central >= INDEPENDENCE_INLINE_FROM);
   if (i.status === 'not_assessed' || near) return [independenceBlock(v), desiredBlock(v)].filter((x): x is HTMLElement => x !== null);
   return [rows(row({ title: `Независимость: ${pct(i.total.central)} пути`, sub: 'сколько расходов покрывают капитал и независимый доход — подробности и «а если бы тратил больше»', href: sheetHref('independence') }))];
 }

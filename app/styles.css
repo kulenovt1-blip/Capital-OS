@@ -640,3 +640,4 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .trust.warn .acc-meter i:not(.on) { background: var(--warn-line); opacity: 0.5; }
 .trust.warn .acc-meter i.on { background: var(--warn); }
 .trust .acc-low .acc-meter i.on, .trust .acc-mid .acc-meter i.on { background: var(--warn); }
+.tune > summary { border-left: 4px solid var(--warn); padding-left: 10px; font-weight: 600; }
