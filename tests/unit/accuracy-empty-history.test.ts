@@ -22,3 +22,20 @@ test('цель с правилом суммы не считается «без �
   const steps = setupSteps({ ...st, goals: st.goals.map((x) => (x === g ? { ...x, targetMin: 0 as never } : x)) }, '2026-11-11' as never);
   expect(steps.find((s) => s.id === 'goals')!.status).not.toContain('без суммы');
 });
+
+// «Начал вести вчера»: полных месяцев нет, записи за последние дни есть — «обычно» оценивается по ним, а не нулём, с пометкой
+test('холодный старт: обычные траты по последним дням, точность низкая', () => {
+  const st = STATES['configured']!();
+  const ops = st.imported!.operations;
+  const last = ops.map((x) => x.date).sort().at(-1)!;
+  const d = new Date(last + 'T00:00:00Z');
+  const from = `${d.toISOString().slice(0, 7)}-01`; // записи только текущего месяца: полных месяцев нет
+  const short = { ...st, imported: { ...st.imported!, operations: ops.filter((x) => x.date >= from) } };
+  const today = last as never;
+  const o = buildOverview(short, today);
+  expect(o.baseline.partialDays).toBeGreaterThanOrEqual(7);
+  expect(o.baseline.median).toBeGreaterThan(0);
+  expect(dataAccuracy(short, today, o).level).toBe('low');
+  // с историей числа не меняются
+  expect(buildOverview(st, today).baseline.partialDays).toBeUndefined();
+});

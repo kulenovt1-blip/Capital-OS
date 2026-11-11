@@ -60,7 +60,9 @@ export function dataAccuracy(state: AppState, today: IsoDate, o: Overview): Accu
     },
     { ok: reconcileOk, text: reconcileOk ? 'Остатки на счетах сошлись с MoneyManager' : 'Остатки на счетах не сошлись', ...(reconcileOk ? {} : { fix: { text: 'Открой сверку', href: '#/import' } }) },
     { ok: hasIncome, text: hasIncome ? 'Расписание доходов задано' : 'Доходы не заданы — прогноз идёт «вслепую»', ...(hasIncome ? {} : { fix: { text: 'Добавь доход', href: '#/incomes' } }) },
-    { ok: o.baseline.median > 0, text: o.baseline.median > 0 ? 'Обычные траты посчитаны' : 'Обычные траты посчитаны как 0 — нет данных за 6 месяцев' },
+    o.baseline.partialDays !== undefined
+      ? { ok: false, text: `«Обычно уходит» оценено по ${o.baseline.partialDays} дням записей — это грубо, пока нет полного месяца` }
+      : { ok: o.baseline.median > 0, text: o.baseline.median > 0 ? 'Обычные траты посчитаны' : 'Обычные траты посчитаны как 0 — нет данных за 6 месяцев' },
   ];
   const level: AccuracyLevel = filled < 3 || !reconcileOk || !hasIncome ? 'low' : historyOk && recent ? 'good' : 'mid';
   const label = level === 'low' ? 'Низкая' : level === 'mid' ? 'Средняя' : 'Хорошая';
