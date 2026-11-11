@@ -37,13 +37,13 @@ function period(d: ImportedData): string {
 }
 
 /** Демо: выдуманный профиль «Студент» на фиксированную дату; работает только на пустом приложении (D169). */
-async function loadDemo(): Promise<void> {
+export async function loadDemo(): Promise<void> {
   try {
     const res = await fetch('./demo.json');
     const r = parseState(await res.text());
     if (!r.ok) throw new Error(r.error);
     if (getState().imported) return;
-    if (await replaceState(r.value)) location.href = `${location.pathname}?today=2026-11-04#/position`;
+    if (await replaceState(r.value)) location.href = `${location.pathname}?today=2026-11-04#/overview`;
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e);
     toast('Не удалось загрузить демо', 'error');
@@ -94,7 +94,7 @@ export function renderImport(rerender: () => void): HTMLElement {
       const freshText = fresh.length ? `новые счета: ${fresh.map((p) => `«${p.title}» — ${o.spend.kinds[p.accountId] === 'savings' ? 'копилка' : 'для трат'}`).join(', ')} (проверь в «Счетах»)` : '';
       const extra = [labeled ? `новых категорий разложено: ${labeled}` : '', moved ? `переводы на копилку найдены: ${fmt(moved as never)}` : '', freshText].filter(Boolean).join(' · ');
       toast(`${ok ? 'Импорт принят' : 'Импорт принят с расхождением — цифры помечены красным'}${extra ? ` · ${extra}` : ''}`);
-      go(getState().settings.firstRunDone ? '#/overview' : '#/start');
+      go('#/overview'); // сначала число, потом вопросы (С1 аудита UX): мастер — карточкой на «Обзоре»
     };
     append(root, [
       sub(`Файл «${p.fileName}»`),
