@@ -22,6 +22,8 @@ export interface FutureTrack {
   cap: CapLevel[];
   /** Ступень «по запасу» сегодня. */
   capNow: CapLevel;
+  /** Запас сегодня, месяцев. */
+  now: number;
 }
 
 /** Верхняя граница ступени по фактам: запас < 3 мес. — не выше 2 (при дефиците — 1); 3–6 — не выше 3; от 6 — не выше 4. */
@@ -54,7 +56,7 @@ export function futureTrack(sim: SimResult, k: number): FutureTrack | null {
     reserve.push(r);
     cap.push(capOf(r, (m.income as number) < spend(i)));
   }
-  return { months, money, need, reserve, cap, capNow: capOf(stg.coverMonths, stg.surplusMonthly < 0) };
+  return { months, money, need, reserve, cap, capNow: capOf(stg.coverMonths, stg.surplusMonthly < 0), now: Math.floor((stg.coverMonths as number) * 10) / 10 };
 }
 
 const THRESHOLD: Record<number, number> = { 2: 3, 3: 6 };

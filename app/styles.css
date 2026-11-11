@@ -641,3 +641,31 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .trust.warn .acc-meter i.on { background: var(--warn); }
 .trust .acc-low .acc-meter i.on, .trust .acc-mid .acc-meter i.on { background: var(--warn); }
 .tune > summary { border-left: 4px solid var(--warn); padding-left: 10px; font-weight: 600; }
+.dirs { display: grid; gap: 4px; }
+.dirs .row-fold { border-bottom: 1px solid var(--divider); padding: 6px 0 2px; }
+.dirs .row-fold:last-child { border-bottom: 0; }
+.dirs .rf-title { font-size: 18px; font-weight: 700; }
+.dirs .rf-val { font-weight: 600; }
+.dirs .dbar { height: 14px; border-radius: 7px; margin: 4px 0 2px; }
+.dirs .dfill { height: 14px; border-radius: 7px; }
+.dirs .dtick { top: -4px; height: 22px; width: 3px; }
+.dirs .dir-low .dfill { background: var(--warn); }
+.dirs .dir-ok .dfill { background: var(--good); }
+.dirs .dir-verdict { order: 4; flex: 0 0 100%; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
+.dirs .dir-ok .dir-verdict { color: var(--on-good-tint); }
+.dirs .dir-low .dir-verdict { color: var(--on-warn-tint); font-weight: 600; }
+.dirs .row-fold { background: none; box-shadow: none; border-radius: 0; padding-left: 0; padding-right: 0; }
+.dirs .row-fold summary { text-align: left; flex-wrap: wrap; }
+.dirs .rf-title { font-size: 17px; flex: 1 1 auto; }
+.dirs .rf-val { white-space: nowrap; margin-left: auto; }
+.dirs .dir-verdict { text-align: left; }
+.dirs .rf-title { font-size: 16px; }
+.dirs .rf-val { font-size: 15px; }
+.rc-z-low { fill: var(--warn-tint); }
+.rc-z-mid { fill: var(--surface-sunken); }
+.rc-z-ok { fill: var(--good-tint); }
+.rc-dot { fill: var(--series-1, var(--primary)); stroke: var(--surface); stroke-width: 2; }
+.rc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+.rc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.rc-sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid var(--line-strong); }
+.rc-sw.rc-z-low { background: var(--warn-tint); } .rc-sw.rc-z-mid { background: var(--surface-sunken); } .rc-sw.rc-z-ok { background: var(--good-tint); }

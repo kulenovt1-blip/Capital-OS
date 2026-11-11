@@ -231,8 +231,8 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       root.append(
         h('section', { class: `card stack${sm.changed ? ' warn' : ''}`, 'aria-label': 'Запас в будущем' },
           h('strong', null, sm.headline),
-          h('div', { class: 'muted' }, sm.detail),
-          reserveChart(ft.months, ft.money, ft.need, `Деньги сразу и пороги запаса: ${sm.headline}`, width),
+          h('div', { class: 'muted' }, `Столько месяцев проживёшь без дохода — ${sm.detail}`),
+          reserveChart(ft.months, ft.now, ft.reserve, `На сколько месяцев хватит денег без дохода: ${sm.headline}`, width),
           h('p', { class: 'muted' }, unknownNote(plansCount())),
         ),
       );
