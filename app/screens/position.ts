@@ -241,6 +241,22 @@ function moneyBlock(v: PositionView): HTMLElement {
   );
 }
 
+/** Жильё и закрытые активы — отдельной строкой, на ступень не влияют: у владельца жилья нет аренды и есть актив, но денег на месяц он не даёт. */
+function housingBlock(v: PositionView): HTMLElement | null {
+  const hs = v.housing;
+  if (!hs) return null;
+  const hasLoan = hs.linked > 0;
+  return h(
+    'div',
+    { class: 'stack' },
+    sub('Жильё и закрытые активы'),
+    rows(
+      row({ title: hasLoan ? 'Твоя доля' : 'Стоимость', sub: hasLoan ? `${money(hs.assets)} за вычетом остатка кредита ${money(hs.debt)}` : 'жильё и деньги, которые нельзя снять за месяц; в запас не входят', value: money(hasLoan ? hs.equity : hs.assets), chevron: false }),
+    ),
+    h('p', { class: 'muted' }, 'Ступень считается по деньгам и доходу: этот актив на неё не влияет. В «Всего капитал» он учтён.'),
+  );
+}
+
 function runwayBlock(v: PositionView): HTMLElement | null {
   const r = v.runway;
   if (r.status === 'no_data') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), h('p', { class: 'muted' }, 'Нужно хотя бы три полных месяца истории, чтобы это посчитать.'));
@@ -350,6 +366,8 @@ export function renderPosition(): HTMLElement {
   const wk = weakBlock(v, path !== null);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));
+  const hb = housingBlock(v);
+  if (hb) root.append(hb);
   const rw = runwayBlock(v);
   if (rw) root.append(rw);
   const sp = spiralBlock(v);
