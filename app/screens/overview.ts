@@ -4,6 +4,7 @@
  */
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
+import { accuracyChip } from '../accuracy-ui';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
 import { attentionItems } from '../attention';
@@ -147,7 +148,7 @@ function cushionRow(o: Overview): HTMLElement | null {
   // К4 (D157): строка говорит о цели, а не о деньгах — «Подушки нет» при запасе на полгода была неправдой; при запасе ≥ 3 мес. цель не навязывается
   if (!n || status === 'none') return (reserveCtx()?.coverMonths ?? 0) >= 3 ? null : rows(row({ title: 'Цель «Подушка» не создана', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
   // сумму не посчитать — так и сказать, а не «0 ₸ из 0 ₸» (D103)
-  if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'не хватает данных о тратах — проверь раскладку трат или задай сумму сам', href: '#/goals~cushion', cls: 'warn' }));
+  if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'нет записей о тратах за последние месяцы — задай сумму сам или загрузи свежий бэкап', href: '#/goals~cushion', cls: 'warn' }));
   const ready = status === 'ready';
   // К6 аудита UX: деньги есть, но не закреплены за подушкой — одна понятная строка с действием, без формулы (она — на карточке цели)
   const notPinned = !ready && o.spend.onHand >= n.goal.targetMin;
@@ -284,6 +285,7 @@ export function renderOverview(): HTMLElement {
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
+    accuracyChip(),
     arrivedCard(),
     historyNote(o),
     h(

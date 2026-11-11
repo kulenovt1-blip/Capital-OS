@@ -6,6 +6,7 @@ import {
   balanceOn, buildSimInput, forecastDate, kindBehavior, runForecast, formatMonthRu, formatDateRu,
   type Money, type MonthKey, type Scenario, type SimInput, type SimResult,
 } from '../../engine/index';
+import { essentialMarkupMissing } from '../../engine/position/inputs';
 import { bandChart } from '../chart';
 import { h } from '../dom';
 import { getState, today, update } from '../store';
@@ -159,7 +160,11 @@ export function warningItems(): { items: AttentionItem[]; missing: { title: stri
   const missing: { title: string; href: string; label: string }[] = [];
   const items: AttentionItem[] = [];
   for (const w of warnings) {
-    if (w.code === 'plan.no_expenses') missing.push({ title: 'разметка трат', href: '#/markup', label: 'Разметить траты' });
+    if (w.code === 'plan.no_expenses') {
+      // Разметка уже есть, а трат за месяцы расчёта нет — «Разметить» никуда не ведёт (петля из бэкапа мамы): причина в пустой истории
+      if (essentialMarkupMissing(ov())) missing.push({ title: 'разметка трат', href: '#/markup', label: 'Разметить траты' });
+      else missing.push({ title: 'записи о тратах за последние месяцы', href: '#/import', label: 'Загрузить свежий бэкап' });
+    }
     else if (w.code === 'plan.no_income') missing.push({ title: 'доход', href: '#/setup/income', label: 'Добавить доход' });
     else if (w.code === 'plan.installments_missing') items.push({ title: 'Рассрочки не заведены', href: '#/debts' });
     else items.push({ title: w.text, href: '' });

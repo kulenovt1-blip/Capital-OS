@@ -9,6 +9,7 @@ import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { radar } from '../radar';
+import { accuracyBlock } from '../accuracy-ui';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
@@ -84,6 +85,7 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${meaningOf(v)}.`) : null,
     trustLine(v),
+    accuracyBlock(),
     v.level === 4 ? h('p', { class: 'muted' }, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
     chart,
