@@ -227,7 +227,7 @@ function header(r: Route): HTMLElement {
     'header',
     { class: `top${parent ? ' sub-top' : ''}` },
     back ?? h('div', { class: 'date' }, dateLine()),
-    h('div', { class: 'ttl-row' }, h('h1', { tabindex: '-1', id: 'screen-title' }, r.title), trustChip()),
+    h('div', { class: 'ttl-row' }, h('h1', { tabindex: '-1', id: 'screen-title' }, r.title), r.path === 'start' || r.path === 'setup' ? null : trustChip()),
   );
 }
 
