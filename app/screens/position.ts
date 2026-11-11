@@ -251,7 +251,7 @@ function housingBlock(v: PositionView): HTMLElement | null {
     { class: 'stack' },
     sub('Жильё и закрытые активы'),
     rows(
-      row({ title: hasLoan ? 'Твоя доля' : 'Стоимость', sub: hasLoan ? `${money(hs.assets)} за вычетом остатка кредита ${money(hs.debt)}` : 'жильё и деньги, которые нельзя снять за месяц; в запас не входят', value: money(hasLoan ? hs.equity : hs.assets), chevron: false }),
+      row({ title: hasLoan ? 'Твоя доля' : 'Стоимость', sub: hasLoan ? `${money(hs.assets)} за вычетом остатка кредита ${money(hs.debt)}` : 'жильё и деньги, которые нельзя снять за месяц; в запас не входят', value: money(hasLoan ? hs.equity : hs.assets), href: '#/accounts' }),
     ),
     h('p', { class: 'muted' }, 'Ступень считается по деньгам и доходу: этот актив на неё не влияет. В «Всего капитал» он учтён.'),
   );
