@@ -4,6 +4,8 @@
  */
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
 import { h } from '../dom';
+import { accuracyChip } from '../accuracy-ui';
+import { loadDemo } from './import';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
 import { attentionItems } from '../attention';
@@ -147,7 +149,7 @@ function cushionRow(o: Overview): HTMLElement | null {
   // К4 (D157): строка говорит о цели, а не о деньгах — «Подушки нет» при запасе на полгода была неправдой; при запасе ≥ 3 мес. цель не навязывается
   if (!n || status === 'none') return (reserveCtx()?.coverMonths ?? 0) >= 3 ? null : rows(row({ title: 'Цель «Подушка» не создана', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
   // сумму не посчитать — так и сказать, а не «0 ₸ из 0 ₸» (D103)
-  if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'не хватает данных о тратах — проверь раскладку трат или задай сумму сам', href: '#/goals~cushion', cls: 'warn' }));
+  if (status === 'unknown') return rows(row({ title: 'Размер подушки пока не посчитать', sub: 'нет записей о тратах за последние месяцы — задай сумму сам или загрузи свежий бэкап', href: '#/goals~cushion', cls: 'warn' }));
   const ready = status === 'ready';
   // К6 аудита UX: деньги есть, но не закреплены за подушкой — одна понятная строка с действием, без формулы (она — на карточке цели)
   const notPinned = !ready && o.spend.onHand >= n.goal.targetMin;
@@ -194,14 +196,33 @@ function newIncomeLine(): HTMLElement | null {
 }
 
 function emptyState(): HTMLElement {
+  // С1 аудита UX: две равные кнопки и подсказка, где взять файл, — до первого числа не нужно ничего знать про приложение
   return h(
     'div',
     { class: 'screen' },
     hero('Можно тратить', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
     h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'),
-    h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве.'),
+    h('button', { class: 'btn big wide', type: 'button', onclick: () => void loadDemo() }, 'Посмотреть на примере'),
+    h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве. Пример — выдуманный студент: можно посмотреть, как всё выглядит.'),
+    h(
+      'details',
+      { class: 'fold', 'data-key': 'overview:backup-help' },
+      h('summary', null, 'Где взять бэкап'),
+      h(
+        'div',
+        { class: 'stack' },
+        h('p', null, 'В MoneyManager: «Настройки → Резервная копия» → сохрани файл .mmbackup. Потом выбери его здесь — файл читается на устройстве и никуда не отправляется.'),
+        h('p', { class: 'muted' }, 'Начал вести бюджет недавно — это нормально. Приложение оценит по тому, что есть, и честно покажет, насколько расчёты пока приблизительные.'),
+      ),
+    ),
     h('a', { class: 'btn wide', href: '#/help' }, 'Что умеет приложение'),
   );
+}
+
+/** Первый запуск после импорта: число уже видно, а вопросы — одной карточкой (С1 аудита UX). */
+function firstRunCard(): HTMLElement | null {
+  if (getState().settings.firstRunDone) return null;
+  return h('a', { class: 'hint-card first-run', href: '#/start' }, h('strong', null, 'Число предварительное. '), h('span', null, 'Ответь на 3 коротких вопроса — доходы, счета, цели — и оно станет точнее. Минута ›'));
 }
 
 /** «Впервые здесь?» — пока человек не открывал справку и не закрыл подсказку (D94). */
@@ -231,9 +252,6 @@ function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { d
 export function renderOverview(): HTMLElement {
   const o = ov();
   if (!o.hasData) return emptyState();
-  if (!getState().settings.firstRunDone) {
-    queueMicrotask(() => go('#/start'));
-  }
   const c = o.capital;
   const sp = o.spend;
   const bad = badAccounts();
@@ -284,6 +302,8 @@ export function renderOverview(): HTMLElement {
     { class: 'screen' },
     firstTimeHint(),
     heroBlock(o),
+    firstRunCard(),
+    accuracyChip(),
     arrivedCard(),
     historyNote(o),
     h(

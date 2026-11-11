@@ -132,6 +132,15 @@ export function withPositionInput(_prev: PositionSettings | undefined, i: Positi
  * Нужен ли вопрос «Что из этого обязательно?»: данные есть, а ни одна трата не отмечена как «без этого не прожить». Тогда необходимый месяц
  * состоит из одних платежей по долгам, и запас по необходимому выглядит лучше, чем есть. Без данных вопрос не задаётся: сначала нужен импорт.
  */
-export function essentialMarkupMissing(o: { hasData: boolean; baseline: { median: Money } }): boolean {
-  return o.hasData && !(o.baseline.median > 0);
+export function essentialMarkupMissing(o: {
+  hasData: boolean;
+  baseline: { median: Money; months: readonly string[] };
+  classification?: { ops: readonly { op: { date: string; kind: string } }[] } | null;
+}): boolean {
+  if (!o.hasData || o.baseline.median > 0) return false;
+  // Нулевые «обычные траты» бывают и от пустой истории: если за месяцы расчёта вообще нет трат, дело не в разметке (аудит UX, бэкап мамы)
+  const ops = o.classification?.ops;
+  if (!ops) return true;
+  const months = new Set(o.baseline.months);
+  return ops.some((c) => c.op.kind === 'expense' && months.has(c.op.date.slice(0, 7)));
 }

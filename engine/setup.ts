@@ -107,7 +107,8 @@ export function setupSteps(state: AppState, today: IsoDate): SetupStep[] {
     action: { route: 'settings', section: 'obligations', label: 'Завести' },
   });
   const active = o.goals.filter((g) => g.status === 'active');
-  const unconfirmed = active.filter((g) => g.targetMin <= 0);
+  // сумма цели может задаваться правилом («N месяцев обычных трат»): пока трат нет, оно даёт 0, но это не «без суммы»
+  const unconfirmed = active.filter((g) => g.targetMin <= 0 && !g.targetRule);
   add({
     id: 'goals',
     title: 'Создать цели и задать суммы',

@@ -610,3 +610,12 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .pos-trust.warn { background: var(--warn-tint); color: var(--on-warn-tint); font-weight: 600; }
 .rc-t3,.rc-t6{fill:none;stroke:var(--muted,#6b7280);stroke-width:1.5;stroke-dasharray:5 4}
 .rc-t6{stroke-dasharray:2 3}
+.acc { font-size: 15px; }
+.acc summary { cursor: pointer; min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+.acc-facts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.acc-facts .no { color: var(--on-warn-tint); }
+.acc-low { border-left: 4px solid var(--bad); }
+.acc-mid { border-left: 4px solid var(--warn); }
+.acc-chip { display: block; padding: 10px 12px; border-radius: 10px; background: var(--warn-tint); color: var(--on-warn-tint); text-decoration: none; min-height: 44px; box-sizing: border-box; }
+.acc-chip.acc-low { background: var(--bad-tint); color: var(--on-bad-tint); }
+.first-run { display: block; text-decoration: none; min-height: 44px; box-sizing: border-box; }

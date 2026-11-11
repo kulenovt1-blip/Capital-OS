@@ -2,7 +2,7 @@
  * Балансы, сверка с account_balance, капитал и ликвидность.
  */
 import { add, median, mulDiv, neg, pos, sub, sum, tiyn, ZERO, type Money } from './money';
-import { addDays, formatMonthRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
+import { addDays, daysBetween, formatMonthRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import type { ImportedData, Operation } from './types';
 import { classGroup, ALL_CLASSES, type ClassifiedOp, type OpClass } from './classify';
@@ -374,12 +374,18 @@ export function averageMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cls
   return { monthly: mulDiv(total, 1, months.length), months: months.length };
 }
 
+/** Минимум записей, чтобы оценить «обычно» по последним дням (холодный старт). */
+const PARTIAL_MIN_DAYS = 7;
+const PARTIAL_MIN_OPS = 10;
+
 export interface Baseline {
   cls: OpClass;
   classes: OpClass[];
   months: MonthKey[];
   values: Money[];
   median: Money;
+  /** Нет полных месяцев с данными — «обычно» оценено по последним N дням записей, пересчитанным на 30 дней. */
+  partialDays?: number;
   explanation: Explanation;
 }
 
@@ -396,12 +402,31 @@ export function baselineMonthly(ops: readonly ClassifiedOp[], today: IsoDate, cl
   const months = window ?? (first === null ? [] : fullMonthsBefore(today, n).filter((m) => m >= monthKey(first!)));
   const flows = monthlyFlows(ops, months);
   const values = months.map((m) => sum(list.map((c) => flows[m]!.byClass[c] ?? ZERO)));
-  const med = median(values);
+  let med = median(values);
+  // Холодный старт (аудит UX, «начал вести вчера»): полных месяцев с записями нет, а недавние записи есть — «обычно» оцениваем по ним, а не нулём.
+  // Срабатывает только при нулевой медиане, поэтому числа, у которых история есть, не меняются.
+  let partialDays: number | undefined;
+  if (!window && med === 0) {
+    const from = addDays(today, -30);
+    const recent = ops.filter((c) => c.op.date >= from && c.op.date <= today);
+    let start: IsoDate | null = null;
+    for (const c of recent) if (start === null || c.op.date < start) start = c.op.date;
+    const days = start === null ? 0 : daysBetween(start, today) + 1;
+    if (days >= PARTIAL_MIN_DAYS && recent.length >= PARTIAL_MIN_OPS) {
+      const total = sum(recent.filter((c) => list.includes(c.cls)).map((c) => opAmount(c)));
+      if (total > 0) {
+        med = mulDiv(total, 30, days);
+        partialDays = days;
+      }
+    }
+  }
   const explanation: Explanation = [
     step('baseline.median', `${name} в обычный месяц: ${money(med)} — медиана за ${months.length} полн. мес. (${months.map((m, i) => `${formatMonthRu(m)}: ${money(values[i]!)}`).join('; ') || 'нет данных'})`, { amount: med }),
   ];
-  if (months.length < n) {
+  if (partialDays !== undefined) {
+    explanation.push(step('baseline.partial', `Полных месяцев с записями нет — «${name.toLowerCase()}» оценены по последним ${partialDays} дням записей, пересчитанным на месяц: ${money(med)}. Это грубая оценка`, { level: 'warn', amount: med }));
+  } else if (months.length < n) {
     explanation.push(step('baseline.short', `Данных меньше ${n} полных месяцев (${months.length}) — оценка «${name.toLowerCase()}» менее надёжна`, { level: 'warn' }));
   }
-  return { cls: list[0] ?? 'E_base', classes: [...list], months: [...months], values, median: med, explanation };
+  return { cls: list[0] ?? 'E_base', classes: [...list], months: [...months], values, median: med, ...(partialDays !== undefined ? { partialDays } : {}), explanation };
 }

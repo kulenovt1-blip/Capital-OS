@@ -21,6 +21,7 @@ export * from './forecast-steps';
 export * from './plan';
 export * from './classes';
 export * from './setup';
+export * from './accuracy';
 export * from './installment-detect';
 export * from './income-kinds';
 export * from './simple';

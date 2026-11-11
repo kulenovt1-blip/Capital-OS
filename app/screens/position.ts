@@ -9,6 +9,7 @@ import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { radar } from '../radar';
+import { accuracyBlock, accuracyNow } from '../accuracy-ui';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
@@ -60,6 +61,8 @@ function trustLine(v: PositionView): HTMLElement {
   if (v.preliminary || v.l4Unconfirmed) return h('div', { class: 'pos-trust warn' }, 'Уровень предварительный: данных пока мало. Он уточнится, когда накопится история.');
   // «Данных хватает» — только если и общий индикатор доверия зелёный: иначе рядом с красной плашкой это было бы ложное спокойствие
   if (trust().level !== 'ok') return h('a', { class: 'pos-trust warn', href: '#/import' }, 'В данных есть что проверить: подробности на экране импорта · Посмотреть ›');
+  // не «хватает», пока точность расчётов не хорошая (холодный старт: «обычно уходит» оценено по нескольким дням)
+  if (accuracyNow().level !== 'good') return h('div', { class: 'pos-trust warn' }, 'Уровень ориентировочный: он опирается на мало записей. Подробности — в «Точности расчётов» ниже.');
   return h('div', { class: 'pos-trust' }, 'Данных хватает, чтобы этой ступени можно было верить.');
 }
 
@@ -84,6 +87,7 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', null, `${meaningOf(v)}.`) : null,
     trustLine(v),
+    accuracyBlock(),
     v.level === 4 ? h('p', { class: 'muted' }, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
     chart,
