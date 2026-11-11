@@ -8,7 +8,6 @@ import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
-import { radar } from '../radar';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
@@ -22,7 +21,6 @@ const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1
 const mo = (x: number): string => (x >= 600 ? 'больше 50 лет' : `${nfDown(x)} мес.`);
 /** Большие суммы — округлённо: «≈ 105 млн ₸», а не «около 105 410 163 ₸» (С4 аудита UX). */
 const approx = (tenge: number): string => `≈ ${fmtShort(Math.round(tenge * 100) as never)}`;
-const SHORT = { N: 'Сейчас', V: 'Динамика', F: 'Будущее' } as const;
 
 function months(m: number | null): string {
   if (m === null) return 'не определить';
@@ -61,7 +59,7 @@ function trustLine(v: PositionView): HTMLElement | null {
   return null;
 }
 
-function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
+function levelCard(v: PositionView): HTMLElement {
   const isL5 = v.basis === 'independence';
   const lines: (HTMLElement | null)[] = [];
   if (v.range && v.rangeLevels) {
@@ -83,15 +81,15 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     isL5 ? h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.') : null,
     ...lines,
   ].filter(Boolean) as HTMLElement[];
-  const caption = isL5 ? null : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'pos-caption' }, `Общая оценка ${Math.round(v.g)} из 100`) : null;
+  const caption = isL5 ? null : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'pos-caption' }, `Общая оценка ${Math.round(v.g)} из 100. Чёрта на полосе — порог 60: каждое направление должно её достичь для ступени «${LEVEL_NAMES[4]}».`) : null;
   return h(
     'div',
     { class: 'card stack pos-level-card' },
     h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, info('levels'), v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null,
-    // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
-    chart,
+    // главное на экране: три направления с порогом — в одной карточке со ступенью, сразу под названием
+    directionsBlock(v),
     caption,
     ...key,
     trustLine(v),
@@ -163,17 +161,6 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   );
 }
 
-function radarBlock(v: PositionView): HTMLElement {
-  const [n, vv, f] = v.directions;
-  const desc = v.directions.map((d) => `${d.name}: ${d.score === null ? 'оценить нечем' : Math.round(d.score)}`).join('; ');
-  return h(
-    'div',
-    { class: 'pos-radar' },
-    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
-    h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
-  );
-}
-
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
 const INDICATOR_HINTS: Readonly<Record<string, string>> = {
   N1: 'На сколько месяцев хватит денег без дохода. 100 — запас большой, 0 — почти нет.',
@@ -190,20 +177,30 @@ const INDICATOR_HINTS: Readonly<Record<string, string>> = {
   F4: 'Сколько удастся откладывать в будущем по прогнозу.',
 };
 
+/** Порог направления для ступени «Защищён от ударов» (форма Г, D166): только для подписи на полосе, расчёт уровня его не использует. */
+const DIRECTION_BAR_THRESHOLD = 60;
+
+/**
+ * Три направления — три подписанные полосы вместо радара (аудит UX: треугольник из трёх чисел без легенды не читался).
+ * У каждой: название, «N из 100», полоса с чертой порога 60 и вердикт словами; показатели раскрываются.
+ */
 function directionsBlock(v: PositionView): HTMLElement {
   return h(
     'div',
-    { class: 'stack' },
-    rows(
-      ...v.directions.map((d) =>
-        h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
-          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
-            // полоска с чертой порога 60 (форма Г, D166)
-            d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
-          h('p', { class: 'muted' }, d.question),
-          rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
-      ),
-    ),
+    { class: 'dirs', 'aria-label': 'Три направления профиля' },
+    ...v.directions.map((d) => {
+      const s = d.score;
+      const gap = s === null ? null : Math.round(DIRECTION_BAR_THRESHOLD - s);
+      const verdict = s === null ? 'оценить пока нечем' : gap! <= 0 ? '✓ порог 60 достигнут' : `до порога 60 не хватает ${gap}`;
+      return h('details', { class: `fold row-fold dir ${s === null ? 'dir-na' : gap! <= 0 ? 'dir-ok' : 'dir-low'}`, 'data-key': `position:${d.id}` },
+        h('summary', null,
+          h('span', { class: 'rf-title' }, d.name),
+          h('span', { class: 'rf-val' }, s === null ? 'мало данных' : `${Math.round(s)} из 100${d.reliable ? '' : ' · данных мало'}`),
+          s === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, s))}%` }), h('span', { class: 'dtick' })),
+          h('span', { class: 'dir-verdict' }, verdict)),
+        h('p', { class: 'muted' }, d.question),
+        rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false }))));
+    }),
   );
 }
 
@@ -338,7 +335,7 @@ export function renderPosition(): HTMLElement {
     );
     return root;
   }
-  root.append(levelCard(v, radarBlock(v)));
+  root.append(levelCard(v));
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
   const path = pathBlock(v);
@@ -346,7 +343,6 @@ export function renderPosition(): HTMLElement {
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));
-  root.append(directionsBlock(v));
   const wk = weakBlock(v, path !== null);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));

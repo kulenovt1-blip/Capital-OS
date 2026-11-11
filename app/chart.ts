@@ -133,7 +133,7 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
   hi = Math.max(hi, ticks[ticks.length - 1]!);
   // слева место под самую длинную подпись оси, справа — под «Лучше»
   const longest = Math.max(...ticks.map((t) => compact(t).length));
-  const pad = { l: 14 + longest * 7, r: 52, t: 22, b: 28 };
+  const pad = { l: 14 + longest * 7, r: narrow ? 92 : 104, t: 22, b: 28 };
   const n = months.length;
   const x = (i: number) => pad.l + (i * (W - pad.l - pad.r)) / Math.max(1, n - 1);
   const y = (v: number) => pad.t + ((hi - v) * (H - pad.t - pad.b)) / (hi - lo);
@@ -172,7 +172,7 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
   // сценарий, совпавший с базой по всем месяцам, отдельно не подписывается и не показывается в подсказке (D93)
   const betterSame = better.every((v, i) => v === base[i]);
   const worseSame = worse.every((v, i) => v === base[i]);
-  const labels = [betterSame ? null : { y: end(better), t: 'Лучше' }, { y: yb, t: 'Так же' }, worseSame ? null : { y: end(worse), t: 'Хуже' }]
+  const labels = [betterSame ? null : { y: end(better), t: `Лучше ${compact(better[n - 1] ?? 0)}` }, { y: yb, t: `Так же ${compact(base[n - 1] ?? 0)}` }, worseSame ? null : { y: end(worse), t: `Хуже ${compact(worse[n - 1] ?? 0)}` }]
     .filter((l): l is { y: number; t: string } => l !== null)
     .sort((a, b) => a.y - b.y);
   for (let i = 1; i < labels.length; i++) if (labels[i]!.y - labels[i - 1]!.y < 14) labels[i]!.y = labels[i - 1]!.y + 14;
@@ -218,49 +218,57 @@ export function bandChart(months: MonthKey[], base: Money[], worse: Money[], bet
 }
 
 /**
- * График запаса: деньги сразу (линия) против порогов «3 месяца» и «6 месяцев» необходимых расходов (пунктир).
- * Ось от нуля, без сглаживания; смысл — видно, когда линия пересекает порог, то есть когда меняется ступень по запасу.
+ * График запаса в месяцах: «на сколько месяцев хватит денег без дохода» по прогнозу (аудит UX: деньги с пунктирами «3 мес./6 мес.» не читались).
+ * Фоном — три зоны (меньше 3 мес., 3–6, от 6) с подписью под графиком; линия начинается с «сейчас», на концах подписаны значения.
  */
-export function reserveChart(months: MonthKey[], money: Money[], need: Money[], title: string, width = 640): HTMLElement {
+export function reserveChart(months: MonthKey[], now: number, reserve: number[], title: string, width = 640): HTMLElement {
   const W = Math.max(280, Math.min(720, Math.round(width)));
-  const narrow = W < 480;
-  const H = narrow ? 150 : 190;
-  const t3 = need.map((v) => v * 3);
-  const t6 = need.map((v) => v * 6);
-  const hi0 = Math.max(...money, ...t3, 100);
-  const ticks = niceTicks(0, hi0);
-  const hi = Math.max(hi0, ticks[ticks.length - 1]!);
-  const longest = Math.max(...ticks.map((t) => compact(t).length));
-  const pad = { l: 14 + longest * 7, r: 56, t: 14, b: 26 };
-  const n = months.length;
+  const H = W < 480 ? 190 : 230;
+  const vals = [now, ...reserve];
+  const top = Math.max(7, Math.ceil(Math.max(...vals) / 3) * 3);
+  const step = top > 24 ? 12 : top > 12 ? 6 : 3;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  const pad = { l: 34, r: 56, t: 22, b: 26 };
+  const n = vals.length;
   const x = (i: number) => pad.l + (i * (W - pad.l - pad.r)) / Math.max(1, n - 1);
-  const y = (v: number) => pad.t + ((hi - v) * (H - pad.t - pad.b)) / hi;
-  const path = (a: number[]) => a.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  const y = (v: number) => pad.t + ((top - v) * (H - pad.t - pad.b)) / top;
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': title });
-  for (const t of ticks) {
-    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(t), y2: y(t), class: t === 0 ? 'zero' : 'grid' }));
-    const lab = s('text', { x: pad.l - 6, y: y(t) + 4, 'text-anchor': 'end', class: 'axis' });
-    lab.textContent = compact(t);
+  const zone = (from: number, to: number, cls: string) => svg.append(s('rect', { x: pad.l, y: y(Math.min(to, top)), width: W - pad.l - pad.r, height: Math.max(0, y(from) - y(Math.min(to, top))), class: cls }));
+  zone(0, 3, 'rc-z-low');
+  zone(3, 6, 'rc-z-mid');
+  if (top > 6) zone(6, top, 'rc-z-ok');
+  for (const tk of ticks) {
+    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(tk), y2: y(tk), class: tk === 0 ? 'zero' : 'grid' }));
+    const lab = s('text', { x: pad.l - 6, y: y(tk) + 4, 'text-anchor': 'end', class: 'axis' });
+    lab.textContent = String(tk);
     svg.append(lab);
   }
+  const unit = s('text', { x: pad.l - 6, y: 12, 'text-anchor': 'end', class: 'axis' });
+  unit.textContent = 'мес.';
+  svg.append(unit);
+  const labels: [number, string][] = [[0, 'сейчас']];
   const every = Math.max(1, Math.ceil((76 * (n - 1)) / Math.max(1, W - pad.l - pad.r)));
-  months.forEach((m, i) => {
-    if (i % every !== 0 && i !== n - 1) return;
-    if (i === n - 1 && i % every !== 0 && i - Math.floor(i / every) * every < every * 0.9) return;
-    const lab = s('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', class: 'axis' });
-    lab.textContent = formatMonthRu(m);
+  for (let i = every; i < n; i += every) labels.push([i, formatMonthRu(months[i - 1]!)]);
+  for (const [i, txt] of labels) {
+    const lab = s('text', { x: x(i), y: H - 8, 'text-anchor': i === 0 ? 'start' : 'middle', class: 'axis' });
+    lab.textContent = txt;
     svg.append(lab);
-  });
-  const show6 = Math.max(...t6) <= hi * 1.0001;
-  svg.append(s('path', { d: path(t3), class: 'rc-t3' }));
-  if (show6) svg.append(s('path', { d: path(t6), class: 'rc-t6' }));
-  svg.append(s('path', { d: path(money), class: 'line s1' }));
-  const lab = (txt: string, yy: number) => {
-    const t = s('text', { x: W - pad.r + 4, y: yy + 4, class: 'end-label' });
+  }
+  svg.append(s('path', { d: vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(''), class: 'line s1' }));
+  const f = (v: number) => v.toFixed(1).replace('.', ',');
+  const point = (i: number, txt: string, anchor: 'start' | 'end') => {
+    svg.append(s('circle', { cx: x(i), cy: y(vals[i]!), r: 4, class: 'rc-dot' }));
+    const t = s('text', { x: anchor === 'start' ? x(i) + 2 : x(i) + 8, y: y(vals[i]!) + (anchor === 'start' ? 20 : -10), 'text-anchor': 'start', class: 'end-label' });
     t.textContent = txt;
     svg.append(t);
   };
-  lab('3 мес.', y(t3[n - 1]!));
-  if (show6) lab('6 мес.', y(t6[n - 1]!));
-  return h('div', { class: 'chart-wrap' }, svg as unknown as HTMLElement);
+  point(0, `${f(vals[0]!)} мес.`, 'start');
+  point(n - 1, `${f(vals[n - 1]!)}`, 'end');
+  const legend = h('div', { class: 'rc-legend' },
+    h('span', null, h('i', { class: 'rc-sw rc-z-low' }), 'меньше 3 мес. — тонко'),
+    h('span', null, h('i', { class: 'rc-sw rc-z-mid' }), '3–6 — есть подушка'),
+    top > 6 ? h('span', null, h('i', { class: 'rc-sw rc-z-ok' }), 'от 6 — защищён') : null,
+  );
+  return h('div', { class: 'chart-wrap' }, svg as unknown as HTMLElement, legend);
 }
