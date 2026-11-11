@@ -83,7 +83,7 @@ export function futureSummary(t: FutureTrack): { headline: string; detail: strin
 export const unknownNote = (plans: number): string =>
   plans > 0
     ? `Учтено планов: ${plans}. Не учтено: перемены, которых ты не вводил.`
-    : 'Планов нет: «если всё как сейчас». Переезд и смену работы приложение не знает — добавь в «Планирую…».';
+    : 'Планов нет: «если всё как сейчас». Переезд или смену работы добавь в «Планирую…» ниже.';
 
 export const plansCount = (): number => (getState().settings.plannedEvents ?? []).length;
 
