@@ -124,7 +124,7 @@ const readSpendable = async () => {
   await page.getByRole('radio', { name: 'После даты' }).click();
   await page.locator('#manual-form input[type=date]').nth(1).fill('2028-01-01');
   await page.locator('#manual-form input[type=date]').nth(1).dispatchEvent('change');
-  await page.getByRole('radio', { name: 'Жильё / заблокировано' }).click();
+  await page.getByRole('radio', { name: 'Жильё, машина, закрытое' }).click();
   await submit('manual-form');
   const dialog = page.locator('[role=dialog]');
   check('B1. после добавления жилья спрашивают про кредит', (await dialog.count()) === 1 && /кредит или ипотека/i.test((await dialog.textContent()) ?? ''));
@@ -154,7 +154,7 @@ const readSpendable = async () => {
   await open('#/accounts~manual/new');
   await page.locator('#manual-form input[name=title]').fill('Гараж');
   await page.locator('#manual-form input[name=balance]').fill('5000000');
-  await page.getByRole('radio', { name: 'Жильё / заблокировано' }).click();
+  await page.getByRole('radio', { name: 'Жильё, машина, закрытое' }).click();
   await submit('manual-form');
   if ((await page.locator('[role=dialog]').count()) === 1) await page.getByRole('button', { name: 'Нет', exact: true }).click();
   await open('#/position');
@@ -190,7 +190,7 @@ const readSpendable = async () => {
   const t = await body();
   check('D1. при блокировке на годы предлагают «жильё / заблокировано»', /Это жильё или заблокированные деньги\?/.test(t));
   await page.getByRole('button', { name: 'Да, жильё / заблокировано' }).click();
-  const on = await page.getByRole('radio', { name: 'Жильё / заблокировано' }).getAttribute('aria-checked');
+  const on = await page.getByRole('radio', { name: 'Жильё, машина, закрытое' }).getAttribute('aria-checked');
   check('D2. «Да» переключает вид на «Жильё / заблокировано»', on === 'true');
 }
 

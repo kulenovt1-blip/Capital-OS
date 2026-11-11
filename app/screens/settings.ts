@@ -109,8 +109,9 @@ export function renderAccounts(section?: string): HTMLElement {
       href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId),
       mark: bad.has(p.accountId),
     });
-  const spend = group('spend');
-  const savings = group('savings');
+  const locked = counted.filter((p) => p.nonInvestable);
+  const spend = group('spend').filter((p) => !p.nonInvestable);
+  const savings = group('savings').filter((p) => !p.nonInvestable);
   const excluded = o.capital.accounts.filter((p) => p.excluded);
   root.append(
     h('p', { class: 'one-line' }, 'Счета «для трат» — деньги на жизнь. Копилки — то, что не трогаешь: они не входят в «Можно тратить». Нажми на счёт, чтобы переключить.'),
@@ -119,6 +120,8 @@ export function renderAccounts(section?: string): HTMLElement {
     sub(`Копилки · ${fmt(total(savings) as never)}`),
     savings.length ? rows(savings.map(line)) : h('p', { class: 'muted' }, 'Копилок нет. Открой счёт и включи «Копилка».'),
   );
+  // жильё и закрытые активы — отдельно: это не деньги на жизнь, в «Для трат» им не место
+  if (locked.length) root.append(sub(`Жильё и закрытые активы · ${fmt(total(locked) as never)}`), rows(locked.map(line)));
   if (excluded.length) root.append(sub('Не учитываются'), rows(excluded.map((p) => row({ title: p.title, sub: 'технический счёт', value: h('span', { class: 'muted' }, fmt(p.balance)), href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId) }))));
   const hasSavings = o.capital.accounts.some((p) => p.source === 'savings_flow') || st.settings.savingsFlows.mode !== 'estimate';
   // актив, которого нет в MoneyManager, добавляется отсюда, на виду (D138): жильё, машина, вклад в другом банке, деньги у родителей
@@ -903,7 +906,7 @@ function manualAccounts(st: AppState): HTMLElement {
     { class: 'stack' },
     gray('Жильё, машина, депозит в другом банке, деньги у родителей — то, чего нет в MoneyManager. Задаётся остатком на дату.'),
     st.manualAccounts.length
-      ? rows(st.manualAccounts.map((m) => row({ title: m.title, sub: `${assetChoiceOf(m) === 'locked' ? 'жильё / заблокировано · ' : ''}на ${fmtDate(m.balanceDate)} · снять ${liqLabel(m.liquidity)}${m.deposit ? ` · ${(m.deposit.rateBp / 100).toLocaleString('ru-RU')} % годовых` : ''}`, value: fmt(m.balance), href: sheetHref('manual', m.id) })))
+      ? rows(st.manualAccounts.map((m) => row({ title: m.title, sub: assetChoiceOf(m) === 'locked' ? 'жильё / закрытое — не деньги' : `на ${fmtDate(m.balanceDate)} · снять ${liqLabel(m.liquidity)}${m.deposit ? ` · ${(m.deposit.rateBp / 100).toLocaleString('ru-RU')} % годовых` : ''}`, value: fmt(m.balance), href: sheetHref('manual', m.id) })))
       : null,
     h('a', { class: 'btn wide', href: sheetHref('manual', 'new') }, '＋ Актив'),
   );
@@ -914,51 +917,77 @@ defineSheet('manual', (id) => {
   const m = id === 'new' ? null : st.manualAccounts.find((x) => x.id === id);
   if (id !== 'new' && !m) return null;
   let liq: Liquidity = m?.liquidity ?? { kind: 'instant' };
-  // вопрос о виде — один и с двумя ответами; не отвечал — «деньги» (D138). Если снять нельзя дольше месяца — предлагаем «жильё / заблокировано».
+  // первый вопрос — что это: от ответа зависит, какие поля нужны. Деньги: остаток, дата, когда снять, проценты. Жильё и закрытое: только стоимость и кредит на нём.
   let choice: AssetChoice = m ? assetChoiceOf(m) : 'money';
   let loanId: string | undefined = m?.loanId;
   const loanOptions = st.obligations.filter((o) => o.kind !== 'recurring');
-  const assetBox = h('div', { class: 'stack' });
-  const drawAsset = () =>
-    assetBox.replaceChildren(
-      h('span', { class: 'field-label' }, 'Что это', info('assetKind')),
-      seg([['money', 'Деньги'], ['locked', 'Жильё / заблокировано']] as const, choice, (v) => ((choice = v), drawAsset()), 'Что это за актив'),
-      ...(suggestLockedAsset({ liquidity: liq, assetKind: choice === 'locked' ? 'non_investable' : undefined }, today())
-        ? [h('div', { class: 'warnline' }, 'Снять можно не раньше чем через месяц. Это жильё или заблокированные деньги? ', h('button', { class: 'btn link', type: 'button', onclick: () => ((choice = 'locked'), drawAsset()) }, 'Да, жильё / заблокировано'))]
-        : []),
-      ...(choice === 'locked' && loanOptions.length
-        ? [
-            h('span', { class: 'field-label' }, 'Кредит или ипотека на это'),
-            h('select', { name: 'loan', onchange: (e: Event) => { loanId = (e.target as HTMLSelectElement).value || undefined; } },
-              h('option', { value: '', selected: !loanId }, 'нет или не связывать'),
-              ...loanOptions.map((o) => h('option', { value: o.id, selected: o.id === loanId }, o.title))),
-            h('p', { class: 'muted' }, 'Тогда на Профиле покажу твою долю: стоимость минус остаток кредита.'),
-          ]
+  const balanceLabel = h('span', null, 'Остаток, ₸');
+  const moneyOnly = h('div', { class: 'stack' });
+  const lockedOnly = h('div', { class: 'stack' });
+  const warnBox = h('div');
+  const drawWarn = () =>
+    warnBox.replaceChildren(
+      ...(choice === 'money' && suggestLockedAsset({ liquidity: liq }, today())
+        ? [h('div', { class: 'warnline' }, 'Снять можно не раньше чем через месяц. Это жильё или заблокированные деньги? ', h('button', { class: 'btn link', type: 'button', onclick: () => setChoice('locked') }, 'Да, жильё / заблокировано'))]
         : []),
     );
-  drawAsset();
-  const err = h('div');
-  const form = h(
-    'form',
-    { class: 'stack', id: 'manual-form' },
-    field('Название', h('input', { name: 'title', required: true, value: m?.title ?? '', placeholder: 'Депозит в другом банке', autocomplete: 'off' })),
-    h('div', { class: 'grid-form' }, field('Остаток, ₸', moneyInput('balance', m?.balance)), field('Остаток на дату', h('input', { name: 'date', type: 'date', value: m?.balanceDate ?? today() }), 'на какой день назван остаток слева')),
-    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Когда можно снять'), liquidityPicker(liq, (l) => ((liq = l), drawAsset()))),
-    assetBox,
+  const segBox = h('div', { class: 'stack' });
+  const sync = () => {
+    balanceLabel.textContent = choice === 'locked' ? 'Стоимость, ₸' : 'Остаток, ₸';
+    moneyOnly.hidden = choice === 'locked';
+    lockedOnly.hidden = choice !== 'locked';
+    drawWarn();
+  };
+  const drawSeg = () =>
+    segBox.replaceChildren(
+      h('span', { class: 'field-label' }, 'Что это', info('assetKind')),
+      seg([['money', 'Деньги'], ['locked', 'Жильё, машина, закрытое']] as const, choice, (v) => setChoice(v), 'Что это за актив'),
+    );
+  function setChoice(v: AssetChoice): void {
+    choice = v;
+    drawSeg();
+    sync();
+  }
+  drawSeg();
+  moneyOnly.append(
+    field('Остаток на дату', h('input', { name: 'date', type: 'date', value: m?.balanceDate ?? today() }), 'на какой день назван остаток'),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Когда можно снять'), liquidityPicker(liq, (l) => ((liq = l), drawWarn()))),
+    warnBox,
     h(
       'details',
       { class: 'fold', 'data-key': 'manual:more' },
-      h('summary', null, 'Проценты и комментарий'),
+      h('summary', null, 'Проценты'),
       h(
         'div',
         { class: 'stack' },
         field('Ставка, % годовых', h('input', { name: 'rate', inputmode: 'decimal', value: m?.deposit ? String(m.deposit.rateBp / 100).replace('.', ',') : '', placeholder: 'пусто — без процентов' })),
         field('Проценты начисляются', h('select', { name: 'cap' }, h('option', { value: 'monthly', selected: m?.deposit?.capitalization !== 'daily' }, 'раз в месяц'), h('option', { value: 'daily', selected: m?.deposit?.capitalization === 'daily' }, 'каждый день'))),
-        field('Комментарий', h('input', { name: 'comment', value: m?.comment ?? '', autocomplete: 'off' })),
       ),
     ),
+  );
+  lockedOnly.append(
+    loanOptions.length
+      ? h('div', { class: 'field' },
+          h('span', { class: 'field-label' }, 'Кредит или ипотека на это'),
+          h('select', { name: 'loan', onchange: (e: Event) => { loanId = (e.target as HTMLSelectElement).value || undefined; } },
+            h('option', { value: '', selected: !loanId }, 'нет или не связывать'),
+            ...loanOptions.map((o) => h('option', { value: o.id, selected: o.id === loanId }, o.title))),
+          h('p', { class: 'muted' }, 'Тогда на Профиле будет твоя доля: стоимость минус остаток кредита.'))
+      : h('p', { class: 'muted' }, 'Если на этом есть ипотека или кредит, заведи его в «Долги и рассрочки», потом открой этот актив и выбери кредит.'),
+  );
+  const err = h('div');
+  const form = h(
+    'form',
+    { class: 'stack', id: 'manual-form' },
+    segBox,
+    field('Название', h('input', { name: 'title', required: true, value: m?.title ?? '', placeholder: 'Квартира, машина, депозит в другом банке', autocomplete: 'off' })),
+    field(balanceLabel, moneyInput('balance', m?.balance)),
+    moneyOnly,
+    lockedOnly,
+    field('Комментарий', h('input', { name: 'comment', value: m?.comment ?? '', autocomplete: 'off' })),
     err,
   );
+  sync();
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const errs: string[] = [];
@@ -981,17 +1010,17 @@ defineSheet('manual', (id) => {
       id: m?.id ?? newId('man'),
       title,
       balance: balance!,
-      balanceDate: readStr(form, 'date') || today(),
-      liquidity: liq,
+      balanceDate: choice === 'locked' ? today() : readStr(form, 'date') || today(),
+      liquidity: choice === 'locked' ? ({ kind: 'instant' } as Liquidity) : liq,
       comment: readStr(form, 'comment'),
       ...(choice === 'locked' && loanId && loanOptions.some((o) => o.id === loanId) ? { loanId } : {}),
-      ...(rateBp !== null ? { deposit: { rateBp, capitalization: readStr(form, 'cap') as 'monthly' | 'daily' } } : {}),
+      ...(choice === 'money' && rateBp !== null ? { deposit: { rateBp, capitalization: readStr(form, 'cap') as 'monthly' | 'daily' } } : {}),
     }, choice);
     closeSheet();
     await act((s) => ({ ...s, manualAccounts: m ? s.manualAccounts.map((x) => (x.id === m.id ? acc : x)) : [...s.manualAccounts, acc] }), m ? 'Актив сохранён' : 'Актив добавлен');
     // жильё или машина: один раз спрашиваем про кредит или ипотеку (долги заводятся отдельно; связать кредит с активом можно потом в карточке актива)
     if (shouldAskAboutLoan(m ?? null, acc)) {
-      const i = await ask({ title: 'Есть кредит или ипотека на это?', text: 'Если да — заведи его в «Долги и рассрочки»: платежи и остаток войдут в расчёт. Спрашиваю один раз.', actions: [{ label: 'Да, завести долг' }], cancel: 'Нет' });
+      const i = await ask({ title: 'Есть кредит или ипотека на это?', text: 'Если да — заведи его в «Долги и рассрочки». Потом открой этот актив и выбери кредит: на Профиле появится твоя доля. Спрашиваю один раз.', actions: [{ label: 'Да, завести долг' }], cancel: 'Нет' });
       if (i === 0) go('#/debts~debt-new');
     }
   });
