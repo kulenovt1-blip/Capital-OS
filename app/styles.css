@@ -632,3 +632,6 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .acc-chip.acc-low { background: var(--bad-tint); color: var(--on-bad-tint); }
 .acc-chip .chev { opacity: 1; }
 .first-run { display: block; text-decoration: none; min-height: 44px; box-sizing: border-box; }
+.pos-meaning { font-size: 17px; margin: 0; }
+.pos-caption { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+.pos-note { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--warn-tint); color: var(--on-warn-tint); }

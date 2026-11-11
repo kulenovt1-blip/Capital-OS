@@ -54,16 +54,12 @@ registerExplain('position', 'Как посчитано: «Финансовый �
 // ───────────────────────── блоки ─────────────────────────
 
 /** Одна строка о надёжности — сразу под названием ступени (К3 аудита UX): причина словами и действие, без процентов. */
-function trustLine(v: PositionView): HTMLElement {
+function trustLine(v: PositionView): HTMLElement | null {
   const f = v.directions.find((d) => d.id === 'F');
   if (!v.reconcileOk) return h('a', { class: 'pos-trust warn', href: '#/import' }, 'Уровень предварительный: баланс одного из счетов не совпал с MoneyManager · Посмотреть ›');
   if (f && f.score === null) return h('a', { class: 'pos-trust warn', href: '#/incomes' }, 'Уровень предварительный: нет расписания доходов · Указать ›');
-  if (v.preliminary || v.l4Unconfirmed) return h('div', { class: 'pos-trust warn' }, 'Уровень предварительный: данных пока мало. Он уточнится, когда накопится история.');
-  // «Данных хватает» — только если и общий индикатор доверия зелёный: иначе рядом с красной плашкой это было бы ложное спокойствие
-  if (trust().level !== 'ok') return h('a', { class: 'pos-trust warn', href: '#/import' }, 'В данных есть что проверить: подробности на экране импорта · Посмотреть ›');
-  // не «хватает», пока точность расчётов не хорошая (холодный старт: «обычно уходит» оценено по нескольким дням)
-  if (accuracyNow().level !== 'good') return h('div', { class: 'pos-trust warn' }, 'Уровень ориентировочный: он опирается на мало записей. Подробности — в «Точности расчётов» ниже.');
-  return h('div', { class: 'pos-trust' }, 'Данных хватает, чтобы этой ступени можно было верить.');
+  // про «мало данных» и «есть что проверить» говорит блок «Точность расчётов» — не дублируем
+  return null;
 }
 
 function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
@@ -77,22 +73,31 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
           : `Часть данных неизвестна: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}, то есть от «${v.rangeLevels.low}» до «${v.rangeLevels.high}».${v.range.showPoint ? ` Ориентир — ${Math.round(v.range.point)}.` : ' Точнее сказать нельзя.'}`),
     );
   }
-  if (v.onBorder.length) lines.push(h('p', { class: 'muted' }, 'Ты на границе уровней: небольшое изменение сдвинет уровень.'));
-  if (v.l4Unconfirmed) lines.push(h('p', { class: 'muted' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показан уровень ниже. Данные накопятся — уровень подтвердится.`));
-  if (v.held) lines.push(h('p', { class: 'muted' }, `${v.held}.`));
+  // важное про сам уровень — на виду (одной строкой каждое), остальное свёрнуто
+  const key: HTMLElement[] = [];
+  if (v.onBorder.length) key.push(h('p', { class: 'pos-note' }, 'Ты на границе уровней: небольшое изменение сдвинет уровень.'));
+  if (v.l4Unconfirmed) key.push(h('p', { class: 'pos-note' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показан уровень ниже. Данные накопятся — уровень подтвердится.`));
+  if (v.held) key.push(h('p', { class: 'pos-note' }, `${v.held}.`));
+  // внимание: ступень → картинка → оценка надёжности; всё остальное — одной свёрнутой строкой (аудит UX: не стена текста)
+  const more: (HTMLElement | null)[] = [
+    v.level === 4 ? h('p', null, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
+    isL5 ? h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.') : null,
+    ...lines,
+  ].filter(Boolean) as HTMLElement[];
+  const caption = isL5 ? null : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'pos-caption' }, `Общая оценка ${Math.round(v.g)} из 100`) : null;
   return h(
     'div',
     { class: 'card stack pos-level-card' },
     h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, info('levels'), v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
-    v.levelMeaning ? h('p', null, `${meaningOf(v)}.`) : null,
-    trustLine(v),
-    accuracyBlock(),
-    v.level === 4 ? h('p', { class: 'muted' }, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
+    v.levelMeaning ? h('p', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
     chart,
-    isL5 ? h('p', { class: 'muted' }, `Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.`) : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'muted' }, `Общая оценка ${Math.round(v.g)} из 100`) : null,
-    ...lines,
+    caption,
+    ...key,
+    trustLine(v),
+    accuracyBlock(),
+    more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про этот уровень'), h('div', { class: 'stack' }, ...more)) : null,
     ladderFold(v),
   );
 }
