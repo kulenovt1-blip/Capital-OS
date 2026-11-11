@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, test } from 'vitest';
 import { dataAccuracy, essentialMarkupMissing, setupSteps, buildOverview } from '../../engine/index';
 import { STATES } from '../../scripts/ui-states';
 
