@@ -21,7 +21,7 @@ import { computeRunway, type Runway } from './runway';
 import { spiralSigns, type SpiralSigns } from './spiral';
 import { confidenceOf, isPreliminary } from './confidence';
 import { INDEPENDENCE_TEXTS, L5_NAME, desiredScenarioOf, independenceOfState, levelWithIndependence, type DesiredScenario, type IndependenceResult } from './independence';
-import { essentialMarkupMissing } from './inputs';
+import { assetChoiceOf, essentialMarkupMissing } from './inputs';
 
 export const DIRECTION_NAMES: Readonly<Record<Direction, string>> = { N: 'Здесь и сейчас', V: 'Динамика', F: 'Безопасность будущего' };
 export const DIRECTION_QUESTIONS: Readonly<Record<Direction, string>> = { N: 'Каково положение сегодня?', V: 'Как оно менялось за полгода?', F: 'Переживёшь ли ты, если доход упадёт или пропадёт?' };
@@ -112,6 +112,8 @@ export interface PositionView {
   /** Только при L4. */
   l4Warnings: L4Warning[];
   /** Две цифры и строка про срок: «Всего капитал» и «Деньги, которые можно потратить» (D138). */
+  /** Жильё и закрытые активы: стоимость, остаток привязанных кредитов и доля владения (стоимость − остаток); null — таких активов нет. На ступень не влияет. */
+  housing: { assets: number; debt: number; equity: number; items: number; linked: number } | null;
   money: { total: number; spendable: number; instant: number; blockedShare: number; reserveEssentialMonths: number; reserveLifestyleMonths: number };
   runway: Runway;
   spiral: SpiralSigns;
@@ -142,6 +144,16 @@ function hasMismatch(overview: Overview): boolean {
   return overview.reconcile?.accounts.some((a) => a.status === 'mismatch' && !excluded.has(a.accountId)) ?? false;
 }
 
+function housingOf(state: AppState, overview: Overview): PositionView['housing'] {
+  const locked = state.manualAccounts.filter((a) => assetChoiceOf(a) === 'locked');
+  if (!locked.length) return null;
+  const assets = locked.reduce((s, a) => s + a.balance, 0) / 100;
+  const ids = new Set(locked.map((a) => a.loanId).filter((x): x is string => !!x));
+  const linked = overview.obligations.filter((o) => ids.has(o.obligation.id));
+  const debt = linked.reduce((s, o) => s + o.remainingNow, 0) / 100;
+  return { assets, debt, equity: assets - debt, items: locked.length, linked: linked.length };
+}
+
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const series = buildPositionSeries(state, today);
   const overview = buildOverview(state, today);
@@ -153,7 +165,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   if (!series.hasData || !report || overview.capital.unrated.length) {
     return {
       status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !hasMismatch(overview), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
-      onBorder: [], l4Unconfirmed: false, l4Warnings: [], money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
+      onBorder: [], l4Unconfirmed: false, l4Warnings: [], housing: null, money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
       independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
     };
@@ -205,6 +217,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
+    housing: housingOf(state, overview),
     money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
     confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || hasMismatch(overview),
