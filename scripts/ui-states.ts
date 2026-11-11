@@ -110,7 +110,7 @@ export const SCREENS: [string, string][] = [
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
   ['position', '#/position'], ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'], ['you', '#/prefs~you'],
-  ['debt-new', '#/debts~debt-new'], ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
+  ['debt-new', '#/debts~debt-new'], ['debt-edit', '#/debts~debt/ob-tag:телефон'], ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],
   ['reserve-info', '#/overview~reserve-info'], ['save-where', '#/forecast~save-where'], ['save-cat', '#/forecast~save-cat/cat-food'], ['a-to-b', '#/forecast~a-to-b'], ['to-date', '#/forecast~to-date'], ['cushion-fill', '#/goals~cushion-fill'],

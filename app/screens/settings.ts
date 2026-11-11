@@ -5,10 +5,10 @@
  */
 import {
   DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_PATTERN_LABELS, accountsNeedingReview, classRegistry, createIncomeKind, deleteIncomeKind,
-  emptyState, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, makeInstallment, makeRecurring, renameObligation, OBLIGATION_TITLE_MAX, parseState, remainingFromLastDate, remainingFromTerm,
+  emptyState, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, makeInstallment, makeRecurring, reviseObligation, OBLIGATION_TITLE_MAX, parseState, remainingFromLastDate, remainingFromTerm,
   serializeState, suggestionToObligation, tenge, updateIncomeKind, validateAdjustment, validateClassification, validateIncomeItem, validateObligation,
   type AccountSettings, type AppState, type CategoryRule, type IncomeKind, type IncomeKindDef, type IncomePattern, type InstallmentSuggestion, type Liquidity, type ManualAccount,
-  type Obligation, type Overview, type RemainingResult, type StrategyId,
+  type Money, type Obligation, type Overview, type RemainingResult, type StrategyId,
   assetChoiceOf, incomeOriginChoice, positionInputErrors, setIncomeOrigin, setIncomeStatus, shouldAskAboutLoan, suggestLockedAsset, withAssetChoice, withPositionInput,
   type AssetChoice, type IncomeOrigin, type IncomeStatus,
 } from '../../engine/index';
@@ -543,38 +543,72 @@ defineSheet('debt', (id) => {
     await act((s) => ({ ...s, obligations: s.obligations.filter((x) => x.id !== id) }), `«${ob.title}» удалена`);
   };
   const up = status?.effectiveUpcoming ?? [];
-  const nameErr = h('div');
-  const nameForm = h(
+  const isRec = ob.kind === 'recurring';
+  const curRemaining = status?.remainingNow ?? ob.remaining;
+  const curPayment = ob.schedule[0]?.amount ?? (0 as Money);
+  const curFirst = status?.nextDue?.date ?? up[0]?.date ?? ob.schedule[0]?.date ?? today();
+  const curMonths = Math.max(1, isRec ? up.length || ob.schedule.length : 1);
+  const err = h('div');
+  const form = h(
     'form',
-    { class: 'stack', id: 'debt-name-form' },
+    { class: 'stack', id: 'debt-edit-form' },
+    h('p', { class: 'muted' }, `${OB_KIND[ob.kind].charAt(0).toUpperCase()}${OB_KIND[ob.kind].slice(1)}${ob.owner === 'family' ? ', семейная' : ''}. Менять остаток и платёж можно: график пересчитается от сегодня.`),
     field('Название', h('input', { name: 'title', value: ob.title, maxlength: OBLIGATION_TITLE_MAX, autocomplete: 'off' })),
-    nameErr,
-    h('button', { class: 'btn wide', type: 'submit' }, 'Переименовать'),
+    isRec ? null : field('Сейчас осталось выплатить, ₸', moneyInput('remaining', curRemaining)),
+    h('div', { class: 'grid-form' }, field('Платёж в месяц, ₸', moneyInput('payment', curPayment)), field('Ближайший платёж', h('input', { name: 'first', type: 'date', value: curFirst }))),
+    isRec ? field('Сколько месяцев ещё', h('input', { name: 'months', type: 'number', min: 1, value: curMonths, inputmode: 'numeric' })) : null,
+    h(
+      'details',
+      { class: 'fold', 'data-key': 'debt-edit:more' },
+      h('summary', null, 'Подробнее · чья, как найти платежи'),
+      h(
+        'div',
+        { class: 'stack' },
+        field('Чья', h('select', { name: 'owner' }, h('option', { value: 'self', selected: ob.owner === 'self' }, 'моя'), h('option', { value: 'family', selected: ob.owner === 'family' }, 'семейная'))),
+        field('Платежи в MoneyManager с тегом', h('input', { name: 'tag', value: ob.match?.tags?.[0] ?? '', autocomplete: 'off' }), 'по нему платежи находятся сами'),
+        field('…или с текстом в комментарии', h('input', { name: 'comment', value: ob.match?.commentContains ?? '', autocomplete: 'off' })),
+      ),
+    ),
+    err,
   );
-  nameForm.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const r = renameObligation(ob, readStr(nameForm, 'title'));
-    nameErr.replaceChildren(r.ok ? '' : (errorsBox([r.error]) ?? ''));
-    if (!r.ok) return;
+    const errs: string[] = [];
+    const title = readStr(form, 'title').trim();
+    if (!title) errs.push('Нужно название');
+    if (title.length > OBLIGATION_TITLE_MAX) errs.push(`Название не длиннее ${OBLIGATION_TITLE_MAX} знаков`);
+    const payment = readMoney(form, 'payment');
+    const remaining = isRec ? curRemaining : readMoney(form, 'remaining');
+    const first = readStr(form, 'first') || curFirst;
+    const months = isRec ? Math.max(1, Math.floor(Number(readStr(form, 'months')) || 1)) : curMonths;
+    if (payment === null || payment <= 0) errs.push('Платёж должен быть больше нуля');
+    if (!isRec && (remaining === null || remaining <= 0)) errs.push('Укажи, сколько осталось выплатить');
+    const tag = readStr(form, 'tag');
+    const comment = readStr(form, 'comment');
+    // остальные признаки привязки (например, категория) не теряются: меняются только тег и текст
+    const { tags: _t, commentContains: _c, ...keepMatch } = ob.match ?? {};
+    const merged = { ...keepMatch, ...(tag ? { tags: [tag] } : {}), ...(comment ? { commentContains: comment } : {}) };
+    const match = Object.keys(merged).length ? merged : undefined;
+    let next: Obligation | null = null;
+    if (!errs.length) {
+      const changed = payment !== curPayment || remaining !== curRemaining || first !== curFirst || months !== curMonths;
+      try {
+        next = reviseObligation(ob, { title, owner: readStr(form, 'owner') as 'self' | 'family', match, ...(changed ? { numbers: { remaining: remaining!, payment: payment!, firstDate: first, months, asOf: today() } } : {}) });
+        errs.push(...validateObligation(next));
+      } catch (er) {
+        errs.push(er instanceof Error ? er.message : String(er));
+      }
+    }
+    err.replaceChildren(errorsBox(errs) ?? '');
+    if (errs.length || !next) return;
+    const saved = next;
     closeSheet();
-    await act((s) => ({ ...s, obligations: s.obligations.map((x) => (x.id === id ? r.value : x)) }), 'Название сохранено');
+    await act((s) => ({ ...s, obligations: s.obligations.map((x) => (x.id === id ? saved : x)) }), 'Сохранено');
   });
   return {
     title: ob.title,
-    body: h(
-      'div',
-      { class: 'stack' },
-      nameForm,
-      rows(
-        row({ title: 'Что это', value: `${OB_KIND[ob.kind]}${ob.owner === 'family' ? ', семейная' : ''}` }),
-        ob.kind !== 'recurring' ? row({ title: 'Осталось', value: fmt(status?.remainingNow ?? ob.remaining) }) : null,
-        row({ title: 'Платёж', value: ob.schedule[0] ? fmt(ob.schedule[0].amount) : '—' }),
-        row({ title: 'Платежей впереди', value: String(up.length) }),
-        up.length ? row({ title: 'Последний', value: fmtDate(up[up.length - 1]!.date) }) : null,
-        ob.match?.tags?.length ? row({ title: 'Тег в MoneyManager', value: ob.match.tags.join(', ') }) : null,
-      ),
-      h('button', { class: 'btn danger wide', type: 'button', onclick: remove }, 'Удалить'),
-    ),
+    body: h('div', { class: 'stack' }, form, h('button', { class: 'btn danger wide', type: 'button', onclick: remove }, 'Удалить')),
+    bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'debt-edit-form' }, 'Сохранить')),
   };
 });
 
@@ -582,7 +616,7 @@ defineSheet('debt-new', () => {
   const st = getState();
   const tagNames = (st.imported?.tags ?? []).map((t) => t.name);
   const kind = h('select', { name: 'kind' }, h('option', { value: 'installment' }, 'Рассрочка'), h('option', { value: 'debt' }, 'Долг (нет в MoneyManager)'), h('option', { value: 'recurring' }, 'Регулярный платёж'));
-  const remField = h('div', { class: 'grid-form' }, field('Осталось выплатить, ₸', moneyInput('remaining')), field('Остаток на дату', h('input', { name: 'asOf', type: 'date', value: today() }), 'на какой день названа сумма слева; платежи после неё вычтутся сами'));
+  const remField = h('div', { class: 'grid-form' }, field('Осталось выплатить, ₸', moneyInput('remaining')));
   const monthsField = field('Сколько месяцев', h('input', { name: 'months', type: 'number', min: 1, value: 12, inputmode: 'numeric' }));
   const sync = () => {
     remField.hidden = kind.value === 'recurring';
@@ -596,7 +630,7 @@ defineSheet('debt-new', () => {
     field('Что это', kind),
     field('Название', h('input', { name: 'title', required: true, placeholder: 'Рассрочка за телефон', autocomplete: 'off' })),
     remField,
-    h('div', { class: 'grid-form' }, field('Платёж, ₸', moneyInput('payment')), field('Ближайший платёж', h('input', { name: 'first', type: 'date', value: today() }))),
+    h('div', { class: 'grid-form' }, field('Платёж в месяц, ₸', moneyInput('payment')), field('Ближайший платёж', h('input', { name: 'first', type: 'date', value: today() }))),
     monthsField,
     h(
       'details',
@@ -605,6 +639,7 @@ defineSheet('debt-new', () => {
       h(
         'div',
         { class: 'stack' },
+        field('Остаток назван на дату', h('input', { name: 'asOf', type: 'date', value: today() }), 'если сумма из старой выписки — поставь её дату; платежи после неё вычтутся сами'),
         field('Чья', h('select', { name: 'owner' }, h('option', { value: 'self' }, 'моя'), h('option', { value: 'family' }, 'семейная'))),
         field('Платежи в MoneyManager с тегом', h('input', { name: 'tag', list: 'tag-list', placeholder: 'например, телефон', autocomplete: 'off' }), 'по нему платежи находятся сами'),
         field('…или с текстом в комментарии', h('input', { name: 'comment', autocomplete: 'off' })),

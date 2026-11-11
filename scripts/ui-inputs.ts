@@ -218,18 +218,27 @@ const readSpendable = async () => {
   await open('#/debts');
   await page.locator('a[href*="~debt/"]').first().click();
   await page.waitForTimeout(400);
-  const input = page.locator('#debt-name-form input[name=title]');
+  const input = page.locator('#debt-edit-form input[name=title]');
   await input.fill('   ');
-  await page.getByRole('button', { name: 'Переименовать' }).click();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
   await page.waitForTimeout(300);
   check('F1. пустое название — ошибка, окно открыто', /Нужно название/.test((await page.locator('.error-box').first().textContent().catch(() => '')) ?? '') && (await input.count()) === 1);
   await input.fill('Мои духи');
-  await page.getByRole('button', { name: 'Переименовать' }).click();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
   await page.waitForTimeout(500);
   const after = (await stateOnDisk()).obligations.find((o) => o.id === first.id);
   check('F2. название сохранено, остальное то же', after?.title === 'Мои духи' && JSON.stringify({ ...after, title: first.title }) === JSON.stringify(first));
   await open('#/debts');
   check('F3. новое название видно в списке', /Мои духи/.test(await body()));
+  // правка чисел: остаток и платёж пересчитывают график; id остаётся
+  await page.locator('a[href*="~debt/"]').first().click();
+  await page.waitForTimeout(400);
+  await page.locator('#debt-edit-form input[name=payment]').fill('10 000');
+  await page.locator('#debt-edit-form input[name=remaining]').fill('50 000');
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await page.waitForTimeout(500);
+  const rev = (await stateOnDisk()).obligations.find((o) => o.id === first.id);
+  check('F4. остаток и платёж изменены, график пересчитан', rev?.remaining === 5_000_000 && rev.schedule.length === 5 && rev.schedule[0]?.amount === 1_000_000);
 }
 
 check('Нет ошибок страницы', pageErrors.length === 0, pageErrors.join(' | '));

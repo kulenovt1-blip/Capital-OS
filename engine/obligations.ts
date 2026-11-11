@@ -110,6 +110,25 @@ export function renameObligation(o: Obligation, title: string): { ok: true; valu
   return { ok: true, value: t === o.title ? o : { ...o, title: t } };
 }
 
+/**
+ * Правка заведённого долга, рассрочки или регулярного платежа. Без `numbers` меняются только название, «чья» и привязка к платежам (график и остаток целы).
+ * С `numbers` график строится заново: остаток, платёж и первый платёж — как ввёл человек; остаток считается на `asOf`, чтобы прошлые платежи второй раз не вычитались.
+ */
+export function reviseObligation(
+  o: Obligation,
+  p: { title: string; owner: 'self' | 'family'; match?: PaymentMatch | undefined; numbers?: { remaining: Money; payment: Money; firstDate: IsoDate; months: number; asOf: IsoDate } },
+): Obligation {
+  const match = p.match;
+  if (!p.numbers) {
+    const { match: _old, ...rest } = o;
+    return { ...rest, title: p.title, owner: p.owner, ...(match ? { match } : {}) };
+  }
+  const n = p.numbers;
+  const base = { id: o.id, title: p.title, owner: p.owner, firstDate: n.firstDate, ...(match ? { match } : {}) };
+  if (o.kind === 'recurring') return makeRecurring({ ...base, amount: n.payment, months: n.months });
+  return makeInstallment({ ...base, kind: o.kind, remaining: n.remaining, remainingAsOf: n.asOf, payment: n.payment, interestRateBp: o.interestRateBp, earlyPayoffAllowed: o.earlyPayoffAllowed });
+}
+
 export function validateObligation(o: Obligation): string[] {
   const errs: string[] = [];
   if (!o.title.trim()) errs.push('Нужно название');
