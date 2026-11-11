@@ -582,7 +582,7 @@ defineSheet('debt-new', () => {
   const st = getState();
   const tagNames = (st.imported?.tags ?? []).map((t) => t.name);
   const kind = h('select', { name: 'kind' }, h('option', { value: 'installment' }, 'Рассрочка'), h('option', { value: 'debt' }, 'Долг (нет в MoneyManager)'), h('option', { value: 'recurring' }, 'Регулярный платёж'));
-  const remField = h('div', { class: 'grid-form' }, field('Осталось выплатить, ₸', moneyInput('remaining')), field('На дату', h('input', { name: 'asOf', type: 'date', value: today() })));
+  const remField = h('div', { class: 'grid-form' }, field('Осталось выплатить, ₸', moneyInput('remaining')), field('Остаток на дату', h('input', { name: 'asOf', type: 'date', value: today() }), 'на какой день названа сумма слева; платежи после неё вычтутся сами'));
   const monthsField = field('Сколько месяцев', h('input', { name: 'months', type: 'number', min: 1, value: 12, inputmode: 'numeric' }));
   const sync = () => {
     remField.hidden = kind.value === 'recurring';
@@ -907,7 +907,7 @@ defineSheet('manual', (id) => {
     'form',
     { class: 'stack', id: 'manual-form' },
     field('Название', h('input', { name: 'title', required: true, value: m?.title ?? '', placeholder: 'Депозит в другом банке', autocomplete: 'off' })),
-    h('div', { class: 'grid-form' }, field('Остаток, ₸', moneyInput('balance', m?.balance)), field('На дату', h('input', { name: 'date', type: 'date', value: m?.balanceDate ?? today() }))),
+    h('div', { class: 'grid-form' }, field('Остаток, ₸', moneyInput('balance', m?.balance)), field('Остаток на дату', h('input', { name: 'date', type: 'date', value: m?.balanceDate ?? today() }), 'на какой день назван остаток слева')),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Когда можно снять'), liquidityPicker(liq, (l) => ((liq = l), drawAsset()))),
     assetBox,
     h(
