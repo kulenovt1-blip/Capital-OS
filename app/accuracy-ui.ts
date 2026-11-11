@@ -36,7 +36,7 @@ export function accuracyBlock(): HTMLElement | null {
       ),
     ),
   );
-  return h('section', { class: `card stack acc acc-${a.level}`, 'aria-label': `Точность расчётов: ${a.label}` }, head, h('p', { class: 'acc-meaning' }, a.meaning), why);
+  return h('section', { class: `card stack acc acc-${a.level}`, 'aria-label': `Точность расчётов: ${a.label}` }, head, a.level === 'good' ? null : h('p', { class: 'acc-meaning' }, a.meaning), why);
 }
 
 /** Одна строка для «Обзора»: только когда точность не хорошая, ведёт на «Профиль». */
