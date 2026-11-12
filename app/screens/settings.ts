@@ -830,7 +830,7 @@ export function renderBackup(): HTMLElement {
     'div',
     { class: 'screen' },
     gray(persistLine(persistStatus())),
-    gray(`Все данные лежат только в этом браузере. Бэкап — один файл с ними: скачивай раз в месяц и перед обновлением.${st.lastBackupAt ? ` Последний — ${fmtDate(st.lastBackupAt)}.` : ''}`),
+    gray(`Все данные лежат только в этом браузере. Бэкап — один файл с ними: скачивай раз в две недели и перед обновлением.${st.lastBackupAt ? ` Последний — ${fmtDate(st.lastBackupAt)}.` : ''}`),
     h(
       'div',
       { class: 'stack' },

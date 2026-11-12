@@ -30,7 +30,6 @@ export function renderMore(): HTMLElement {
   const bakRem = backupReminder(backupAge, o.hasData, persistStatus());
   const reconcileBad = o.hasData && !o.reconcile?.ok;
   const text = fontPref() === '1' ? 'крупный' : 'обычный';
-  const imp = !o.hasData ? 'данных нет' : `импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`;
   const bak = st.lastBackupAt ? `бэкап ${fmtDay(st.lastBackupAt)}` : 'бэкап не скачивался';
   const noIncome = !st.settings.incomeSchedule.length;
   const markup = o.hasData && essentialMarkupMissing(o);
@@ -48,16 +47,26 @@ export function renderMore(): HTMLElement {
     'div',
     { class: 'screen' },
     attention.length ? h('div', { class: 'stack' }, sub('Требует внимания'), rows(...attention)) : null,
-    h('a', { class: 'tile primary-tile', href: '#/income' }, h('span', { class: 'tt' }, 'Пришли деньги'), h('span', { class: 'ts' }, 'зарплата или стипендия: сколько отложить и на что')),
+    // порядок — по частоте: действия (деньги пришли, обновить данные, сохранить копию) → что хранится → приложение (замечание владельца: большая плитка «Пришли деньги» стояла в меню настроек)
+    h(
+      'div',
+      { class: 'stack' },
+      sub('Действия'),
+      rows(
+        row({ title: 'Пришли деньги', sub: 'зарплата или стипендия: сколько отложить и на что', href: '#/income' }),
+        row({ title: 'Обновить данные из MoneyManager', sub: !o.hasData ? 'данных пока нет' : `последний импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`, href: '#/import', mark: reconcileBad }),
+        row({ title: 'Сохранить копию приложения', sub: bak, href: '#/backup' }),
+      ),
+    ),
     h(
       'div',
       { class: 'stack' },
       sub('Мои данные'),
       rows(
-        row({ title: 'Данные', sub: `${imp} · ${bak}`, href: '#/data' }),
         row({ title: 'Счета', sub: !o.hasData ? 'после импорта' : nWord(accounts, 'счёт', 'счёта', 'счетов'), href: '#/accounts' }),
         row({ title: 'Доходы', sub: noIncome ? 'не заданы' : `доходов: ${st.settings.incomeSchedule.length}`, href: '#/incomes' }),
         row({ title: 'Долги и рассрочки', sub: st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', href: '#/debts' }),
+        row({ title: 'Разметка трат', sub: 'категории, раскладка, правила', href: '#/data' }),
       ),
     ),
     h(

@@ -82,7 +82,8 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     isL5 ? h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.') : null,
     ...lines,
   ].filter(Boolean) as HTMLElement[];
-  const caption = isL5 ? null : v.g !== null && (!v.range || v.range.showPoint) ? h('p', { class: 'pos-caption' }, `Общая оценка ${Math.round(v.g)} из 100`) : null;
+  // общая оценка — внутрь свёрнутого блока: на виду только ступень, смысл и полоски (аудит владельца: «много сплошного текста»)
+  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) more.unshift(h('p', null, `Общая оценка ${Math.round(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
   return h(
     'div',
     { class: 'card stack pos-level-card' },
@@ -91,7 +92,6 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     v.levelMeaning ? h('p', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null,
     // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
     chart,
-    caption,
     ...key,
     trustLine(v),
     more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про этот уровень'), h('div', { class: 'stack' }, ...more)) : null,
@@ -171,7 +171,7 @@ export function scoreWord(score: number): string {
 }
 
 function scaleNote(): HTMLElement {
-  return h('p', { class: 'one-line' }, `Чем длиннее полоска, тем лучше. Черта — 60 из 100: столько нужно на каждом из трёх направлений для уровня «${LEVEL_NAMES[4]}».`);
+  return h('p', { class: 'one-line' }, 'Оранжевая черта — порог уровня. Чем длиннее полоска, тем лучше.');
 }
 
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
@@ -224,19 +224,19 @@ function moneyBlock(v: PositionView): HTMLElement {
     { class: 'stack' },
     sub('Деньги', info('capitalTwo')),
     rows(
-      row({ title: 'Всего капитал', sub: 'всё, что у тебя есть, минус долги', value: money(m.total), chevron: false }),
+      row({ title: 'Всего капитал', sub: 'всё, что есть, минус долги', value: money(m.total), chevron: false }),
       // вторая цифра — только если она заметно отличается (жильё, вклады на срок, долги людям); иначе это тот же капитал второй раз
       Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1)
         ? row({
             title: 'Доступно в течение месяца',
             // «из капитала» только когда они меньше капитала; при долгах и рассрочках они бывают больше капитала: капитал уже уменьшен на то, что ещё предстоит выплатить
-            sub: m.spendable < m.total ? 'можно снять за 30 дней, минус платежи и обычные траты этого месяца; остальное — жильё, вклады на срок или долги людям' : 'то, что можно снять за 30 дней, минус долги людям, платежи и обычные траты этого месяца',
+            sub: m.spendable < m.total ? 'можно снять за 30 дней, после платежей и трат; остальное — жильё или вклады на срок' : 'можно снять за 30 дней, после платежей и трат; рассрочки в капитале уже вычтены, поэтому здесь больше',
             value: money(m.spendable),
             chevron: false,
           })
         : null,
       // один запас (этап 2, К4): на необходимых расходах — как в условиях ступени и на «Обзоре»
-      row({ title: 'Запас', sub: 'на сколько хватит денег без дохода, на необходимых расходах', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
+      row({ title: 'Запас', sub: 'сколько месяцев проживёшь без дохода', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
     ),
   );
 }
@@ -261,7 +261,8 @@ function runwayBlock(v: PositionView): HTMLElement | null {
   const r = v.runway;
   if (r.status === 'no_data') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), h('p', { class: 'muted' }, 'Нужно хотя бы три полных месяца истории, чтобы это посчитать.'));
   // С7 (D164): под этим заголовком — ответ на сам вопрос: на сколько месяцев хватит денег без дохода (запас из условий ступени)
-  if (r.status === 'no_deficit') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), rows(row({ title: v.money.reserveEssentialMonths >= 600 ? 'Денег хватит больше чем на 50 лет без дохода' : `Денег хватит на ${mo(v.money.reserveEssentialMonths)} без дохода`, sub: 'на необходимых расходах; сейчас ты не тратишь больше, чем получаешь', chevron: false })));
+  // то же самое уже сказано строкой «Запас» выше — второй раз не повторяем
+  if (r.status === 'no_deficit') return null;
   return h(
     'div',
     { class: 'stack' },

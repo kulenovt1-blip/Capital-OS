@@ -4,7 +4,7 @@
  * «переведи в банке» → «Перевёл в банке — подтвердить» (D105).
  * Старый экран сравнения вариантов — «Другие способы распределить».
  */
-import { arrivedIncomes, commitSetAside, splitAmount, splitIncome, type ArrivedIncome, type Money, type SimpleSplit } from '../../engine/index';
+import { arrivedIncomes, commitSetAside, spendGap, splitAmount, splitIncome, type ArrivedIncome, type Money, type SimpleSplit } from '../../engine/index';
 import { h, toast } from '../dom';
 import { getState, today, update } from '../store';
 import { errorsBox, fmt, fmtDay, moneyInput, newId, readMoney, row, rows, seg, stickyBar } from '../ui';
@@ -143,6 +143,18 @@ function transferNote(amount?: Money): HTMLElement {
 }
 
 function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
+  const gap = spendGap(ov().spend);
+  // Деньги уже в балансе, а на счетах для трат их нет — значит они лежат в копилке: откладывать нечего, нужно наоборот снять (D182)
+  if (a.inBalance && gap) {
+    return h(
+      'div',
+      { class: 'advice' },
+      h('div', { class: 'big' }, gap.covered ? `С копилки нужно перевести ${fmt(gap.gap)}` : `До ${fmtDay(sp.nextIncome)} не хватает ${fmt(gap.gap)}`),
+      h('div', null, `Эти деньги уже лежат на копилке, а на счетах для трат до ${fmtDay(sp.nextIncome)} не хватает на платежи и обычные траты.`, gap.covered ? ` Переведи с копилки ${fmt(gap.gap)} — всего там ${fmt(gap.savings)}. Цели при этом чуть сдвинутся.` : ` В копилках доступно ${fmt(gap.savings)} — этого мало, придётся ужаться или сдвинуть платёж.`),
+      sp.payments.length ? h('div', { class: 'gs' }, `Платежи до дохода: ${sp.payments.map((p) => `${p.title} ${fmt(p.amount)} (${fmtDay(p.date)})`).join(', ')}`) : null,
+      h('a', { class: 'btn wide', href: sheetHref('setaside-other') }, 'Всё равно отложить другую сумму'),
+    );
+  }
   const enough = sp.life >= 0 ? ' — обычные траты покрыты.' : ' — на обычные траты не хватает, придётся ужаться.';
   const shortFor = new Map(sp.short.map((x) => [x.goalId, x]));
   const items = sp.lines.map((l) => {
