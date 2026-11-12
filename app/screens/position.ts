@@ -7,6 +7,7 @@ import { DESIRED_LABEL, INDEPENDENCE_TEXTS, routeTo, type ReserveTarget, INDICAT
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
+import { isSimpleMode } from '../../engine/index';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
@@ -331,6 +332,13 @@ function desiredBlock(v: PositionView): HTMLElement | null {
   );
 }
 
+defineSheet('profile-more', () => {
+  const v = positionNow();
+  if (v.status !== 'ok') return null;
+  const parts = [housingBlock(v), runwayBlock(v), ...(v.money.total < 0 && v.independence.status !== 'not_assessed' ? [h('p', { class: 'muted' }, 'Независимость сейчас не считается: сначала долги.')] : [independenceBlock(v), desiredBlock(v)])].filter((x): x is HTMLElement => x !== null);
+  return { title: 'Подробнее о профиле', body: h('div', { class: 'stack' }, ...parts) };
+});
+
 /** Независимость нужна единицам: на экране — одна строка, подробности — по нажатию; целиком только когда она рядом (≥ 20 %) или достигнута. */
 const INDEPENDENCE_INLINE_FROM = 0.2;
 defineSheet('independence', () => {
@@ -374,11 +382,18 @@ export function renderPosition(): HTMLElement {
   const wk = weakBlock(v, path !== null);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));
+  const sp = spiralBlock(v);
+  // простой режим (D185): жильё, «если доход пропадёт» и независимость — за одной строкой «Подробнее»; тревожные признаки (спираль, просрочки) остаются на виду
+  if (isSimpleMode(getState().settings)) {
+    if (sp) root.append(sp);
+    root.append(rows(row({ title: 'Подробнее', sub: 'если доход пропадёт, жильё и активы, независимость', href: sheetHref('profile-more') })));
+    root.append(h('div', { class: 'foot-note' }, explainLink('position')));
+    return root;
+  }
   const hb = housingBlock(v);
   if (hb) root.append(hb);
   const rw = runwayBlock(v);
   if (rw) root.append(rw);
-  const sp = spiralBlock(v);
   if (sp) root.append(sp);
   // при отрицательном капитале «нужен капитал на миллиарды» только стыдит — сначала долги
   if (v.money.total < 0 && v.independence.status !== 'not_assessed') {

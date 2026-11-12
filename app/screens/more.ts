@@ -6,7 +6,7 @@ import { fmt, fmtDay, nWord, row, rows, sub, toggle } from '../ui';
 import { act } from '../store';
 import { isInstalled } from '../install';
 import { fontPref, themePref } from '../theme';
-import { daysBetween, essentialMarkupMissing } from '../../engine/index';
+import { daysBetween, essentialMarkupMissing, isSimpleMode } from '../../engine/index';
 import { sheetHref } from '../main';
 import { backupReminder } from '../persist';
 import { persistStatus } from '../protect';
@@ -56,6 +56,7 @@ export function renderMore(): HTMLElement {
         row({ title: 'Пришли деньги', sub: 'зарплата или стипендия: сколько отложить и на что', href: '#/income' }),
         row({ title: 'Обновить данные из MoneyManager', sub: !o.hasData ? 'данных пока нет' : `последний импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`, href: '#/import', mark: reconcileBad }),
         row({ title: 'Сохранить копию приложения', sub: bak, href: '#/backup' }),
+        o.hasData ? row({ title: 'Итоги месяцев', sub: 'сколько пришло, ушло и куда сдвинулся капитал', href: '#/months' }) : null,
       ),
     ),
     h(
@@ -66,7 +67,7 @@ export function renderMore(): HTMLElement {
         row({ title: 'Счета', sub: !o.hasData ? 'после импорта' : nWord(accounts, 'счёт', 'счёта', 'счетов'), href: '#/accounts' }),
         row({ title: 'Доходы', sub: noIncome ? 'не заданы' : `доходов: ${st.settings.incomeSchedule.length}`, href: '#/incomes' }),
         row({ title: 'Долги и рассрочки', sub: st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', href: '#/debts' }),
-        row({ title: 'Разметка трат', sub: 'категории, раскладка, правила', href: '#/data' }),
+        isSimpleMode(st.settings) ? null : row({ title: 'Разметка трат', sub: 'категории, раскладка, правила', href: '#/data' }),
       ),
     ),
     h(
@@ -103,11 +104,18 @@ export function renderPrefs(): HTMLElement {
   const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const st = getState();
   const details = !!st.settings.showDetails;
+  const simple = isSimpleMode(st.settings);
   const p = st.settings.position;
   return h(
     'div',
     { class: 'screen' },
     rows(
+      row({
+        title: 'Простой режим',
+        sub: 'меньше блоков на экранах; расчёты, независимость и редкое — в «Подробнее»',
+        value: toggle(simple, (v) => void act((s) => ({ ...s, settings: { ...s.settings, uiMode: v ? 'simple' : 'full' } }), v ? 'Простой режим включён' : 'Полный режим включён'), 'Простой режим'),
+        chevron: false,
+      }),
       row({
         title: 'Сразу показывать подробности',
         sub: 'капитал, все счета и числа «Подробнее» открыты на каждом экране',
@@ -120,8 +128,8 @@ export function renderPrefs(): HTMLElement {
       row({ title: 'О тебе', sub: p?.age || p?.desiredMonthly ? [p.age ? `${p.age} лет` : '', p.desiredMonthly ? `хочу тратить ${fmt(p.desiredMonthly)} в месяц` : ''].filter(Boolean).join(' · ') : 'возраст и сколько хочешь тратить в месяц', href: sheetHref('you') }),
       row({ title: 'Вид', sub: `тема: ${themePref() === 'auto' ? 'как в системе' : themePref() === 'dark' ? 'тёмная' : 'светлая'} · текст: ${text}`, href: '#/view' }),
       isInstalled() ? null : row({ title: 'Установить как приложение', sub: 'значок на экране, работает без интернета', href: '#/install' }),
-      row({ title: 'Редкое', sub: 'долги на начало учёта, ручные счета, поправки', href: '#/rare' }),
-      row({ title: 'Для продвинутых', sub: 'правила разметки, параметры, сценарии', href: '#/advanced' }),
+      simple ? null : row({ title: 'Редкое', sub: 'долги на начало учёта, ручные счета, поправки', href: '#/rare' }),
+      simple ? null : row({ title: 'Для продвинутых', sub: 'правила разметки, параметры, сценарии', href: '#/advanced' }),
     ),
   );
 }

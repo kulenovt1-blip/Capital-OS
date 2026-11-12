@@ -2,6 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
+import { monthlyCard } from './monthly';
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, spendGap, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { loadDemo } from './import';
@@ -324,6 +325,7 @@ export function renderOverview(): HTMLElement {
     heroBlock(o),
     firstRunCard(),
     arrivedCard(),
+    monthlyCard(),
     freshnessNote(),
     historyNote(o),
     h(
