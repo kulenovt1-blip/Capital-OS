@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
+import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, spendGap, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { loadDemo } from './import';
 import { act, getState, today } from '../store';
@@ -35,7 +35,8 @@ function freeChain(o: Overview): HTMLElement {
   const byGoal = new Map<string, number>();
   for (const f of o.fundings) if (sp.kinds[f.accountId] === 'spend') byGoal.set(f.goalId, (byGoal.get(f.goalId) ?? 0) + f.amount);
   const goalsList = [...byGoal.entries()].filter(([, v]) => v > 0);
-  const head = (sign: string, title: string, value: number) => row({ title: h('strong', null, h('span', { class: 'chain-sign' }, sign), title), value: h('strong', null, fmt(value as never)) });
+  // знак — рядом с суммой, а не с названием (замечание владельца)
+  const head = (sign: string, title: string, value: number) => row({ title: h('strong', null, title), value: h('strong', null, `${sign}${fmt(value as never)}`) });
   const part = (title: string, value: number, subText?: string) => row({ title, value: fmt(value as never), cls: 'sub-row', ...(subText ? { sub: subText } : {}) });
   return h(
     'div',
@@ -44,11 +45,11 @@ function freeChain(o: Overview): HTMLElement {
     rows(
       head('', 'На счетах для трат', sp.spendNow),
       spendAcc.map((p) => part(p.title, p.balance)),
-      head('− ', 'Отложено на цели — перевода ещё нет в бэкапе', sp.setAsideOnSpend),
+      head('−', 'Отложено на цели — перевода ещё нет в бэкапе', sp.setAsideOnSpend),
       goalsList.map(([g, v]) => part(goalTitle.get(g) ?? 'цель', v)),
-      head('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome),
+      head('−', `Платежи по долгам ${till}`, o.reserveUntilIncome),
       o.untilIncome.map((u) => part(u.title, u.amount, fmtDay(u.date))),
-      head('− ', `Обычные траты ${till}`, sp.usualUntilIncome),
+      head('−', `Обычные траты ${till}`, sp.usualUntilIncome),
       head('= ', 'Свободно после обычных трат', sp.canSpend),
     ),
     sub('Для сравнения'),
@@ -121,6 +122,13 @@ function heroBlock(o: Overview): HTMLElement {
   // К4 аудита UX: при нехватке «Можно тратить −1,96 млн» звучит абсурдно и пугает без выхода — говорим прямо и даём шаг
   if (sp.canSpend < 0) {
     const till = o.nextIncome.source === 'schedule' ? `до ${fmtDay(o.nextIncome.date)}` : 'на 30 дней';
+    const gap = spendGap(sp);
+    // деньги в копилках есть — прямо говорим, что делать (D182), а не только «не хватает»
+    if (gap?.covered) {
+      return hero(h('span', null, `Перевести с копилки ${till}`, info('free')), fmtShort(gap.gap), h('span', null, `на счетах для трат не хватает на платежи и обычные траты; в копилках лежит ${fmtShort(gap.savings)}`), {
+        extra: h('div', { class: 'stack tight' }, h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')),
+      });
+    }
     return hero(h('span', null, `Не хватает ${till}`, info('free')), fmtShort((-sp.canSpend) as never), h('span', null, 'чтобы дожить до дохода: платежи и обычные траты'), {
       extra: h('div', { class: 'stack tight' }, h('a', { class: 'link', href: '#/forecast~save-where' }, 'Что можно сделать ›'), h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')),
     });
@@ -163,6 +171,8 @@ function cushionRow(o: Overview): HTMLElement | null {
   const ready = status === 'ready';
   // К6 аудита UX: деньги есть, но не закреплены за подушкой — одна понятная строка с действием, без формулы (она — на карточке цели)
   const notPinned = !ready && o.spend.onHand >= n.goal.targetMin;
+  // ответ «так задумано» (с листа «Перенести в подушку» или с «Прогноза») — не напоминать об этом снова
+  if (notPinned && (getState().settings.sanityAnswered ?? []).includes('cushion_ignores_money')) return null;
   return rows(
     row({
       title: ready ? 'Подушка готова' : notPinned ? 'Подушка: деньги есть, но не закреплены' : `Подушка: осталось ${fmtShort(n.remainingMin)}`,

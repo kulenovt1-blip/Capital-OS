@@ -703,6 +703,18 @@ export function lockedByDate(locked: readonly { balance: Money; availableFrom: I
   return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount }));
 }
 
+/**
+ * Нехватка на счетах для трат до дохода и можно ли закрыть её из копилок (D182, замечание владельца: «не рассматривает деньги в накоплениях»).
+ * Только подсказка для показа: числа canSpend и распределения не меняются. Заблокированные вклады (до даты) не считаются доступными.
+ */
+export function spendGap(sp: { canSpend: Money; inSavings: Money; locked: readonly { balance: Money }[] }): { gap: Money; savings: Money; covered: boolean } | null {
+  if (sp.canSpend >= 0) return null;
+  const gap = (0 - sp.canSpend) as Money;
+  const lockedSum = sp.locked.reduce((a, x) => a + x.balance, 0);
+  const savings = Math.max(0, sp.inSavings - lockedSum) as Money;
+  return { gap, savings, covered: savings >= gap };
+}
+
 /** Состояние подушки для показа (D103): нет подушки, сумму не посчитать (нет данных о тратах), набрана, копится. */
 export function cushionStatus(n: { goal: Goal; progress: Money } | undefined): 'none' | 'unknown' | 'ready' | 'saving' {
   if (!n) return 'none';

@@ -42,6 +42,9 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
     byDebt.set(p.obligationId, e);
   }
   const income = input.incomes.reduce((a, x) => a + x.amount, 0);
+  // длинные списки — в свёрнутые блоки с итогом в заголовке: страница была слишком длинной (замечание владельца)
+  const fold = (title: string, total: Money | null, ...body: (HTMLElement | HTMLElement[] | null)[]) =>
+    h('details', { class: 'fold', 'data-key': `explain:${title}` }, h('summary', null, total === null ? title : `${title} · ${fmt(total)}`), h('div', { class: 'stack' }, ...body.flat().filter((x): x is HTMLElement => x !== null)));
   const spend = input.expenses.reduce((a, x) => a + x.monthly, 0);
   return h(
     'div',
@@ -65,22 +68,21 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
           row({ title: 'На руках сейчас', sub: 'сумма по всем счетам', value: fmt(steps.from), chevron: false }),
           ...steps.lines.map((l) =>
             row({
-              title: `${sg(l.amount)} ${l.date && !(l.count && l.count > 1) ? `${fmtDay(l.date)} ` : ''}${l.title}${l.count && l.count > 1 ? ` × ${l.count}` : ''}`,
+              title: `${l.date && !(l.count && l.count > 1) ? `${fmtDay(l.date)} ` : ''}${l.title}${l.count && l.count > 1 ? ` × ${l.count}` : ''}`,
               ...(l.count && l.count > 1 && l.date && l.to ? { sub: `с ${fmtDay(l.date)} по ${fmtDay(l.to)}` } : {}),
-              ...(l.days !== undefined ? { sub: l.kind === 'interest' ? 'начислено к этой дате' : `за ${nWord(l.days, 'день', 'дня', 'дней')}, каждый день по доле месяца` } : {}),
-              value: abs(l.amount),
+              ...(l.days !== undefined ? { sub: l.kind === 'interest' ? 'один раз: с сегодняшнего дня до этой даты' : `за ${nWord(l.days, 'день', 'дня', 'дней')}, каждый день по доле месяца` } : {}),
+              value: `${sg(l.amount)}${abs(l.amount)}`,
               chevron: false,
             }),
           ),
-          row({ title: h('strong', null, `= На руках ${formatDateRu(steps.until)}`), value: h('strong', null, fmt(steps.total)), chevron: false }),
+          row({ title: h('strong', null, `На руках ${formatDateRu(steps.until)}`), value: h('strong', null, `= ${fmt(steps.total)}`), chevron: false }),
         ),
-        h('p', { class: 'muted' }, 'Сумма строк равна итогу до тиына; на экране суммы округлены до тенге, поэтому на калькуляторе может выйти разница в 1–2 ₸. Доходы и платежи — на своих датах; траты — доля месяца за каждый день срока, поэтому здесь они «по медианам», а не только известные платежи.'),
+        h('p', { class: 'muted' }, 'Доходы и платежи — на своих датах; траты — доля обычного месяца за каждый день срока, а не только известные платежи. На калькуляторе возможна разница 1–2 ₸ из-за округления.'),
         steps.liabilities > 0 ? h('p', { class: 'muted' }, `Долги к ${fmtDay(steps.until)}: ещё ${fmt(steps.liabilities)}. Они не вычтены — «капитал» был бы ${fmt((steps.total - steps.liabilities) as Money)}.`) : null,
       ];
     })(),
-    h('p', { class: 'muted' }, 'Каждый месяц: доходы − обычные траты − платежи по долгам. Остаток копится и раскладывается по целям — по порядку списка.'),
-    sub('Доходы в месяц'),
-    input.incomes.length ? rows(input.incomes.map((x) => line(x.title, x.amount, `${x.dayOfMonth}-го${x.end ? ` · до ${dmy(x.end)}` : ''}`)), row({ title: h('strong', null, 'Всего'), value: h('strong', null, fmt(income as Money)) })) : h('p', { class: 'muted' }, 'не заданы'),
+    h('p', { class: 'muted' }, 'Каждый месяц: доходы − траты − платежи по долгам. Остаток копится и раскладывается по целям.'),
+    fold('Доходы в месяц', input.incomes.length ? (income as Money) : null, input.incomes.length ? rows(input.incomes.map((x) => line(x.title, x.amount, `${x.dayOfMonth}-го${x.end ? ` · до ${dmy(x.end)}` : ''}`))) : h('p', { class: 'muted' }, 'не заданы')),
     // одна раскладка с «Обзором» (D109): обычные — как «обычно уходит», редкие — отдельно
     ...(() => {
       const part = (k: string) => expensePart(st, k);
@@ -91,22 +93,18 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
       const total = (xs: typeof input.expenses) => xs.reduce((a, x) => a + x.monthly, 0) as Money;
       if (!input.expenses.length) return [sub('Траты в месяц'), h('p', { class: 'muted' }, 'не размечены')];
       return [
-        sub('Обычные траты в месяц'),
-        rows(usual.map(lineOf), row({ title: h('strong', null, 'Обычные'), value: h('strong', null, fmt(total(usual))) })),
-        rare.length ? [sub('Редкие траты в месяц'), rows(rare.map(lineOf), row({ title: h('strong', null, 'Редкие'), value: h('strong', null, fmt(total(rare))) }))] : null,
-        habit.length ? [sub('Новые рассрочки — как раньше'), rows(habit.map((x) => line(`${dmy(x.start!)} – ${dmy(x.end!)}`, x.monthly, 'в месяц сверх текущих платежей')))] : null,
-        rows(row({ title: h('strong', null, 'Всего траты'), value: h('strong', null, fmt(spend as Money)) })),
+        fold('Обычные траты в месяц', total(usual), rows(usual.map(lineOf))),
+        rare.length ? fold('Редкие траты в месяц', total(rare), rows(rare.map(lineOf))) : null,
+        habit.length ? fold('Новые рассрочки — как раньше', null, rows(habit.map((x) => line(`${dmy(x.start!)} – ${dmy(x.end!)}`, x.monthly, 'в месяц сверх текущих платежей')))) : null,
       ];
     })(),
-    byDebt.size ? [sub('Платежи по долгам'), rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))] : null,
-    sub('Деньги сейчас'),
-    rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, [d.rateBp > 0 ? `${(d.rateBp / 100).toString().replace('.', ',')} % годовых` : '', d.availableFrom === NEVER_AVAILABLE ? 'жильё / заблокировано — не деньги' : d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : ''].filter(Boolean).join(' · ') || undefined))),
-    sub('Что ещё учтено'),
-    rows(
+    byDebt.size ? fold('Платежи по долгам', null, rows([...byDebt.values()].map((d) => line(d.title, d.total as Money, `${nWord(d.n, 'платёж', 'платежа', 'платежей')}, последний ${dmy(d.last)}`)))) : null,
+    fold('Деньги сейчас', null, rows(line('На счетах', input.cash), input.deposits.map((d) => line(d.title, d.balance, [d.rateBp > 0 ? `${(d.rateBp / 100).toString().replace('.', ',')} % годовых` : '', d.availableFrom === NEVER_AVAILABLE ? 'жильё / заблокировано — не деньги' : d.availableFrom > today() ? `снять можно с ${dmy(d.availableFrom)}` : ''].filter(Boolean).join(' · ') || undefined)))),
+    fold('Что ещё учтено', null, rows(
       row({ title: 'Траты дорожают', value: `${(st.settings.inflationBp / 100).toString().replace('.', ',')}% в год` }),
       ...input.incomes.filter((x) => x.growth).map((x) => row({ title: `«${x.title}» повышают`, value: `каждый год в ${['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'][Number((x.growthAnchor ?? x.start ?? today()).slice(5, 7)) - 1]}` })),
       row({ title: 'Плановые события', value: String(st.settings.plannedEvents.length), href: '#/forecast' }),
-    ),
+    )),
   );
 });
 
@@ -421,15 +419,16 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
     // одна группа строк вместо четырёх отдельных карточек (D121)
     root.append(
-      sub('Проверить и посчитать'),
+      sub('Посчитать'),
       rows(
-        row({ title: 'Из А в Б', sub: stg ? `сейчас запас на ${stg.coverMonths.toString().replace('.', ',')} мес. · выбери, куда выйти` : 'выбери нужный запас и путь к нему', href: sheetHref('a-to-b') }),
-        row({ title: 'Где можно сэкономить', sub: 'на чём уходит больше всего и что это даст', href: sheetHref('save-where') }),
-        row({ title: 'Если денег не хватит', sub: order.length ? `брать из: ${order.map((t) => `«${t}»`).join(', ')}` : 'сначала свободные деньги, потом — не выбрано', href: sheetHref('fc-draw', '') }),
-        row({ title: 'Если станет хуже или лучше', sub: 'сценарии', href: '#/forecast-more' }),
+        row({ title: 'Как набрать запас', sub: stg ? `сейчас хватит на ${stg.coverMonths.toString().replace('.', ',')} мес. · сколько откладывать, чтобы набрать больше` : 'сколько откладывать и к какому сроку', href: sheetHref('a-to-b') }),
+        row({ title: 'Где сэкономить', sub: 'на чём уходит больше всего и что даст экономия', href: sheetHref('save-where') }),
+        row({ title: 'Что, если доход или траты изменятся', sub: 'как выглядит прогноз в плохом и хорошем случае', href: '#/forecast-more' }),
+        row({ title: 'Откуда брать, если денег не хватит', sub: order.length ? `сейчас: ${order.map((t) => `«${t}»`).join(', ')}` : 'сейчас: свободные деньги, потом ничего не выбрано', href: sheetHref('fc-draw', '') }),
       ),
-      sub('Планирую…'),
-      h('div', { class: 'chips wrap' }, [...PLAN_CHIPS.map((k) => h('a', { class: 'chip', href: sheetHref('plan', k) }, KINDS[k].label)), h('a', { class: 'chip', href: sheetHref('plan', 'own') }, 'Другое…')]),
+      // события — одной свёрнутой группой, у каждого понятная подпись (раньше были голые кнопки)
+      h('details', { class: 'fold', 'data-key': 'forecast:plan' }, h('summary', null, 'Если что-то изменится в жизни'),
+        rows(...[...PLAN_CHIPS, 'own' as const].map((k) => (k === 'own' ? row({ title: 'Другое', sub: 'своё событие: сумма и дата', href: sheetHref('plan', 'own') }) : row({ title: KINDS[k].label, sub: KINDS[k].hint, href: sheetHref('plan', k) }))))),
     );
   }
   if (st.settings.plannedEvents.length) {
@@ -689,6 +688,9 @@ export function setRouteTarget(m: ReserveTarget): void {
   routeTarget = m;
 }
 
+/** Начало названия события «путь к запасу»: по нему план находится, заменяется и убирается. */
+export const ROUTE_PLAN_PREFIX = 'Набрать ';
+
 defineSheet('a-to-b', () => {
   const st = getState();
   const t = today();
@@ -714,16 +716,22 @@ defineSheet('a-to-b', () => {
   const dl = r.deadlines.find((d) => d.months === routeDeadline) ?? r.deadlines[0];
   const dm = dl ? dl.month : null;
   const usual = ov().spend.usualMonthly;
+  // «Добавить в план» раньше ничего не показывало: можно было нажать много раз, а видимого результата не было (замечание владельца).
+  // Теперь план один: повторное нажатие заменяет прежний, лист закрывается, на «Прогнозе» и «Профиле» видно «в плане».
+  const planned = st.settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
   const fast = dl && dm
-    ? dl.extraMonthly === 0
+    ? dl.extraMonthly === 0 && !planned
       ? h('div', { class: 'okline' }, `К ${monthTo(dm)} ты и так успеваешь — откладывать больше не нужно.`)
       : h(
           'div',
           { class: 'card stack tight' },
-          h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
-          h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
-          h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
-          h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents, cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `Набрать ${toText} к ${monthTo(dm)}`)] } }), `В плане: на ${fmt(dl.extraMonthly)} в месяц больше, чтобы набрать ${toText} к ${monthTo(dm)}`) }, 'Добавить в план'),
+          planned ? h('div', { class: 'okline' }, `Уже в плане: «${planned.title}». Прогноз считает с этой добавкой.`) : null,
+          planned ? null : h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
+          planned ? null : h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
+          planned ? null : h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
+          planned
+            ? h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)) } }), 'Убрано из плана').then(() => closeSheet()) }, 'Убрать из плана')
+            : h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)), cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `${ROUTE_PLAN_PREFIX}${toText} к ${monthTo(dm)}`)] } }), `В плане: откладывать на ${fmt(dl.extraMonthly)} в месяц больше — прогноз пересчитан`).then(() => closeSheet()) }, 'Добавить в план'),
         )
     : null;
 
@@ -772,8 +780,8 @@ defineSheet('reserve-info', () => {
       sub('Как посчитано'),
       rows(
         row({ title: 'Необходимые траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
-        row({ title: '+ платежи по долгам и рассрочкам', value: fmt(s.obligationsMonthly), chevron: false }),
-        row({ title: h('strong', null, '= необходимое в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
+        row({ title: 'Платежи по долгам и рассрочкам', value: `+${fmt(s.obligationsMonthly)}`, chevron: false }),
+        row({ title: h('strong', null, 'Необходимое в месяц'), value: h('strong', null, `= ${fmt(s.needMonthly)}`), chevron: false }),
         row({ title: 'Деньги, которые можно снять сразу, за вычетом долгов людям', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),
