@@ -727,29 +727,25 @@ describe('«Подушка: 0 из …» (D122)', () => {
     expect(has(after)).toBe(false);
   });
 
-  it('явные метки: сначала свободное в копилке, потом метки других целей; сумма на счёте не растёт, плашка уходит', () => {
+  it('свободные деньги копилки (D172) сами засчитываются подушке: она набрана, плашки нет, переносить нечего', () => {
     const s = explicit();
-    expect(has(s)).toBe(true);
-    const f = cushionFill(s, TODAY, 'cf')!;
-    expect(f.moved).toBe(f.need);
-    const after = apply(s);
-    expect(overAssigned(after)).toBe(false);
-    expect(has(after)).toBe(false);
-    // всего за целями столько же, сколько было плюс свободное, которое взяли
-    const total = (st: AppState) => o(st).fundings.reduce((x, y) => x + y.amount, 0);
-    expect(total(after) - total(s)).toBe(f.fromFree);
-    expect(cushion(after).progress).toBe(f.need + cushion(s).progress);
+    expect(cushion(s).progress).toBe(cushion(s).goal.targetMin);
+    expect(has(s)).toBe(false);
+    expect(cushionFill(s, TODAY, 'cf')).toBeNull();
+    // автоматическая метка не хранится и не мешает назначить те же деньги другой цели: явная метка забирает деньги у подушки
+    expect(s.fundings.every((f) => !f.id.startsWith('auto-cushion:'))).toBe(true);
   });
 
-  it('денег не хватает на всю подушку — переносится сколько есть, остаток назван', () => {
+  it('денег не хватает на всю подушку — свободные идут в подушку сами, остальное переносится из других целей, остаток назван', () => {
     const s = explicit();
     const big = { ...s, goals: s.goals.map((g) => (g.id === 'cushion' ? { ...g, targetRule: { kind: 'months_of_base' as const, months: 60, basis: 'essential' as const } } : g)) };
     const f = cushionFill(big, TODAY, 'cf')!;
     expect(f.moved).toBeLessThan(f.need);
-    // перенесено всё, что есть на счёте: за подушкой — вся копилка, у других целей и свободных денег не осталось ничего
+    expect(f.fromFree).toBe(0); // свободное уже учтено автоматически
+    // за подушкой — всё, что есть на счёте: автоматическая часть плюс перенесённое; у других целей ничего не осталось
     const after = apply(big);
     expect(overAssigned(after)).toBe(false);
-    expect(cushion(after).progress).toBe(f.moved);
+    expect(cushion(after).progress).toBe(cushion(big).progress + f.moved);
   });
 
   it('«так задумано» убирает плашку; без ответа она на месте', () => {

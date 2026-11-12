@@ -7,7 +7,7 @@ import { day, formula, money, plural, step, type Explanation } from './explain';
 import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport, type ClassifiedOp } from './classify';
 import { averageMonthly, baselineMonthly, monthlyFlows, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
-import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
+import { AUTO_CUSHION_PREFIX, balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
 import { accountKindGuess, accountsNeedingReview, type AccountKind } from './settings';
 import { daysBetween } from './date';
 import { add, mulDiv } from './money';
@@ -217,7 +217,8 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     savingsFlows: state.settings.savingsFlows,
     ...(state.settings.currencyRates ? { currencyRates: state.settings.currencyRates } : {}),
   });
-  const fundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
+  const explicitFundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
+  let fundings = explicitFundings;
   const installments = detectInstallments(state, today, classification);
 
   // обычные траты нужны раньше: от них зависит, какой доход считать «настоящим» для окна «до дохода» (D111)
@@ -251,6 +252,29 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     essential: add(baseline.median, obligationsMonthly),
     all: add(add(add(baseline.median, regularMedian), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
   });
+  // одна подушка (D172): свободные деньги в копилках — те, что не закреплены ни за какой целью, — засчитываются подушке, пока она не набрана
+  const cushion = resolved.goals.find((g) => g.role === 'safety' && g.parentId === undefined && g.status === 'active' && !g.folder);
+  if (cushion && cushion.targetMin > 0) {
+    const subtree = new Set<string>([cushion.id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const g of resolved.goals) if (g.parentId !== undefined && subtree.has(g.parentId) && !subtree.has(g.id)) (subtree.add(g.id), (grew = true));
+    }
+    let need = Math.max(0, cushion.targetMin - sum(explicitFundings.filter((f) => subtree.has(f.goalId)).map((f) => f.amount))) as Money;
+    const pools = capital.accounts
+      .filter((p) => !p.excluded && p.availableFrom <= today && accountKindGuess(p, state.settings.accounts, state.manualAccounts).kind === 'savings')
+      .map((p) => ({ accountId: p.accountId, free: Math.max(0, p.balance - sum(explicitFundings.filter((f) => f.accountId === p.accountId).map((f) => f.amount))) as Money }))
+      .filter((p) => p.free > 0)
+      .sort((a, b) => b.free - a.free || (a.accountId < b.accountId ? -1 : 1));
+    const auto: GoalFunding[] = [];
+    for (const p of pools) {
+      if (need <= 0) break;
+      const take = Math.min(need, p.free) as Money;
+      need = (need - take) as Money;
+      auto.push({ id: `${AUTO_CUSHION_PREFIX}${p.accountId}`, goalId: cushion.id, accountId: p.accountId, amount: take, date: today, decisionId: null, note: 'свободные деньги копилки — в подушку' });
+    }
+    if (auto.length) fundings = [...explicitFundings, ...auto];
+  }
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
   const overAssigned = overAssignment(fundings, balances, resolved.goals);

@@ -373,6 +373,13 @@ export function moveFunding(
 // ───────────────────────── привязка счёта к цели (D59) ─────────────────────────
 
 export const BOUND_PREFIX = 'bound:';
+/**
+ * Виртуальная метка «свободные деньги копилки — в подушку» (D172): пересчитывается от баланса, не хранится.
+ * При назначении денег целям не учитывается — явная метка всегда сильнее и забирает деньги у автоматической.
+ */
+export const AUTO_CUSHION_PREFIX = 'auto-cushion:';
+/** Метки без автоматических: по ним проверяется, сколько денег на счёте ещё можно назначить. */
+export const withoutAuto = (fundings: readonly GoalFunding[]): GoalFunding[] => fundings.filter((f) => !f.id.startsWith(AUTO_CUSHION_PREFIX));
 
 /** Привязка действует, если цель есть и не отменена/не выполнена, а счёт есть и не исключён. */
 export function invalidBindings(settings: readonly AccountSettings[], positions: readonly AccountPosition[], goals: readonly Goal[]): { accountId: string; goalId: string; reason: string }[] {

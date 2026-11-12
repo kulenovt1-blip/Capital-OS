@@ -11,7 +11,7 @@ import { BEHAVIOR_LABELS, UNCHECKED_CLASS_ID, classRegistry } from './classes';
 import { upcomingPayments } from './obligations';
 import { normalizeIncomeKind } from './settings';
 import { incomeKindRegistry } from './income-kinds';
-import { assignMoney, directFunded, type GoalFunding } from './goals';
+import { assignMoney, directFunded, withoutAuto, type GoalFunding } from './goals';
 import { compareStrategies, type CompareResult, type StrategyParams, type StrategyRow } from './allocate';
 import { simulate, whatIf, compareAlternatives, type ExpenseBaseline, type LifeEvent, type SimDeposit, type SimInput, type SimResult, type WhatIfResult, type AlternativeResult } from './simulate';
 import { baselineWindow, buildOverview, type Overview } from './overview';
@@ -176,12 +176,25 @@ export interface IncomeRequest {
    * а покрыть их могут только деньги на счетах «для трат», не копилки.
    */
   simple?: boolean;
+  /**
+   * Деньги, которые уже лежат в копилках без цели и будут распределены по порядку списка (D172): учитываются как прогресс целей,
+   * чтобы поступление не уходило в цель, которую эти деньги и так закрывают.
+   */
+  extraProgress?: Readonly<Record<string, Money>>;
 }
 
 export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest): CompareResult {
-  const { input, overview: o } = buildSimInput(state, today);
+  const built = buildSimInput(state, today);
+  const o = built.overview;
+  let input = built.input;
+  if (req.extraProgress) {
+    const progress = new Map(input.progress);
+    for (const [goalId, amount] of Object.entries(req.extraProgress)) progress.set(goalId, add(progress.get(goalId) ?? ZERO, amount));
+    input = { ...input, progress };
+  }
+  const explicitF = withoutAuto(o.fundings);
   const assigned = new Map<string, Money>();
-  for (const f of o.fundings) assigned.set(f.accountId, add(assigned.get(f.accountId) ?? ZERO, f.amount));
+  for (const f of explicitF) assigned.set(f.accountId, add(assigned.get(f.accountId) ?? ZERO, f.amount));
   let liquidFree = ZERO;
   const liquidIds = new Set<string>();
   for (const p of o.capital.accounts) {
@@ -191,11 +204,11 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
     liquidFree = add(liquidFree, p.balance - (assigned.get(p.accountId) ?? 0) as Money);
   }
   const goalById = new Map(o.goals.map((g) => [g.id, g]));
-  const obligationGoalFunds = sum(o.fundings.filter((f) => goalById.get(f.goalId)?.role === 'obligation').map((f) => f.amount));
+  const obligationGoalFunds = sum(explicitF.filter((f) => goalById.get(f.goalId)?.role === 'obligation').map((f) => f.amount));
   // те же деньги по счетам — с датой, с которой их можно снять (D92): вклад до 01.06 не оплатит платёж 05.11
   const positionById = new Map(o.capital.accounts.map((p) => [p.accountId, p]));
   const obligationByAccount = new Map<string, Money>();
-  for (const f of o.fundings) if (goalById.get(f.goalId)?.role === 'obligation') obligationByAccount.set(f.accountId, add(obligationByAccount.get(f.accountId) ?? ZERO, f.amount));
+  for (const f of explicitF) if (goalById.get(f.goalId)?.role === 'obligation') obligationByAccount.set(f.accountId, add(obligationByAccount.get(f.accountId) ?? ZERO, f.amount));
   const obligationGoalFundsByAvailability = [...obligationByAccount.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
     .flatMap(([accountId, amount]) => {
@@ -203,7 +216,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
       return p && !p.excluded && amount > 0 ? [{ amount, availableFrom: p.availableFrom }] : [];
     });
   const perGoalLiquid = new Map<string, Money>();
-  for (const f of o.fundings) if (liquidIds.has(f.accountId)) perGoalLiquid.set(f.goalId, add(perGoalLiquid.get(f.goalId) ?? ZERO, f.amount));
+  for (const f of explicitF) if (liquidIds.has(f.accountId)) perGoalLiquid.set(f.goalId, add(perGoalLiquid.get(f.goalId) ?? ZERO, f.amount));
   const thisMonth = monthKey(today);
   const fundedThisMonth = new Map<string, Money>();
   for (const f of state.fundings) if (monthKey(f.date) === thisMonth) fundedThisMonth.set(f.goalId, add(fundedThisMonth.get(f.goalId) ?? ZERO, f.amount));
@@ -241,7 +254,7 @@ export function acceptAllocation(state: AppState, c: CompareResult, row: Strateg
   const fundings: GoalFunding[] = [...o.fundings];
   for (const [goalId, amount] of Object.entries(row.byGoal).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     if (amount <= 0) continue;
-    const r = assignMoney({ id: `${decisionId}-${goalId}`, goalId, accountId, amount, date: today, decisionId }, { goals: o.goals, fundings, balances: o.balances });
+    const r = assignMoney({ id: `${decisionId}-${goalId}`, goalId, accountId, amount, date: today, decisionId }, { goals: o.goals, fundings: withoutAuto(fundings), balances: o.balances });
     if (!r.ok) return { ok: false, error: `${r.error}. Если поступление ещё не в импорте — сначала импортируй свежий бэкап или выбери другой счёт`, explanation: r.explanation };
     const f = opts.pending ? { ...r.value, pending: true as const } : r.value;
     fundings.push(f);

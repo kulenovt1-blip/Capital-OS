@@ -153,6 +153,14 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
   return h(
     'div',
     { class: 'advice' },
+    sp.fromSavings.total > 0
+      ? h(
+          'div',
+          { class: 'gs' },
+          `В копилках уже лежит ${fmt(sp.fromSavings.total)}, не закреплённые за целями: они закроют ${sp.fromSavings.lines.map((l) => `«${l.title}» (${fmt(l.amount)})`).join(', ')}. Поступление ниже посчитано после них. `,
+          h('a', { href: '#/goals~distribute' }, 'Распределить копилки ›'),
+        )
+      : null,
     h('div', { class: 'big' }, sp.setAside > 0 ? `Можно отложить ${fmt(sp.setAside)}` : 'Откладывать не нужно'),
     items.length ? h('ul', null, items) : h('div', { class: 'gs' }, 'Целей пока нет — всё остаётся на жизнь. ', h('a', { href: '#/goals' }, 'Добавить цель ›')),
     h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день на всё`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
