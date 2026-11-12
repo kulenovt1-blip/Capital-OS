@@ -21,6 +21,7 @@ import type { AppState } from './state';
 import type { IncomeScheduleItem } from './settings';
 import type { ExpenseBaseline, SimPayment } from './simulate';
 import { baseForecastTrace } from './simple';
+import { SPIKE_SUFFIX } from './spikes';
 import { capitalInMonths } from './forecast-steps';
 
 /** Пороги — в одном месте. */
@@ -241,7 +242,7 @@ export function habitExpenses(avg: Money, payments: readonly SimPayment[], start
 /** Строка трат: обычная, редкая (за год / 12, крупные сверх обычного) или новые рассрочки — для одинаковой раскладки на всех экранах. */
 export function expensePart(state: AppState, key: string): 'usual' | 'rare' | 'installments' {
   if (key.startsWith(HABIT_KEY)) return 'installments';
-  if (key.endsWith(LUMPS_SUFFIX)) return 'rare';
+  if (key.endsWith(LUMPS_SUFFIX) || key.endsWith(SPIKE_SUFFIX)) return 'rare';
   const c = classRegistry(state.settings.classes).find((x) => x.id === key);
   return c?.behavior === 'irregular' ? 'rare' : 'usual';
 }

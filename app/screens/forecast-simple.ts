@@ -4,6 +4,7 @@
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
 import { NEVER_AVAILABLE, balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { spikeFacts, ensureNeverClass, tenge } from '../../engine';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, forecastTraceNow, ov, reserveCtx, verdicts } from '../ctx';
@@ -152,6 +153,31 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
         pv((s, yes) => ({ ...s, settings: { ...s.settings, lumps: { ...(s.settings.lumps ?? {}), [l.classId]: yes } } })),
         chips(btn(`Да, +${fmtShort(l.extraMonthly)} в месяц`, () => setL(l.classId, true)), btn('Нет, это было разово', () => setL(l.classId, false))),
         more('Какие именно', h('p', { class: 'muted' }, l.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')))));
+    }
+  }
+  const spikeF = found.find((x) => x.id === 'spike_unconfirmed' && x.level === 'fail');
+  if (spikeF) {
+    shown.add(spikeF);
+    const ids = new Set(spikeF.ref!.split(','));
+    const monthNames = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+    const mname = (k: string) => `${monthNames[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
+    const setS = (id: string, classId: string, a: { kind: 'never' } | { kind: 'yearly' } | { kind: 'custom'; annual: Money }, msg: string) =>
+      void act((s) => ({ ...s, settings: { ...s.settings, spikes: { ...(s.settings.spikes ?? {}), [id]: a }, ...(a.kind === 'yearly' ? {} : { classes: ensureNeverClass(s.settings.classes) }) } }), msg);
+    for (const sp of spikeFacts(st, today(), ov()).filter((x) => ids.has(x.id))) {
+      const when = sp.from === sp.to ? mname(sp.from) : `${mname(sp.from)} – ${mname(sp.to)}`;
+      const input = h('input', { type: 'number', inputmode: 'numeric', min: '0', step: '1000', placeholder: 'Сколько в год, ₸', 'aria-label': 'Сколько в год, ₸', class: 'input' }) as HTMLInputElement;
+      nodes.push(card('Всплеск трат', `${label(sp.label)}, ${when}: ${fmt(sp.total)}, а в обычный месяц ${fmt(sp.median)}. Это повторится?`,
+        pv((s, yes) => ({ ...s, settings: { ...s.settings, spikes: { ...(s.settings.spikes ?? {}), [sp.id]: yes ? { kind: 'yearly' } : { kind: 'never' } }, classes: ensureNeverClass(s.settings.classes) } })),
+        chips(
+          btn('Разовое — больше не повторится', () => setS(sp.id, sp.classId, { kind: 'never' }, 'Всплеск не повторится — убрал из прогноза')),
+          btn('Бывает раз в год', () => setS(sp.id, sp.classId, { kind: 'yearly' }, 'Оставил: такая сумма раз в год')),
+        ),
+        more('Своя сумма в год', h('div', { class: 'chips wrap' }, input, btn('Принять', () => {
+          const v = Math.round(Number(input.value));
+          if (!(v >= 0)) return;
+          setS(sp.id, sp.classId, { kind: 'custom', annual: tenge(v) }, `В прогнозе ${fmt(tenge(v))} в год вместо всплеска`);
+        }))),
+        more('Какие именно', h('p', { class: 'muted' }, sp.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')))));
     }
   }
   const habitF = found.find((x) => x.id === 'installment_habit' && x.level === 'fail');

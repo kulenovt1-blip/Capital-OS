@@ -15,6 +15,7 @@ import { assignMoney, directFunded, withoutAuto, type GoalFunding } from './goal
 import { compareStrategies, type CompareResult, type StrategyParams, type StrategyRow } from './allocate';
 import { simulate, whatIf, compareAlternatives, type ExpenseBaseline, type LifeEvent, type SimDeposit, type SimInput, type SimResult, type WhatIfResult, type AlternativeResult } from './simulate';
 import { baselineWindow, buildOverview, type Overview } from './overview';
+import { SPIKE_SUFFIX, parseSpikeId } from './spikes';
 import { EXTRA_INCOME_ID, LUMPS_SUFFIX, growthAnchor, habitExpenses, hiddenFacts, raiseMonth } from './hidden';
 import type { AppState, Decision } from './state';
 
@@ -111,6 +112,13 @@ export function buildSimInput(state: AppState, today: IsoDate): SimBuild {
   for (const l of hf.lumps) {
     if (state.settings.lumps?.[l.classId] !== true) continue;
     expenses.push({ key: `${l.classId}${LUMPS_SUFFIX}`, title: `Крупные траты: ${l.label.replace(/^Расход:\s*/, '')} (за 12 мес. сверх обычного месяца)`, monthly: l.extraMonthly, growthBp: state.settings.inflationBp });
+  }
+  // D175: «своя сумма в год» для всплеска — отдельной строкой «сумма / 12», сам всплеск из прогноза выпал
+  for (const [id, a] of Object.entries(state.settings.spikes ?? {})) {
+    if (a.kind !== 'custom' || !(a.annual > 0)) continue;
+    const sp = parseSpikeId(id);
+    const label = sp ? classRegistry(state.settings.classes).find((c) => c.id === sp.classId)?.label.replace(/^Расход:\s*/, '') ?? sp.classId : id;
+    expenses.push({ key: `${id}${SPIKE_SUFFIX}`, title: `${label}: ${money(a.annual)} в год (твоя оценка)`, monthly: mulDiv(a.annual, 1, 12), growthBp: state.settings.inflationBp });
   }
   if (hf.installments && state.settings.newInstallments === true) expenses.push(...habitExpenses(hf.installments.avgMonthly, payments, today, state.settings.simulationMonths));
   if (!expenses.length) warnings.push(step('plan.no_expenses', 'Нет размеченных трат — прогноз считает траты нулевыми. Разметь категории в «Разметке»', { level: 'warn' }));

@@ -424,6 +424,11 @@ function ensureClass(classes: ClassSettings, def: ClassDef): ClassSettings {
   return classes.custom.some((c) => c.id === def.id) ? classes : { ...classes, custom: [...classes.custom, def] };
 }
 
+/** Класс «Больше не повторится» есть в настройках (создаётся один раз) — для ответов про всплески (D175). */
+export function ensureNeverClass(classes: ClassSettings): ClassSettings {
+  return ensureClass(classes, { id: NEVER_CLASS_ID, label: 'Больше не повторится', group: 'expense', behavior: 'excluded', builtin: false });
+}
+
 /** Класс, которым категория попадает в корзину. Для «разового» — по ответу «повторится / до даты / больше не будет». */
 export function basketClass(basket: Basket, classes: ClassSettings, oneoff: OneoffKind = { kind: 'repeat' }): { cls: OpClass; classes: ClassSettings } {
   if (basket === 'everyday') return { cls: 'E_base', classes };

@@ -1,6 +1,7 @@
 /**
  * Экран «Обзор» как чистая функция: из состояния и даты — всё, что показывается.
  */
+import { applySpikes } from './spikes';
 import { sub, sum, ZERO, type Money } from './money';
 import { addDays, fullMonthsBefore, monthKey, nextDayOfMonth, maxDate, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
@@ -205,7 +206,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const explanation: Explanation = [];
 
   const reconcile = hasData ? reconcileAccounts(data) : null;
-  const classification = hasData ? classifyAll(data, state.settings.classification) : null;
+  const classified = hasData ? classifyAll(data, state.settings.classification) : null;
+  // D175: ответы про всплески трат переводят их операции в «Больше не повторится»
+  const classification = classified && state.settings.spikes ? { ...classified, ops: applySpikes(classified.ops, state.settings.spikes) } : classified;
   const obligations = state.obligations.map((o) => obligationStatus(o, data, today, { matchWindowDays: state.settings.matchWindowDays, manualMatches: state.manualMatches }));
   const capital = computeCapital({
     data,
