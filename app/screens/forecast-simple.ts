@@ -4,7 +4,7 @@
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
 import { NEVER_AVAILABLE, balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
-import { spikeFacts, ensureNeverClass, tenge } from '../../engine';
+import { spikeFacts, ensureNeverClass, tenge, isSimpleMode } from '../../engine';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, forecastTraceNow, ov, reserveCtx, verdicts } from '../ctx';
@@ -418,8 +418,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   {
     const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
     // одна группа строк вместо четырёх отдельных карточек (D121)
-    root.append(
-      sub('Посчитать'),
+    const calc = [
       rows(
         row({ title: 'Как набрать запас', sub: stg ? `сейчас хватит на ${stg.coverMonths.toString().replace('.', ',')} мес. · сколько откладывать, чтобы набрать больше` : 'сколько откладывать и к какому сроку', href: sheetHref('a-to-b') }),
         row({ title: 'Где сэкономить', sub: 'на чём уходит больше всего и что даст экономия', href: sheetHref('save-where') }),
@@ -429,7 +428,10 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
       // события — одной свёрнутой группой, у каждого понятная подпись (раньше были голые кнопки)
       h('details', { class: 'fold', 'data-key': 'forecast:plan' }, h('summary', null, 'Если что-то изменится в жизни'),
         rows(...[...PLAN_CHIPS, 'own' as const].map((k) => (k === 'own' ? row({ title: 'Другое', sub: 'своё событие: сумма и дата', href: sheetHref('plan', 'own') }) : row({ title: KINDS[k].label, sub: KINDS[k].hint, href: sheetHref('plan', k) }))))),
-    );
+    ];
+    // простой режим (D185): все расчёты и планы — за одной строкой «Подробнее»
+    if (isSimpleMode(st.settings)) root.append(h('details', { class: 'fold', 'data-key': 'forecast:calc' }, h('summary', null, 'Подробнее: расчёты и планы'), h('div', { class: 'stack' }, ...calc)));
+    else root.append(sub('Посчитать'), ...calc);
   }
   if (st.settings.plannedEvents.length) {
     root.append(

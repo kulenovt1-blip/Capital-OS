@@ -42,6 +42,8 @@ export async function loadState(): Promise<void> {
     return;
   }
   const d = decideLoad(raw);
+  // первый запуск: новому человеку — простой режим; у тех, у кого данные уже есть, поля нет, и всё остаётся как было (D185)
+  if (d.kind === 'empty') state = { ...state, settings: { ...state.settings, uiMode: 'simple' } };
   if (d.kind === 'ok') {
     state = d.state;
     // перенос на новую модель экранов (D96, D103): сначала копия исходника с проверкой; не вышло — только чтение

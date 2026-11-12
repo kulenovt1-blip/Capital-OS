@@ -232,6 +232,8 @@ export interface Settings {
   forecastViewMonths?: number;
   /** «Сразу показывать подробности» (D96). */
   showDetails?: boolean;
+  /** Простой режим (D185): меньше блоков на экранах, остальное — в «Подробнее». Не задано — как раньше (полный). Новому человеку ставится «simple». */
+  uiMode?: 'simple' | 'full';
   /** Поступления (id операций), про которые сказано «уже распределил» (D100). */
   handledIncomes?: string[];
   /** Категории дохода, про которые сказано «это не доход» (D96). */
@@ -291,3 +293,6 @@ export function mergeAccountSettings(existing: AccountSettings[], accounts: Acco
   }
   return out.sort((x, y) => (x.accountId < y.accountId ? -1 : 1));
 }
+
+/** Включён ли простой режим (D185). */
+export const isSimpleMode = (s: { uiMode?: 'simple' | 'full' }): boolean => s.uiMode === 'simple';
