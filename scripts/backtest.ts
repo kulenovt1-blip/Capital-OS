@@ -7,14 +7,23 @@
  */
 // @ts-nocheck — служебный скрипт для Bun
 import { readFileSync } from 'node:fs';
+import { emptyState, importMmbackup, mergeAccountSettings } from '../engine/index';
 import { parseState, buildOverview, addDays, classGroup, daysBetween, classRegistry, baseClassIds, regularClassIds, UNCHECKED_CLASS_ID } from '../engine/index';
 
 const [file, stepArg] = process.argv.slice(2);
 if (!file) { console.error('Укажи файл бэкапа'); process.exit(2); }
 const step = Number(stepArg ?? 3);
-const r = parseState(readFileSync(file, 'utf8'));
-if (!r.ok) { console.error(r.error); process.exit(2); }
-const state = r.value;
+let state;
+if (file.endsWith('.mmbackup')) {
+  // «сырой» бэкап MoneyManager: расписания доходов и разметки категорий нет — берутся настройки по умолчанию
+  const data = importMmbackup(new Uint8Array(readFileSync(file)));
+  const s0 = emptyState();
+  state = { ...s0, imported: data, settings: { ...s0.settings, accounts: mergeAccountSettings([], data.accounts) } };
+} else {
+  const r = parseState(readFileSync(file, 'utf8'));
+  if (!r.ok) { console.error(r.error); process.exit(2); }
+  state = r.value;
+}
 const full = state.imported;
 if (!full) { console.error('В бэкапе нет импортированных операций'); process.exit(2); }
 const today = new Date().toISOString().slice(0, 10);
@@ -23,6 +32,7 @@ const first = full.operations.reduce((m, o) => (o.date < m ? o.date : m), '9999-
 const ovFull = buildOverview(state, last);
 const cls = new Map((ovFull.classification?.ops ?? []).map((c) => [c.op.id, c.cls]));
 const amt = (o) => (o.kind === 'transfer' ? 0 : o.amount);
+if (ovFull.spend.usualMonthly === 0) console.log('ВНИМАНИЕ: «обычные траты» = 0 — категории не размечены (в сыром .mmbackup разметки нет). Результат бессмыслен: используй JSON-бэкап Capital OS с разметкой.');
 const reg = classRegistry(state.settings.classes);
 const usualSet = new Set([...baseClassIds(reg, last), ...regularClassIds(reg, last), UNCHECKED_CLASS_ID]);
 const spentIn = (from, to, only) => full.operations.filter((o) => o.date > from && o.date <= to && o.kind === 'expense' && classGroup(cls.get(o.id)) === 'expense' && (!only || usualSet.has(cls.get(o.id)))).reduce((a, o) => a + amt(o), 0);
