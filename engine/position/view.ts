@@ -189,7 +189,9 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   if (weakestId) {
     const dv = directions.find((x) => x.id === weakestId)!;
     const known = dv.indicators.filter((x): x is { id: IndicatorId; label: string; score: number } => x.score !== null);
-    const low = known.length ? known.reduce((a, b) => (b.score < a.score ? b : a)) : null;
+    // D177 (L7): «Капитал» (N4) шкалой до 300 месяцев почти всегда самый низкий, но за месяцы на него не повлиять; при запасе от 3 месяцев называем то, что можно менять
+    const actionable = inputs.reserveEssentialMonths >= L3_RESERVE_MONTHS ? known.filter((x) => x.id !== 'N4') : known;
+    const low = actionable.length ? actionable.reduce((a, b) => (b.score < a.score ? b : a)) : null;
     weak = { direction: weakestId, directionName: dv.name, indicator: low };
   }
 
