@@ -9,7 +9,7 @@ import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
-import { setRouteTarget } from './forecast-simple';
+import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
 
@@ -142,6 +142,15 @@ function pathBlock(v: PositionView): HTMLElement | null {
     ? `Сейчас расходы больше доходов на ≈ ${fmtShort(r.deficitMonthly)} в месяц — сначала нужно выйти в плюс.`
     : r.by ? `Нынешним темпом — к ${monthTo(r.by)}.` : 'Нынешним темпом за пять лет не получается: расходы почти равны доходам.';
   const open = (): void => setRouteTarget(target);
+  const planned = getState().settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
+  if (planned) {
+    return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени' },
+      h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
+      h('strong', null, 'План принят'),
+      h('p', null, `В прогнозе: «${planned.title}». ${pace}`),
+      h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посмотреть или убрать'),
+    );
+  }
   return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени' },
     h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
     h('strong', null, `Нужно отложить в запас ещё ${approx(r.missing / 100)}`),
@@ -219,23 +228,21 @@ function weakBlock(v: PositionView, hasPath = false): HTMLElement | null {
 
 function moneyBlock(v: PositionView): HTMLElement {
   const m = v.money;
+  const debts = m.gross - m.total;
+  // «есть − долги = капитал» — арифметика на виду; «можно снять за месяц» — другая величина и подписана как другая (замечание владельца: «доступно» больше капитала)
   return h(
     'div',
     { class: 'stack' },
     sub('Деньги', info('capitalTwo')),
     rows(
-      row({ title: 'Всего капитал', sub: 'всё, что есть, минус долги', value: money(m.total), chevron: false }),
-      // вторая цифра — только если она заметно отличается (жильё, вклады на срок, долги людям); иначе это тот же капитал второй раз
+      row({ title: 'Всё, что есть', sub: 'счета, вклады, жильё и другие активы', value: money(m.gross), chevron: false }),
+      debts > 0.5 ? row({ title: 'Долги и рассрочки', sub: 'всё, что ещё предстоит выплатить', value: `−${money(debts)}`, chevron: false }) : null,
+      row({ title: 'Всего капитал', sub: debts > 0.5 ? 'то, что останется после всех выплат' : 'всё, что есть', value: money(m.total), chevron: false }),
+    ),
+    rows(
       Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1)
-        ? row({
-            title: 'Доступно в течение месяца',
-            // «из капитала» только когда они меньше капитала; при долгах и рассрочках они бывают больше капитала: капитал уже уменьшен на то, что ещё предстоит выплатить
-            sub: m.spendable < m.total ? 'можно снять за 30 дней, после платежей и трат; остальное — жильё или вклады на срок' : 'можно снять за 30 дней, после платежей и трат; рассрочки в капитале уже вычтены, поэтому здесь больше',
-            value: money(m.spendable),
-            chevron: false,
-          })
+        ? row({ title: 'Можно снять за 30 дней', sub: 'после платежей и обычных трат этого месяца; рассрочки растянуты на годы, поэтому тут вычтены только ближайшие платежи', value: money(m.spendable), chevron: false })
         : null,
-      // один запас (этап 2, К4): на необходимых расходах — как в условиях ступени и на «Обзоре»
       row({ title: 'Запас', sub: 'сколько месяцев проживёшь без дохода', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
     ),
   );

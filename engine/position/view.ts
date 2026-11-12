@@ -114,7 +114,7 @@ export interface PositionView {
   /** Две цифры и строка про срок: «Всего капитал» и «Деньги, которые можно потратить» (D138). */
   /** Жильё и закрытые активы: стоимость, остаток привязанных кредитов и доля владения (стоимость − остаток); null — таких активов нет. На ступень не влияет. */
   housing: { assets: number; debt: number; equity: number; items: number; linked: number } | null;
-  money: { total: number; spendable: number; instant: number; blockedShare: number; reserveEssentialMonths: number; reserveLifestyleMonths: number };
+  money: { total: number; gross: number; spendable: number; instant: number; blockedShare: number; reserveEssentialMonths: number; reserveLifestyleMonths: number };
   runway: Runway;
   spiral: SpiralSigns;
   /** Просроченные платежи по графику (отдельная пометка). */
@@ -165,7 +165,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   if (!series.hasData || !report || overview.capital.unrated.length) {
     return {
       status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !hasMismatch(overview), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
-      onBorder: [], l4Unconfirmed: false, l4Warnings: [], housing: null, money: { total: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
+      onBorder: [], l4Unconfirmed: false, l4Warnings: [], housing: null, money: { total: 0, gross: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 },
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
       independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
     };
@@ -223,7 +223,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
     housing: housingOf(state, overview),
-    money: { total: cap.net / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
+    money: { total: cap.net / 100, gross: cap.gross / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
     confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || hasMismatch(overview),
     independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),

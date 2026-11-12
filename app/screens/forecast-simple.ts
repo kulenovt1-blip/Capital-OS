@@ -688,6 +688,9 @@ export function setRouteTarget(m: ReserveTarget): void {
   routeTarget = m;
 }
 
+/** Начало названия события «путь к запасу»: по нему план находится, заменяется и убирается. */
+export const ROUTE_PLAN_PREFIX = 'Набрать ';
+
 defineSheet('a-to-b', () => {
   const st = getState();
   const t = today();
@@ -713,16 +716,22 @@ defineSheet('a-to-b', () => {
   const dl = r.deadlines.find((d) => d.months === routeDeadline) ?? r.deadlines[0];
   const dm = dl ? dl.month : null;
   const usual = ov().spend.usualMonthly;
+  // «Добавить в план» раньше ничего не показывало: можно было нажать много раз, а видимого результата не было (замечание владельца).
+  // Теперь план один: повторное нажатие заменяет прежний, лист закрывается, на «Прогнозе» и «Профиле» видно «в плане».
+  const planned = st.settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
   const fast = dl && dm
-    ? dl.extraMonthly === 0
+    ? dl.extraMonthly === 0 && !planned
       ? h('div', { class: 'okline' }, `К ${monthTo(dm)} ты и так успеваешь — откладывать больше не нужно.`)
       : h(
           'div',
           { class: 'card stack tight' },
-          h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
-          h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
-          h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
-          h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents, cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `Набрать ${toText} к ${monthTo(dm)}`)] } }), `В плане: на ${fmt(dl.extraMonthly)} в месяц больше, чтобы набрать ${toText} к ${monthTo(dm)}`) }, 'Добавить в план'),
+          planned ? h('div', { class: 'okline' }, `Уже в плане: «${planned.title}». Прогноз считает с этой добавкой.`) : null,
+          planned ? null : h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
+          planned ? null : h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
+          planned ? null : h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
+          planned
+            ? h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)) } }), 'Убрано из плана').then(() => closeSheet()) }, 'Убрать из плана')
+            : h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)), cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `${ROUTE_PLAN_PREFIX}${toText} к ${monthTo(dm)}`)] } }), `В плане: откладывать на ${fmt(dl.extraMonthly)} в месяц больше — прогноз пересчитан`).then(() => closeSheet()) }, 'Добавить в план'),
         )
     : null;
 
