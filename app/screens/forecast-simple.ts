@@ -68,14 +68,14 @@ registerExplain('forecast', 'Из чего прогноз', () => [], () => {
           row({ title: 'На руках сейчас', sub: 'сумма по всем счетам', value: fmt(steps.from), chevron: false }),
           ...steps.lines.map((l) =>
             row({
-              title: `${sg(l.amount)} ${l.date && !(l.count && l.count > 1) ? `${fmtDay(l.date)} ` : ''}${l.title}${l.count && l.count > 1 ? ` × ${l.count}` : ''}`,
+              title: `${l.date && !(l.count && l.count > 1) ? `${fmtDay(l.date)} ` : ''}${l.title}${l.count && l.count > 1 ? ` × ${l.count}` : ''}`,
               ...(l.count && l.count > 1 && l.date && l.to ? { sub: `с ${fmtDay(l.date)} по ${fmtDay(l.to)}` } : {}),
               ...(l.days !== undefined ? { sub: l.kind === 'interest' ? 'один раз: с сегодняшнего дня до этой даты' : `за ${nWord(l.days, 'день', 'дня', 'дней')}, каждый день по доле месяца` } : {}),
-              value: abs(l.amount),
+              value: `${sg(l.amount)}${abs(l.amount)}`,
               chevron: false,
             }),
           ),
-          row({ title: h('strong', null, `= На руках ${formatDateRu(steps.until)}`), value: h('strong', null, fmt(steps.total)), chevron: false }),
+          row({ title: h('strong', null, `На руках ${formatDateRu(steps.until)}`), value: h('strong', null, `= ${fmt(steps.total)}`), chevron: false }),
         ),
         h('p', { class: 'muted' }, 'Доходы и платежи — на своих датах; траты — доля обычного месяца за каждый день срока, а не только известные платежи. На калькуляторе возможна разница 1–2 ₸ из-за округления.'),
         steps.liabilities > 0 ? h('p', { class: 'muted' }, `Долги к ${fmtDay(steps.until)}: ещё ${fmt(steps.liabilities)}. Они не вычтены — «капитал» был бы ${fmt((steps.total - steps.liabilities) as Money)}.`) : null,
@@ -780,8 +780,8 @@ defineSheet('reserve-info', () => {
       sub('Как посчитано'),
       rows(
         row({ title: 'Необходимые траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
-        row({ title: '+ платежи по долгам и рассрочкам', value: fmt(s.obligationsMonthly), chevron: false }),
-        row({ title: h('strong', null, '= необходимое в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
+        row({ title: 'Платежи по долгам и рассрочкам', value: `+${fmt(s.obligationsMonthly)}`, chevron: false }),
+        row({ title: h('strong', null, 'Необходимое в месяц'), value: h('strong', null, `= ${fmt(s.needMonthly)}`), chevron: false }),
         row({ title: 'Деньги, которые можно снять сразу, за вычетом долгов людям', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),

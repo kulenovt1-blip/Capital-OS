@@ -115,7 +115,7 @@ export function trust(): Trust {
   if (o.baseline.months.length < 3 && o.baseline.months.length < st.settings.baselineMonths) notes.push({ text: `Истории трат ${nWord(o.baseline.months.length, 'полный месяц', 'полных месяца', 'полных месяцев')} — «обычно уходит» и прогноз приблизительные`, href: '#/baskets' });
   if (bad.length) {
     const a = bad[0]!;
-    return { level: 'bad', label: `${a.status === 'no_reference' ? `${a.title}: нечем сверить` : `Сверка: ${a.title} ${fmtExact(a.diff, true)}`}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
+    return { level: 'bad', label: `${a.status === 'no_reference' ? `${a.title}: в MoneyManager нет остатка для сверки` : `Сверка: ${a.title} ${fmtExact(a.diff, true)}`}${bad.length > 1 ? ` и ещё ${bad.length - 1}` : ''}`, reasons, notes };
   }
   if (reasons.length) return { level: 'warn', label: `Проверь · ${nWord(reasons.length, 'вопрос', 'вопроса', 'вопросов')}`, reasons, notes };
   return { level: 'ok', label: `Данные от ${fmtDay(st.importedAt ?? today())} ✓`, reasons: [], notes };

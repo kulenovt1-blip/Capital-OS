@@ -35,7 +35,8 @@ function freeChain(o: Overview): HTMLElement {
   const byGoal = new Map<string, number>();
   for (const f of o.fundings) if (sp.kinds[f.accountId] === 'spend') byGoal.set(f.goalId, (byGoal.get(f.goalId) ?? 0) + f.amount);
   const goalsList = [...byGoal.entries()].filter(([, v]) => v > 0);
-  const head = (sign: string, title: string, value: number) => row({ title: h('strong', null, h('span', { class: 'chain-sign' }, sign), title), value: h('strong', null, fmt(value as never)) });
+  // знак — рядом с суммой, а не с названием (замечание владельца)
+  const head = (sign: string, title: string, value: number) => row({ title: h('strong', null, title), value: h('strong', null, `${sign}${fmt(value as never)}`) });
   const part = (title: string, value: number, subText?: string) => row({ title, value: fmt(value as never), cls: 'sub-row', ...(subText ? { sub: subText } : {}) });
   return h(
     'div',
@@ -44,11 +45,11 @@ function freeChain(o: Overview): HTMLElement {
     rows(
       head('', 'На счетах для трат', sp.spendNow),
       spendAcc.map((p) => part(p.title, p.balance)),
-      head('− ', 'Отложено на цели — перевода ещё нет в бэкапе', sp.setAsideOnSpend),
+      head('−', 'Отложено на цели — перевода ещё нет в бэкапе', sp.setAsideOnSpend),
       goalsList.map(([g, v]) => part(goalTitle.get(g) ?? 'цель', v)),
-      head('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome),
+      head('−', `Платежи по долгам ${till}`, o.reserveUntilIncome),
       o.untilIncome.map((u) => part(u.title, u.amount, fmtDay(u.date))),
-      head('− ', `Обычные траты ${till}`, sp.usualUntilIncome),
+      head('−', `Обычные траты ${till}`, sp.usualUntilIncome),
       head('= ', 'Свободно после обычных трат', sp.canSpend),
     ),
     sub('Для сравнения'),

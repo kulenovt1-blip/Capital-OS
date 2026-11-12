@@ -35,7 +35,7 @@ function explanation(v: PositionView): Explanation {
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
   out.push(step('position.rule', 'Как получается ступень: общая оценка из трёх направлений (слабое тянет вниз) плюс факты — запас от 3 месяцев для «Есть подушка», от 6 месяцев и все направления от 60 для «Защищён от ударов»', { detail: true }));
-  out.push(step('position.level', `Уровень: ${v.level === null ? 'не определён' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
+  out.push(step('position.level', `Ступень: ${v.level === null ? 'не определена' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
     out.push(step(`position.dir.${d.id}`, `${d.name}: ${d.score === null ? 'оценить нечем' : `${nf(d.score)} из 100`}${d.reliable ? '' : ' (данных мало)'}`));
     for (const i of d.indicators) out.push(step(`position.ind.${i.id}`, `${i.label}: ${i.score === null ? 'пока неизвестно' : `${nf(i.score)} из 100`}`, { detail: true }));
@@ -44,7 +44,7 @@ function explanation(v: PositionView): Explanation {
   if (v.held) out.push(step('position.held', `${v.held}`, { level: 'warn' }));
   if (v.next) out.push(step('position.next', `Чтобы подняться на «${v.next.name}»: ${v.next.needs.join('; ')}`));
   if (v.range) out.push(step('position.range', `Часть данных неизвестна, поэтому оценка — от ${nf(v.range.low)} до ${nf(v.range.high)}${v.range.showPoint ? `; ближе всего к ${nf(v.range.point)}` : ''}`));
-  out.push(step('position.confidence', `Достоверность данных: ${pct(v.confidence)}${v.preliminary ? ' — уровень предварительный' : ''}`));
+  out.push(step('position.confidence', `Достоверность данных: ${pct(v.confidence)}${v.preliminary ? ' — ступень предварительная' : ''}`));
   return out;
 }
 registerExplain('position', 'Как посчитано: «Финансовый профиль»', () => explanation(positionNow()));
@@ -67,14 +67,14 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     lines.push(
       h('p', { class: 'muted' },
         v.rangeLevels.low === v.rangeLevels.high
-          ? `Часть данных неизвестна, но на уровень это не влияет: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}.`
+          ? `Часть данных неизвестна, но на ступень это не влияет: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}.`
           : `Часть данных неизвестна: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}, то есть от «${v.rangeLevels.low}» до «${v.rangeLevels.high}».${v.range.showPoint ? ` Ориентир — ${Math.round(v.range.point)}.` : ' Точнее сказать нельзя.'}`),
     );
   }
   // важное про сам уровень — на виду (одной строкой каждое), остальное свёрнуто
   const key: HTMLElement[] = [];
-  if (v.onBorder.length) key.push(h('p', { class: 'pos-note' }, 'Ты на границе уровней: небольшое изменение сдвинет уровень.'));
-  if (v.l4Unconfirmed) key.push(h('p', { class: 'pos-note' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показан уровень ниже. Данные накопятся — уровень подтвердится.`));
+  if (v.onBorder.length) key.push(h('p', { class: 'pos-note' }, 'Ты на границе ступеней: небольшое изменение сдвинет ступень.'));
+  if (v.l4Unconfirmed) key.push(h('p', { class: 'pos-note' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показана ступень ниже. Данные накопятся — ступень подтвердится.`));
   if (v.held) key.push(h('p', { class: 'pos-note' }, `${v.held}.`));
   // внимание: ступень → картинка → оценка надёжности; всё остальное — одной свёрнутой строкой (аудит UX: не стена текста)
   const more: (HTMLElement | null)[] = [
@@ -94,7 +94,7 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
     chart,
     ...key,
     trustLine(v),
-    more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про этот уровень'), h('div', { class: 'stack' }, ...more)) : null,
+    more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про эту ступень'), h('div', { class: 'stack' }, ...more)) : null,
     ladderFold(v),
   );
 }
@@ -108,7 +108,7 @@ function meaningOf(v: PositionView): string {
 /** Все пять ступеней: где ты и что значит каждая (D151). */
 function ladderFold(v: PositionView): HTMLElement {
   return h('details', { class: 'fold pos-ladder', 'data-key': 'position:ladder' },
-    h('summary', null, 'Все уровни'),
+    h('summary', null, 'Все ступени'),
     h('ol', { class: 'pos-ladder-list' },
       [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
         h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
@@ -167,7 +167,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
     { class: 'warnline stack' },
     h('strong', null, `Это «${LEVEL_NAMES[4]}», но есть уязвимость`),
     v.l4Warnings.map((w) => h('div', null, w.text)),
-    h('small', { class: 'hint' }, 'Уровень от этого не меняется: это объяснение, где профиль хрупкий.'),
+    h('small', { class: 'hint' }, 'Ступень от этого не меняется: это объяснение, где профиль хрупкий.'),
   );
 }
 
@@ -180,7 +180,7 @@ export function scoreWord(score: number): string {
 }
 
 function scaleNote(): HTMLElement {
-  return h('p', { class: 'one-line' }, 'Оранжевая черта — порог уровня. Чем длиннее полоска, тем лучше.');
+  return h('p', { class: 'one-line' }, 'Оранжевая черта — порог ступени. Чем длиннее полоска, тем лучше.');
 }
 
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
@@ -222,7 +222,7 @@ function weakBlock(v: PositionView, hasPath = false): HTMLElement | null {
     items.push(row({ title: `Слабое место: ${v.weak.directionName}`, sub: v.weak.indicator ? `самое слабое в нём — «${v.weak.indicator.label}», ${Math.round(v.weak.indicator.score)} из 100` : undefined, chevron: false }));
   }
   if (v.next && !hasPath) items.push(row({ title: `Чтобы подняться на «${v.next.name}»`, sub: `нужно: ${v.next.needs.join('; ')}`, chevron: false }));
-  for (const l of v.limitsFired) items.push(row({ title: 'Сдерживает уровень', sub: l.text, chevron: false, cls: 'warn' }));
+  for (const l of v.limitsFired) items.push(row({ title: 'Сдерживает ступень', sub: l.text, chevron: false, cls: 'warn' }));
   return items.length ? rows(...items) : null;
 }
 
@@ -319,7 +319,7 @@ function desiredBlock(v: PositionView): HTMLElement | null {
     { class: 'stack' },
     sub(`При желаемых расходах (${DESIRED_LABEL})`, info('desiredScenario')),
     h('div', { class: 'card stack' },
-      h('p', { class: 'muted' }, `А если бы ты тратил ${money(d.desired)} в месяц, а не ${money(d.current)}. Капитал и доходы те же. Это гипотеза: основной уровень от неё не меняется.`),
+      h('p', { class: 'muted' }, `А если бы ты тратил ${money(d.desired)} в месяц, а не ${money(d.current)}. Капитал и доходы те же. Это гипотеза: основная ступень от неё не меняется.`),
       h('div', { class: 'pos-cols' },
         col('Сейчас', v.independence.total.central, `при ${money(d.current)} в месяц`),
         col(`Гипотеза`, i.total.central, `при ${money(d.desired)} в месяц`)),
@@ -357,7 +357,7 @@ export function renderPosition(): HTMLElement {
   }
   if (v.status === 'needs_rate') {
     root.append(
-      h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, `Счёт ${v.unrated.map((a) => `«${a.title}» (${a.currency})`).join(', ')} не в тенге. Без курса уровень, запас и прогноз были бы неверными — укажи курс ниже.`)),
+      h('div', { class: 'card stack' }, h('strong', null, 'Профиль пока не оценить'), h('p', { class: 'muted' }, `Счёт ${v.unrated.map((a) => `«${a.title}» (${a.currency})`).join(', ')} не в тенге. Без курса ступень, запас и прогноз были бы неверными — укажи курс ниже.`)),
       currencyRatesBlock([...new Set(v.unrated.map((a) => a.currency))]),
     );
     return root;

@@ -50,12 +50,25 @@ export async function loadDemo(): Promise<void> {
   }
 }
 
+/** Забрать файл, который service worker положил после «Поделиться → Capital OS»; забирается один раз. */
+async function takeSharedFile(): Promise<File | null> {
+  try {
+    if (typeof caches === 'undefined') return null;
+    const c = await caches.open('capital-os-share');
+    const res = await c.match('shared-file');
+    if (!res) return null;
+    await c.delete('shared-file');
+    const name = decodeURIComponent(res.headers.get('x-file-name') ?? 'MoneyManager.mmbackup');
+    return new File([await res.blob()], name);
+  } catch {
+    return null;
+  }
+}
+
 export function renderImport(rerender: () => void): HTMLElement {
   const st = getState();
   const input = h('input', { type: 'file', accept: '.mmbackup,application/octet-stream,application/zip', id: 'mm-file', class: 'visually-hidden', 'aria-label': 'Файл бэкапа .mmbackup' });
-  input.addEventListener('change', async () => {
-    const f = input.files?.[0];
-    if (!f) return;
+  const load = async (f: File): Promise<void> => {
     try {
       const data = importMmbackup(await readFileBytes(f));
       pending = { data, report: reconcileAccounts(data), fileName: f.name };
@@ -65,7 +78,13 @@ export function renderImport(rerender: () => void): HTMLElement {
       lastError = e instanceof Error ? e.message : String(e);
     }
     rerender();
+  };
+  input.addEventListener('change', async () => {
+    const f = input.files?.[0];
+    if (f) await load(f);
   });
+  // файл, присланный через «Поделиться → Capital OS» (D183)
+  void takeSharedFile().then((f) => f && load(f));
   const pick = (primary: boolean, label: string) => h('label', { class: `btn ${primary ? 'primary big' : ''} wide file-btn` }, label, input);
 
   const root = h('div', { class: 'screen' });
