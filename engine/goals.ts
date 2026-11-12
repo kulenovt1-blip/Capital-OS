@@ -531,11 +531,11 @@ export function resolveGoalTargets(goals: readonly Goal[], baseMedian: Money, re
 }
 
 /**
- * Универсальный старт (D74): одна цель «Резерв» с суммой по правилу — она нужна любому.
+ * Универсальный старт (D74): одна цель «Подушка» с суммой по правилу — она нужна любому.
  * Остальные цели человек создаёт сам: у каждого они свои.
  */
 export function starterGoals(date: IsoDate): Goal[] {
-  const r = createGoal({ id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Резерв = N месяцев базовых расходов (N — в «Ещё → Для продвинутых → Параметры»)' }, [], date);
+  const r = createGoal({ id: 'goal-reserve', title: 'Подушка', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, why: 'Подушка на случай потери дохода или непредвиденной траты', doneCriteria: 'Подушка = N месяцев базовых расходов (N — в «Ещё → Для продвинутых → Параметры»)' }, [], date);
   if (!r.ok) throw new Error(r.error);
   return [r.value];
 }
@@ -547,7 +547,7 @@ export function starterGoals(date: IsoDate): Goal[] {
 export function exampleGoals(date: IsoDate): Goal[] {
   const spec: GoalInput[] = [
     { id: 'goal-savings', title: 'Накопления', role: 'capital', targetMin: tenge(300_000), importance: 5, order: 30, why: 'Запас на будущее', doneCriteria: 'Накоплено 300 000 ₸' },
-    { id: 'goal-reserve', title: 'Резерв', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, unconfirmed: true, why: 'Подушка на случай потери дохода', doneCriteria: 'Резерв = 3 месяца базовых расходов' },
+    { id: 'goal-reserve', title: 'Подушка', role: 'safety', targetMin: ZERO, importance: 5, order: 0, targetRule: { kind: 'months_of_base', basis: 'essential' }, unconfirmed: true, why: 'Подушка на случай потери дохода', doneCriteria: 'Подушка = 3 месяца базовых расходов' },
     { id: 'goal-trip', title: 'Отпуск', role: 'life_change', targetMin: ZERO, importance: 4, order: 10, folder: true, deadline: '2027-07-01', flexibility: 'fixed', unconfirmed: true, why: 'Поездка летом', doneCriteria: 'Поездка оплачена' },
     { id: 'goal-trip-tickets', parentId: 'goal-trip', title: 'Билеты', role: 'life_change', targetMin: ZERO, importance: 4, order: 10, deadline: '2027-07-01', unconfirmed: true },
     { id: 'goal-trip-stay', parentId: 'goal-trip', title: 'Жильё в поездке', role: 'life_change', targetMin: ZERO, importance: 4, order: 20, deadline: '2027-07-01', unconfirmed: true },

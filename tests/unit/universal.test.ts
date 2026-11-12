@@ -289,10 +289,10 @@ describe('подсказка класса по названию категори
 });
 
 describe('цели: универсальный старт', () => {
-  it('«Начать с резерва» — одна цель «Резерв» с суммой по правилу, без чужих целей', async () => {
+  it('«Начать с резерва» — одна цель «Подушка» с суммой по правилу, без чужих целей', async () => {
     const { starterGoals, validateGoal } = await import('../../engine/goals');
     const g = starterGoals(TODAY);
-    expect(g.map((x) => [x.title, x.role, x.targetRule?.kind])).toEqual([['Резерв', 'safety', 'months_of_base']]);
+    expect(g.map((x) => [x.title, x.role, x.targetRule?.kind])).toEqual([['Подушка', 'safety', 'months_of_base']]);
     expect(validateGoal(g[0]!, g)).toEqual([]);
   });
 });

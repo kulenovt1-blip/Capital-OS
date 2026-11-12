@@ -210,7 +210,7 @@ describe('резерв как цель (§4.2 п.4, D27) и пример из §
   });
   it('пример целей: дерево целей, суммы помечены «подтвердить», валидно', () => {
     const ex = exampleGoals(TODAY);
-    expect(ex.map((g) => g.title)).toEqual(['Накопления', 'Резерв', 'Отпуск', 'Билеты', 'Жильё в поездке', 'Ремонт']);
+    expect(ex.map((g) => g.title)).toEqual(['Накопления', 'Подушка', 'Отпуск', 'Билеты', 'Жильё в поездке', 'Ремонт']);
     expect(ex.find((g) => g.title === 'Накопления')!.targetMin).toBe(tenge(300_000));
     expect(ex.filter((g) => g.unconfirmed).length).toBeGreaterThanOrEqual(4);
     expect(ex.find((g) => g.title === 'Ремонт')!.status).toBe('paused');

@@ -213,7 +213,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
 
   return {
-    status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null, spiral.spiral), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
@@ -265,7 +265,15 @@ function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs
 }
 
 /** Фраза-смысл ступени: при запасе ≥ 3 мес. на ступенях 1–2 общий текст был бы неправдой — называется причина низкой оценки (К3, D156). */
-function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): string {
+function meaningOf(level: Level, i: IndicatorInputs, weak: string | null, spiral = false): string {
+  // расходы больше доходов: «на жизнь хватает» и «запаса почти нет» были бы неправдой (L6, D173)
+  const deficit = i.savingRate !== null && i.savingRate < 0;
+  if (level <= 2 && deficit) {
+    const base = i.reserveEssentialMonths >= L3_RESERVE_MONTHS
+      ? `Расходы больше доходов: живёшь за счёт запаса, его хватит примерно на ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, и он тает`
+      : `Расходы больше доходов, а запаса меньше ${L3_RESERVE_MONTHS} месяцев: сейчас ${nfDown(i.reserveEssentialMonths)}`;
+    return spiral ? `${base}. Долги растут: начни с одного платежа` : base;
+  }
   if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
   return LEVEL_MEANINGS[level];
 }

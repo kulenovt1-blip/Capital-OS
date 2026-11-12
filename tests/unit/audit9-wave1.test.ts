@@ -10,6 +10,9 @@ import { mergeAccountSettings, type AccountSettings } from '../../engine/setting
 import { emptyState, type AppState } from '../../engine/state';
 import { tenge } from '../../engine/money';
 import { acc, dataset, inc, trf } from '../support/build';
+import { positionViewOf } from '../../engine/position/view';
+import { debtLoadScore } from '../../engine/position/indicators';
+import { namedProfiles, TODAY as PROFILE_TODAY } from '../support/position-profiles';
 
 const TODAY = '2026-10-28';
 
@@ -66,5 +69,22 @@ describe('D172: «Пришли деньги» после копилок', () => 
     expect(sp.lines.find((l) => l.goalId === 'reserve')?.amount ?? 0).toBe(0);
     expect(sp.lines.find((l) => l.goalId === 'trip')!.amount).toBeGreaterThan(0);
     expect(sp.setAside).toBeLessThanOrEqual(tenge(50_000));
+  });
+});
+
+describe('D171: долговая нагрузка без дохода', () => {
+  it('нет дохода и есть долг — 0 баллов, а не «отлично»; нет ни долга, ни дохода — 100', () => {
+    expect(debtLoadScore(50_000, 500_000, 0)).toBe(0);
+    expect(debtLoadScore(0, 500_000, 0)).toBe(0);
+    expect(debtLoadScore(0, 0, 0)).toBe(100);
+  });
+});
+
+describe('D173: текст ступени при расходах больше доходов', () => {
+  it('на ступени 2 с дефицитом нет фраз «на жизнь хватает» и «запаса почти нет»; названо, на сколько хватит запаса', () => {
+    const v = positionViewOf(namedProfiles().find((p) => p.name === 'D34')!.state, PROFILE_TODAY);
+    expect(v.level).toBe(2);
+    expect(v.levelMeaning).toMatch(/^Расходы больше доходов: живёшь за счёт запаса/);
+    expect(v.levelMeaning).toMatch(/мес\./);
   });
 });

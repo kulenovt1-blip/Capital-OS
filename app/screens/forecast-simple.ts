@@ -23,7 +23,7 @@ function spendParts(): HTMLElement | null {
   const usual = input.expenses.filter((x) => part(x.key) === 'usual').reduce((a, x) => a + x.monthly, 0) as Money;
   const rare = input.expenses.filter((x) => part(x.key) === 'rare').reduce((a, x) => a + x.monthly, 0) as Money;
   if (usual + rare <= 0) return null;
-  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Расчёт по шагам · траты в месяц ${fmtShort((usual + rare) as Money)} ›`);
+  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Расчёт по шагам · траты без платежей по долгам ${fmtShort((usual + rare) as Money)} в месяц ›`);
 }
 
 /** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
@@ -710,7 +710,7 @@ defineSheet('a-to-b', () => {
       pick,
       sub('Что для этого нужно'),
       rows(
-        row({ title: 'Уходит в обычный месяц', sub: 'траты и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
+        row({ title: 'Необходимое в месяц', sub: 'еда, дорога, связь, быт и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
         row({ title: `Нужно денег: ${r.to} ${r.to === 1 ? 'месяц' : 'мес.'}`, sub: `${r.to} × ${fmt(r.from.needMonthly)}`, value: fmt(r.target), chevron: false }),
         row({ title: 'Есть сейчас', sub: 'можно снять сразу', value: fmt(r.from.liquid), chevron: false }),
         row({ title: h('strong', null, 'Не хватает'), value: h('strong', null, fmt(r.missing)), chevron: false }),
@@ -746,7 +746,7 @@ defineSheet('reserve-info', () => {
       rows(
         row({ title: 'Необходимые траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
         row({ title: '+ платежи по долгам и рассрочкам', value: fmt(s.obligationsMonthly), chevron: false }),
-        row({ title: h('strong', null, '= уходит в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
+        row({ title: h('strong', null, '= необходимое в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
         row({ title: 'Деньги, которые можно снять сразу, за вычетом долгов людям', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),
