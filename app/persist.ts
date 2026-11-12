@@ -101,3 +101,59 @@ function safeStringify(v: unknown): string {
     return String(v);
   }
 }
+
+// ───────────────────────── защита от удаления браузером (аудит 9, P1; D176) ─────────────────────────
+
+/** Постоянное ли хранилище: granted — браузер не удалит данные сам; denied — может удалить при нехватке места (Safari — через 7 дней без заходов). */
+export type PersistStatus = 'granted' | 'denied' | 'unsupported' | 'unknown';
+
+/** Часть `navigator.storage`, которая нужна (в тестах — подделка). */
+export interface StorageApi {
+  persisted?: () => Promise<boolean>;
+  persist?: () => Promise<boolean>;
+}
+
+/** Просит постоянное хранилище; уже выданное — не просит второй раз. Ошибки браузера — не падение приложения. */
+export async function requestPersistence(api: StorageApi | undefined): Promise<PersistStatus> {
+  if (!api || typeof api.persist !== 'function') return 'unsupported';
+  try {
+    if (typeof api.persisted === 'function' && (await api.persisted())) return 'granted';
+    return (await api.persist()) ? 'granted' : 'denied';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Через сколько дней без бэкапа напоминать: чаще, если браузер не обещал беречь данные. */
+export const BACKUP_REMIND_DAYS = 14;
+export const BACKUP_REMIND_DAYS_UNPROTECTED = 7;
+
+export interface BackupReminder {
+  show: boolean;
+  /** bad — данных нет нигде, кроме этого браузера, и он их не обещает беречь. */
+  level: 'warn' | 'bad';
+  title: string;
+  sub: string;
+}
+
+/** Нужно ли напомнить про бэкап приложения (всё, что человек настроил, не восстановить из MoneyManager). */
+export function backupReminder(lastBackupDaysAgo: number | null, hasData: boolean, status: PersistStatus): BackupReminder {
+  const unprotected = status === 'denied' || status === 'unsupported';
+  const limit = unprotected ? BACKUP_REMIND_DAYS_UNPROTECTED : BACKUP_REMIND_DAYS;
+  if (!hasData) return { show: false, level: 'warn', title: '', sub: '' };
+  if (lastBackupDaysAgo === null) {
+    return { show: true, level: unprotected ? 'bad' : 'warn', title: 'Бэкап приложения ещё не скачивался', sub: unprotected ? 'браузер может удалить данные — настройки, цели и разметку из MoneyManager не вернуть' : 'настройки, цели и разметку из MoneyManager не вернуть' };
+  }
+  if (lastBackupDaysAgo > limit) {
+    return { show: true, level: unprotected && lastBackupDaysAgo > 2 * limit ? 'bad' : 'warn', title: 'Бэкап давно не скачивался', sub: `последний ${lastBackupDaysAgo} дн. назад${unprotected ? ' · браузер может удалить данные' : ''}` };
+  }
+  return { show: false, level: 'warn', title: '', sub: '' };
+}
+
+/** Строка про защиту для экрана «Бэкап». */
+export function persistLine(status: PersistStatus): string {
+  if (status === 'granted') return 'Браузер обещал не удалять данные сам. Бэкап всё равно нужен: он защищает от ручной очистки и поломки телефона.';
+  if (status === 'denied') return 'Браузер не обещал беречь данные: при нехватке места он может их удалить. Установи приложение на главный экран и скачивай бэкап раз в неделю.';
+  if (status === 'unsupported') return 'Этот браузер не умеет закреплять данные: они могут пропасть без предупреждения. Скачивай бэкап раз в неделю.';
+  return 'Не удалось выяснить, закреплены ли данные в браузере. Скачивай бэкап регулярно.';
+}

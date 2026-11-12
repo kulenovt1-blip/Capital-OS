@@ -1,13 +1,14 @@
 /**
  * Экран «Обзор» как чистая функция: из состояния и даты — всё, что показывается.
  */
+import { applySpikes } from './spikes';
 import { sub, sum, ZERO, type Money } from './money';
 import { addDays, fullMonthsBefore, monthKey, nextDayOfMonth, maxDate, type IsoDate, type MonthKey } from './date';
 import { day, formula, money, plural, step, type Explanation } from './explain';
 import { detectInstallments, type InstallmentScan } from './installment-detect';
 import { classifyAll, type ClassificationReport, type ClassifiedOp } from './classify';
 import { averageMonthly, baselineMonthly, monthlyFlows, computeCapital, reconcileAccounts, type Baseline, type CapitalReport, type ReconcileReport } from './ledger';
-import { balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
+import { AUTO_CUSHION_PREFIX, balancesFromPositions, effectiveFundings, flattenTree, freeMoney as goalsFreeMoney, goalTree, invalidBindings, overAssignment, resolveGoalTargets, type Goal, type GoalFunding, type GoalNode, type OverAssignment } from './goals';
 import { accountKindGuess, accountsNeedingReview, type AccountKind } from './settings';
 import { daysBetween } from './date';
 import { add, mulDiv } from './money';
@@ -128,8 +129,10 @@ export interface SpendView {
   spendNow: Money;
   /** Отложено, но ещё на счетах для трат (назначения целям на них). */
   setAsideOnSpend: Money;
-  /** Можно тратить до следующего дохода = spendNow − setAsideOnSpend − платежи до дохода. */
+  /** Свободно после обычных трат до дохода = spendNow − setAsideOnSpend − платежи до дохода − обычные траты до дохода (D174). */
   canSpend: Money;
+  /** Обычные траты до следующего дохода (usualMonthly × дни / 30,4). */
+  usualUntilIncome: Money;
   /** Дней до следующего дохода (не меньше 1). */
   days: number;
   perDay: Money;
@@ -203,7 +206,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   const explanation: Explanation = [];
 
   const reconcile = hasData ? reconcileAccounts(data) : null;
-  const classification = hasData ? classifyAll(data, state.settings.classification) : null;
+  const classified = hasData ? classifyAll(data, state.settings.classification) : null;
+  // D175: ответы про всплески трат переводят их операции в «Больше не повторится»
+  const classification = classified && state.settings.spikes ? { ...classified, ops: applySpikes(classified.ops, state.settings.spikes) } : classified;
   const obligations = state.obligations.map((o) => obligationStatus(o, data, today, { matchWindowDays: state.settings.matchWindowDays, manualMatches: state.manualMatches }));
   const capital = computeCapital({
     data,
@@ -217,7 +222,8 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     savingsFlows: state.settings.savingsFlows,
     ...(state.settings.currencyRates ? { currencyRates: state.settings.currencyRates } : {}),
   });
-  const fundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
+  const explicitFundings = effectiveFundings(state.fundings, capital.accounts, state.settings.accounts, state.goals, today);
+  let fundings = explicitFundings;
   const installments = detectInstallments(state, today, classification);
 
   // обычные траты нужны раньше: от них зависит, какой доход считать «настоящим» для окна «до дохода» (D111)
@@ -251,6 +257,29 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     essential: add(baseline.median, obligationsMonthly),
     all: add(add(add(baseline.median, regularMedian), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),
   });
+  // одна подушка (D172): свободные деньги в копилках — те, что не закреплены ни за какой целью, — засчитываются подушке, пока она не набрана
+  const cushion = resolved.goals.find((g) => g.role === 'safety' && g.parentId === undefined && g.status === 'active' && !g.folder);
+  if (cushion && cushion.targetMin > 0) {
+    const subtree = new Set<string>([cushion.id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const g of resolved.goals) if (g.parentId !== undefined && subtree.has(g.parentId) && !subtree.has(g.id)) (subtree.add(g.id), (grew = true));
+    }
+    let need = Math.max(0, cushion.targetMin - sum(explicitFundings.filter((f) => subtree.has(f.goalId)).map((f) => f.amount))) as Money;
+    const pools = capital.accounts
+      .filter((p) => !p.excluded && p.availableFrom <= today && accountKindGuess(p, state.settings.accounts, state.manualAccounts).kind === 'savings')
+      .map((p) => ({ accountId: p.accountId, free: Math.max(0, p.balance - sum(explicitFundings.filter((f) => f.accountId === p.accountId).map((f) => f.amount))) as Money }))
+      .filter((p) => p.free > 0)
+      .sort((a, b) => b.free - a.free || (a.accountId < b.accountId ? -1 : 1));
+    const auto: GoalFunding[] = [];
+    for (const p of pools) {
+      if (need <= 0) break;
+      const take = Math.min(need, p.free) as Money;
+      need = (need - take) as Money;
+      auto.push({ id: `${AUTO_CUSHION_PREFIX}${p.accountId}`, goalId: cushion.id, accountId: p.accountId, amount: take, date: today, decisionId: null, note: 'свободные деньги копилки — в подушку' });
+    }
+    if (auto.length) fundings = [...explicitFundings, ...auto];
+  }
   const tree = goalTree(resolved.goals, fundings, today, state.settings.horizonMonths);
   const balances = balancesFromPositions(capital.accounts);
   const overAssigned = overAssignment(fundings, balances, resolved.goals);
@@ -274,6 +303,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   for (const b of invalidBindings(state.settings.accounts, capital.accounts, state.goals)) {
     const t = capital.accounts.find((p) => p.accountId === b.accountId)?.title ?? b.accountId;
     notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Ещё → Счета»` });
+  }
+  if (data.meta.defaultCurrency && data.meta.defaultCurrency !== 'KZT') {
+    notices.push({ code: 'import.default_currency', level: 'error', text: `Основная валюта в MoneyManager — ${data.meta.defaultCurrency}, а Capital OS считает в тенге: суммы подписаны «₸», хотя это ${data.meta.defaultCurrency}. Числа и выводы приложения здесь неверны. Пока приложение рассчитано на основную валюту KZT` });
   }
   if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} ${plural(data.warnings.length, 'замечание', 'замечания', 'замечаний')} — см. экран «Импорт»` });
   for (const s of capital.explanation) if (s.level === 'warn') notices.push({ code: s.code, level: 'warn', text: s.text });
@@ -323,13 +355,15 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     else if (k === 'spend') spendNow = add(spendNow, p.balance);
   }
   const setAsideOnSpend = sum(fundings.filter((f) => kinds[f.accountId] === 'spend').map((f) => f.amount));
-  const canSpend = sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome);
   const days = Math.max(1, daysBetween(today, nextIncome.date));
   // не узнанные категории: в «обычно уходит» — по среднему за месяц, а не медианой как регулярные (D104)
   const unchecked = averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly;
   const usualMonthly = add(add(baseline.median, regularMedian), unchecked);
+  // D174: «можно тратить» — это то, что останется после платежей И обычных трат до дохода, а не просто баланс минус платежи
+  const usualUntilIncome = mulDiv(usualMonthly, 12 * days, 365);
+  const canSpend = sub(sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome), usualUntilIncome);
   const spend: SpendView = {
-    kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
+    kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, usualUntilIncome, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
     onHand, inSavings, locked, obligationsMonthly, regularMedian,

@@ -4,6 +4,7 @@
  * График, таблица и сценарии «Хуже / Лучше» — в «График и сценарии».
  */
 import { NEVER_AVAILABLE, balanceOn, forecastDate, formatDateRu, stepsTo, SAVING_CUT_PCT, cushionFill, expensePart, higherTargets, routeTo, RESERVE_NOTES, ROUTE_DEADLINES, type ReserveTarget, hiddenFacts, previewAnswer, type SanityFinding, planToGoal, reorderGoals, applyRepeatAnswer, buildSimInput, savingOptions, cutEvent, previewBaselineMode, previewEvent, previewIndexed, capitalAt, classRegistry, listOrder, previewRepeat, runWhatIf, sanityCheck, sparseExpenses, type LifeEvent, type LifeEventKind, type Money, type MonthKey, type WhatIfResult } from '../../engine/index';
+import { spikeFacts, ensureNeverClass, tenge } from '../../engine';
 import { ask, field, h } from '../dom';
 import { act, getState, today, update } from '../store';
 import { forecastNow, forecastTraceNow, ov, reserveCtx, verdicts } from '../ctx';
@@ -23,7 +24,7 @@ function spendParts(): HTMLElement | null {
   const usual = input.expenses.filter((x) => part(x.key) === 'usual').reduce((a, x) => a + x.monthly, 0) as Money;
   const rare = input.expenses.filter((x) => part(x.key) === 'rare').reduce((a, x) => a + x.monthly, 0) as Money;
   if (usual + rare <= 0) return null;
-  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Расчёт по шагам · траты в месяц ${fmtShort((usual + rare) as Money)} ›`);
+  return h('a', { class: 'subline', href: sheetHref('explain', 'forecast'), style: 'color:inherit;display:flex;align-items:center;min-height:44px' }, `Расчёт по шагам · траты без платежей по долгам ${fmtShort((usual + rare) as Money)} в месяц ›`);
 }
 
 /** «Как посчитано» прогноза (D100): из чего он сложен — строками, без сплошного текста. */
@@ -154,6 +155,31 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
         more('Какие именно', h('p', { class: 'muted' }, l.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')))));
     }
   }
+  const spikeF = found.find((x) => x.id === 'spike_unconfirmed' && x.level === 'fail');
+  if (spikeF) {
+    shown.add(spikeF);
+    const ids = new Set(spikeF.ref!.split(','));
+    const monthNames = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+    const mname = (k: string) => `${monthNames[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
+    const setS = (id: string, classId: string, a: { kind: 'never' } | { kind: 'yearly' } | { kind: 'custom'; annual: Money }, msg: string) =>
+      void act((s) => ({ ...s, settings: { ...s.settings, spikes: { ...(s.settings.spikes ?? {}), [id]: a }, ...(a.kind === 'yearly' ? {} : { classes: ensureNeverClass(s.settings.classes) }) } }), msg);
+    for (const sp of spikeFacts(st, today(), ov()).filter((x) => ids.has(x.id))) {
+      const when = sp.from === sp.to ? mname(sp.from) : `${mname(sp.from)} – ${mname(sp.to)}`;
+      const input = h('input', { type: 'number', inputmode: 'numeric', min: '0', step: '1000', placeholder: 'Сколько в год, ₸', 'aria-label': 'Сколько в год, ₸', class: 'input' }) as HTMLInputElement;
+      nodes.push(card('Всплеск трат', `${label(sp.label)}, ${when}: ${fmt(sp.total)}, а в обычный месяц ${fmt(sp.median)}. Это повторится?`,
+        pv((s, yes) => ({ ...s, settings: { ...s.settings, spikes: { ...(s.settings.spikes ?? {}), [sp.id]: yes ? { kind: 'yearly' } : { kind: 'never' } }, classes: ensureNeverClass(s.settings.classes) } })),
+        chips(
+          btn('Разовое — больше не повторится', () => setS(sp.id, sp.classId, { kind: 'never' }, 'Всплеск не повторится — убрал из прогноза')),
+          btn('Бывает раз в год', () => setS(sp.id, sp.classId, { kind: 'yearly' }, 'Оставил: такая сумма раз в год')),
+        ),
+        more('Своя сумма в год', h('div', { class: 'chips wrap' }, input, btn('Принять', () => {
+          const v = Math.round(Number(input.value));
+          if (!(v >= 0)) return;
+          setS(sp.id, sp.classId, { kind: 'custom', annual: tenge(v) }, `В прогнозе ${fmt(tenge(v))} в год вместо всплеска`);
+        }))),
+        more('Какие именно', h('p', { class: 'muted' }, sp.top.map((t) => `${fmtDay(t.date)} — ${fmt(t.amount)}${t.comment ? ` (${t.comment})` : ''}`).join('; ')))));
+    }
+  }
   const habitF = found.find((x) => x.id === 'installment_habit' && x.level === 'fail');
   if (habitF && hf.installments) {
     shown.add(habitF);
@@ -210,6 +236,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const stg = reserveCtx();
   const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
   root.append(
+    h('p', { class: 'one-line' }, 'Срок прогноза, месяцев'),
     horizonSeg(k),
     h(
       'section',
@@ -710,7 +737,7 @@ defineSheet('a-to-b', () => {
       pick,
       sub('Что для этого нужно'),
       rows(
-        row({ title: 'Уходит в обычный месяц', sub: 'траты и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
+        row({ title: 'Необходимое в месяц', sub: 'еда, дорога, связь, быт и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
         row({ title: `Нужно денег: ${r.to} ${r.to === 1 ? 'месяц' : 'мес.'}`, sub: `${r.to} × ${fmt(r.from.needMonthly)}`, value: fmt(r.target), chevron: false }),
         row({ title: 'Есть сейчас', sub: 'можно снять сразу', value: fmt(r.from.liquid), chevron: false }),
         row({ title: h('strong', null, 'Не хватает'), value: h('strong', null, fmt(r.missing)), chevron: false }),
@@ -746,7 +773,7 @@ defineSheet('reserve-info', () => {
       rows(
         row({ title: 'Необходимые траты в месяц', value: fmt(s.usualMonthly), chevron: false }),
         row({ title: '+ платежи по долгам и рассрочкам', value: fmt(s.obligationsMonthly), chevron: false }),
-        row({ title: h('strong', null, '= уходит в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
+        row({ title: h('strong', null, '= необходимое в месяц'), value: h('strong', null, fmt(s.needMonthly)), chevron: false }),
         row({ title: 'Деньги, которые можно снять сразу, за вычетом долгов людям', value: fmt(s.liquid), chevron: false }),
         row({ title: h('strong', null, `${fmt(s.liquid)} ÷ ${fmt(s.needMonthly)}`), value: h('strong', null, `${cover} мес.`), chevron: false }),
       ),

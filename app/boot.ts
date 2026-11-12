@@ -1,5 +1,6 @@
 /** Сборка приложения из экранов (D81): 5 пунктов нижней панели и подэкраны «Ещё». */
 import { addRoute, start } from './main';
+import { initPersistence } from './protect';
 import { renderOverview } from './screens/overview';
 import { renderGoals } from './screens/goals';
 import { renderIncome } from './screens/income';
@@ -41,4 +42,5 @@ addRoute({ path: 'view', title: 'Вид', nav: 'more', parent: 'prefs', render: 
 addRoute({ path: 'install', title: 'Установить', nav: 'more', parent: 'prefs', render: () => renderInstall() });
 addRoute({ path: 'rare', title: 'Редкое', nav: 'more', parent: 'prefs', render: (_r, sec) => renderRare(sec) });
 addRoute({ path: 'advanced', title: 'Для продвинутых', nav: 'more', parent: 'prefs', render: (_r, sec) => renderAdvanced(sec) });
+void initPersistence();
 void start();

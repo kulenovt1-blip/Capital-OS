@@ -221,7 +221,8 @@ describe('«Можно тратить» и «На руках»', () => {
     const savingsIds = Object.entries(sp.kinds).filter(([, k]) => k === 'savings').map(([id]) => id);
     expect(savingsIds).toContain('acc-halyk');
     expect(sp.inSavings).toBe(savingsIds.reduce((a, id) => a + bal(id), 0));
-    expect(sp.canSpend).toBe(sp.spendNow - sp.setAsideOnSpend - o.reserveUntilIncome);
+    expect(sp.canSpend).toBe(sp.spendNow - sp.setAsideOnSpend - o.reserveUntilIncome - sp.usualUntilIncome);
+    expect(sp.usualUntilIncome).toBeGreaterThan(0);
     expect(sp.onHand).toBe(o.capital.accounts.filter((p) => !p.excluded).reduce((a, p) => a + p.balance, 0));
     // отложил 10 000 на Kaspi → можно тратить меньше на 10 000
     const s2 = { ...s, fundings: [{ id: 'f1', goalId: 'books', accountId: 'acc-kaspi', amount: tenge(10_000), date: TODAY, decisionId: null, pending: true as const }] };

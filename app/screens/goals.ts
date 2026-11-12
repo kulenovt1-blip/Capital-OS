@@ -3,7 +3,7 @@
  * Форма — три поля; деньги закрепляются за целью в отдельном подэкране с выбором счёта.
  */
 import {
-  STATUS_LABELS, assignMoney, baseForecast, cushionFill, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, goalShifts, moveFunding, nextOrder, reorderGoals,
+  STATUS_LABELS, assignMoney, withoutAuto, baseForecast, cushionFill, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, goalShifts, moveFunding, nextOrder, reorderGoals,
   starterGoals, unassignedSavings, updateGoal, withdrawMoney,
   type Goal, type GoalNode, type GoalStatus, type GoalsView, type Flexibility, type Money,
 } from '../../engine/index';
@@ -629,7 +629,7 @@ defineSheet('goal-fund', (id) => {
     const m = readMoney(form, 'amount');
     if (m === null) return err.replaceChildren(errorsBox(['Введи сумму']) ?? '');
     const cur = view();
-    const r = assignMoney({ id: newId('fund'), goalId: g.id, accountId: acc, amount: m, date: today(), decisionId: null }, { goals: cur.goals, fundings: cur.fundings, balances: cur.balances });
+    const r = assignMoney({ id: newId('fund'), goalId: g.id, accountId: acc, amount: m, date: today(), decisionId: null }, { goals: cur.goals, fundings: withoutAuto(cur.fundings), balances: cur.balances });
     if (!r.ok) return err.replaceChildren(errorsBox([r.error]) ?? '');
     closeSheet();
     await act((s) => ({ ...s, fundings: [...s.fundings, r.value] }), `${fmt(m)} отложено на «${g.title}»`);

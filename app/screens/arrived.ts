@@ -143,7 +143,7 @@ function transferNote(amount?: Money): HTMLElement {
 }
 
 function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
-  const enough = sp.usualPerDay > 0 ? (sp.lifePerDay >= sp.usualPerDay ? ' — хватает.' : ' — меньше обычного, придётся ужаться.') : '.';
+  const enough = sp.life >= 0 ? ' — обычные траты покрыты.' : ' — на обычные траты не хватает, придётся ужаться.';
   const shortFor = new Map(sp.short.map((x) => [x.goalId, x]));
   const items = sp.lines.map((l) => {
     const s = shortFor.get(l.goalId);
@@ -153,9 +153,17 @@ function adviceCard(sp: SimpleSplit, a: Arrived): HTMLElement {
   return h(
     'div',
     { class: 'advice' },
+    sp.fromSavings.total > 0
+      ? h(
+          'div',
+          { class: 'gs' },
+          `В копилках уже лежит ${fmt(sp.fromSavings.total)}, не закреплённые за целями: они закроют ${sp.fromSavings.lines.map((l) => `«${l.title}» (${fmt(l.amount)})`).join(', ')}. Поступление ниже посчитано после них. `,
+          h('a', { href: '#/goals~distribute' }, 'Распределить копилки ›'),
+        )
+      : null,
     h('div', { class: 'big' }, sp.setAside > 0 ? `Можно отложить ${fmt(sp.setAside)}` : 'Откладывать не нужно'),
     items.length ? h('ul', null, items) : h('div', { class: 'gs' }, 'Целей пока нет — всё остаётся на жизнь. ', h('a', { href: '#/goals' }, 'Добавить цель ›')),
-    h('div', null, `На жизнь до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день на всё`), sp.usualPerDay > 0 ? `. Обычно уходит ${fmt(sp.usualPerDay)}${enough}` : '.'),
+    h('div', null, `После платежей и обычных трат до ${fmtDay(sp.nextIncome)} останется `, h('b', null, `${fmt(sp.life)} ≈ ${fmt(sp.lifePerDay)} в день сверх обычного`), `${enough}`),
     sp.payments.length ? h('div', { class: 'gs' }, `Уже вычтено: ${sp.payments.map((p) => `${p.title} ${fmt(p.amount)} (${fmtDay(p.date)})`).join(', ')}`) : null,
     sp.setAside > 0 && !a.inBalance
       ? [

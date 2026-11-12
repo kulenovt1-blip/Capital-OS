@@ -189,7 +189,9 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   if (weakestId) {
     const dv = directions.find((x) => x.id === weakestId)!;
     const known = dv.indicators.filter((x): x is { id: IndicatorId; label: string; score: number } => x.score !== null);
-    const low = known.length ? known.reduce((a, b) => (b.score < a.score ? b : a)) : null;
+    // D177 (L7): «Капитал» (N4) шкалой до 300 месяцев почти всегда самый низкий, но за месяцы на него не повлиять; при запасе от 3 месяцев называем то, что можно менять
+    const actionable = inputs.reserveEssentialMonths >= L3_RESERVE_MONTHS ? known.filter((x) => x.id !== 'N4') : known;
+    const low = actionable.length ? actionable.reduce((a, b) => (b.score < a.score ? b : a)) : null;
     weak = { direction: weakestId, directionName: dv.name, indicator: low };
   }
 
@@ -210,10 +212,13 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : base?.result.lifted ? liftedText(base.result.lifted.reason, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
-  const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
+  // D174: доступное за месяц — после долгов людям, платежей на 30 дней и обычных трат на 30 дней
+  const payments30 = overview.upcoming30.reduce((a, u) => a + u.amount, 0);
+  const usual30 = Math.round((overview.spend.usualMonthly * 12 * 30) / 365);
+  const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps - payments30 - usual30);
 
   return {
-    status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
+    status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null, spiral.spiral), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,
     limitsFired: (base?.fired ?? []).map((id) => ({ id, text: LIMIT_TEXTS[id] })),
     next, onBorder: borderOf(base?.result.onBorder ?? [], inputs), l4Unconfirmed: base?.result.l4Unconfirmed ?? false,
     l4Warnings: level === 4 ? l4Warnings(inputs, blockedShare) : [],
@@ -265,7 +270,15 @@ function liftedText(reason: 'reserve' | 'income' | 'unknown', i: IndicatorInputs
 }
 
 /** Фраза-смысл ступени: при запасе ≥ 3 мес. на ступенях 1–2 общий текст был бы неправдой — называется причина низкой оценки (К3, D156). */
-function meaningOf(level: Level, i: IndicatorInputs, weak: string | null): string {
+function meaningOf(level: Level, i: IndicatorInputs, weak: string | null, spiral = false): string {
+  // расходы больше доходов: «на жизнь хватает» и «запаса почти нет» были бы неправдой (L6, D173)
+  const deficit = i.savingRate !== null && i.savingRate < 0;
+  if (level <= 2 && deficit) {
+    const base = i.reserveEssentialMonths >= L3_RESERVE_MONTHS
+      ? `Расходы больше доходов: живёшь за счёт запаса, его хватит примерно на ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, и он тает`
+      : `Расходы больше доходов, а запаса меньше ${L3_RESERVE_MONTHS} месяцев: сейчас ${nfDown(i.reserveEssentialMonths)}`;
+    return spiral ? `${base}. Долги растут: начни с одного платежа` : base;
+  }
   if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
   return LEVEL_MEANINGS[level];
 }

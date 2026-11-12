@@ -2,7 +2,7 @@
  * «Обзор» (D96): главное число — сколько можно тратить до следующих денег и ≈ в день; рядом — сколько всего на руках
  * и сколько из них в копилках. Подушка одной строкой, платежи, «Требует внимания»; капитал и счета — в «Подробнее».
  */
-import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, type Overview } from '../../engine/index';
+import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
 import { h } from '../dom';
 import { loadDemo } from './import';
 import { act, getState, today } from '../store';
@@ -40,7 +40,7 @@ function freeChain(o: Overview): HTMLElement {
   return h(
     'div',
     { class: 'stack' },
-    hero(`Можно тратить ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день на всё · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
+    hero(`Свободно после обычных трат ${till}`, fmt(sp.canSpend), `≈ ${fmt(sp.perDay)} в день сверх обычного · ${nWord(sp.days, 'день', 'дня', 'дней')} до дохода`, { neg: sp.canSpend < 0 }),
     rows(
       head('', 'На счетах для трат', sp.spendNow),
       spendAcc.map((p) => part(p.title, p.balance)),
@@ -48,11 +48,12 @@ function freeChain(o: Overview): HTMLElement {
       goalsList.map(([g, v]) => part(goalTitle.get(g) ?? 'цель', v)),
       head('− ', `Платежи по долгам ${till}`, o.reserveUntilIncome),
       o.untilIncome.map((u) => part(u.title, u.amount, fmtDay(u.date))),
-      head('= ', 'Можно тратить', sp.canSpend),
+      head('− ', `Обычные траты ${till}`, sp.usualUntilIncome),
+      head('= ', 'Свободно после обычных трат', sp.canSpend),
     ),
     sub('Для сравнения'),
     rows(
-      row({ title: 'В день до дохода', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')} — на все траты, не только на еду`, value: fmt(sp.perDay) }),
+      row({ title: 'Сверх обычного в день', sub: `${fmt(sp.canSpend)} ÷ ${nWord(sp.days, 'день', 'дня', 'дней')} — сверх того, что и так уходит`, value: fmt(sp.perDay) }),
       row({ title: 'Обычно уходит в день', sub: 'повседневное и регулярное, обычный месяц ÷ 30', value: fmt(sp.usualPerDay) }),
       sp.uncheckedMonthly > 0 ? row({ title: 'Из них не проверено', sub: 'категории, которые приложение не узнало, — по среднему за месяц', value: fmt(mulDivDay(sp.uncheckedMonthly)), href: '#/baskets' }) : null,
       row({ title: 'В копилках', sub: 'не входят — их не тратишь', value: fmt(sp.inSavings) }),
@@ -120,14 +121,14 @@ function heroBlock(o: Overview): HTMLElement {
   // К4 аудита UX: при нехватке «Можно тратить −1,96 млн» звучит абсурдно и пугает без выхода — говорим прямо и даём шаг
   if (sp.canSpend < 0) {
     const till = o.nextIncome.source === 'schedule' ? `до ${fmtDay(o.nextIncome.date)}` : 'на 30 дней';
-    return hero(h('span', null, `Не хватает ${till}`, info('free')), fmtShort((-sp.canSpend) as never), h('span', null, 'чтобы дожить до дохода и заплатить по платежам'), {
+    return hero(h('span', null, `Не хватает ${till}`, info('free')), fmtShort((-sp.canSpend) as never), h('span', null, 'чтобы дожить до дохода: платежи и обычные траты'), {
       extra: h('div', { class: 'stack tight' }, h('a', { class: 'link', href: '#/forecast~save-where' }, 'Что можно сделать ›'), h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')),
     });
   }
-  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Можно тратить до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Можно тратить · на 30 дней', info('free'));
+  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно после обычных трат до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно после обычных трат · 30 дней', info('free'));
   // С8: рядом с «≈ 29 тыс в день» — сколько обычно уходит, чтобы лимит не читался как разрешение тратить всё
   const usual = sp.usualPerDay > 0 ? ` · обычно уходит ~${fmtShort(sp.usualPerDay)}` : '';
-  const subline = h('span', null, `≈ ${fmtShort(sp.perDay)} в день, если тратить всё${usual}`);
+  const subline = h('span', null, `≈ ${fmtShort(sp.perDay)} в день сверх обычного${usual}`);
   return hero(label, fmtShort(sp.canSpend), subline, { extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
@@ -138,6 +139,17 @@ function historyNote(o: Overview): HTMLElement | null {
   if (n >= 3 || n >= getState().settings.baselineMonths) return null;
   const have = n === 0 ? 'Полных месяцев в данных ещё нет' : `В данных ${nWord(n, 'полный месяц', 'полных месяца', 'полных месяцев')}`;
   return h('div', { class: 'warnline' }, `${have} — «обычно уходит», подушка и прогноз пока приблизительные. С 3 месяцами истории станут точнее.`);
+}
+
+/** Данные из MoneyManager давно не обновлялись — числа «сейчас» могут не совпадать с реальностью (D180). */
+function freshnessNote(): HTMLElement | null {
+  const st = getState();
+  const f = dataFreshness(st.importedAt, today());
+  if (f.level === 'none' || f.level === 'fresh') return null;
+  const ago = nWord(f.days!, 'день', 'дня', 'дней');
+  return h('a', { class: 'warnline', href: '#/import', style: 'display:block;color:inherit' }, f.level === 'stale'
+    ? `Данные из MoneyManager старые: загружены ${fmtDay(st.importedAt!)}, ${ago} назад. Свободные деньги и подсказки могут быть неверны — загрузи свежий бэкап ›`
+    : `Данные загружены ${fmtDay(st.importedAt!)}, ${ago} назад. Если с тех пор были траты, загрузи свежий бэкап ›`);
 }
 
 /** Подушка — одной строкой: готова или сколько осталось (D96). */
@@ -302,6 +314,7 @@ export function renderOverview(): HTMLElement {
     heroBlock(o),
     firstRunCard(),
     arrivedCard(),
+    freshnessNote(),
     historyNote(o),
     h(
       'div',

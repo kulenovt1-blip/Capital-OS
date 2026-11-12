@@ -149,6 +149,9 @@ export interface IncomeScheduleItem {
 }
 
 /** Вид дохода = поведение в прогнозе, а не метка (D66). Встроенные — ниже; свои — id 'K_…' (D75). */
+/** Что человек ответил про всплеск трат (D175). */
+export type SpikeAnswer = { kind: 'never' } | { kind: 'yearly' } | { kind: 'custom'; annual: Money };
+
 export type IncomeKind = 'work' | 'stable' | 'irregular' | `K_${string}`;
 export const INCOME_KIND_LABELS: Record<'work' | 'stable' | 'irregular', string> = {
   work: 'зависит от работы',
@@ -209,6 +212,8 @@ export interface Settings {
    */
   /** Крупные траты сверх обычного месяца в классе повторятся (по id класса). */
   lumps?: Record<string, boolean>;
+  /** Ответы про всплески трат (D175), по id `классId@с~по`. */
+  spikes?: Record<string, SpikeAnswer>;
   /** Когда текущие рассрочки кончатся, будут новые — как раньше. */
   newInstallments?: boolean;
   /** Учитывать поступления вне расписания (подарки деньгами, кешбэк, прочее). */

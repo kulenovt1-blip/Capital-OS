@@ -9,7 +9,7 @@ import { classGroup, classifyAll, setCategoryClass, suggestClassForCategory, typ
 import { UNCHECKED_CLASS_ID, classRegistry, type Behavior, type ClassDef, type ClassSettings } from './classes';
 export { UNCHECKED_CLASS_ID };
 import { eligibleGoals, ladder, listOrder, requiredMonthly, type StrategyParams } from './ladder';
-import { BOUND_PREFIX, assignMoney, flattenTree, type Goal, type GoalFunding } from './goals';
+import { BOUND_PREFIX, assignMoney, withoutAuto, flattenTree, type Goal, type GoalFunding } from './goals';
 import { step, type Outcome } from './explain';
 import { baselineWindow, buildOverview, type Overview } from './overview';
 import { buildSimInput, planIncome } from './plan';
@@ -85,6 +85,8 @@ export interface SimpleSplit {
   payments: { title: string; amount: Money; date: IsoDate }[];
   /** Дохода не хватает на платежи и обычные траты до следующего. */
   deficit: Money;
+  /** Деньги в копилках без цели (D172): сначала они закроют цели по порядку списка, и поступление считается уже после них. */
+  fromSavings: { total: Money; lines: { goalId: string; title: string; amount: Money }[] };
 }
 
 /**
@@ -94,7 +96,9 @@ export interface SimpleSplit {
 export function splitIncome(state: AppState, today: IsoDate, amount: Money, incomeInBalance: boolean): SimpleSplit {
   const o = buildOverview(state, today);
   const strategy: StrategyParams = { id: 'S' };
-  const compare = planIncome(state, today, { amount, incomeInBalance, strategies: [strategy], simple: true });
+  // свободные деньги в копилках закроют цели по порядку списка — поступление считается после них (D172)
+  const fromSavingsDist = distributeSavings(o, today, 'virt');
+  const compare = planIncome(state, today, { amount, incomeInBalance, strategies: [strategy], simple: true, extraProgress: fromSavingsDist.byGoal });
   const row = compare.rows[0];
   const byId = new Map(o.goals.map((g) => [g.id, g]));
   const { list } = eligibleGoals(o.goals);
@@ -103,6 +107,7 @@ export function splitIncome(state: AppState, today: IsoDate, amount: Money, inco
   const short: SimpleSplit['short'] = [];
   const progress = new Map<string, Money>();
   for (const f of o.fundings) progress.set(f.goalId, add(progress.get(f.goalId) ?? ZERO, f.amount));
+  for (const [goalId, a] of Object.entries(fromSavingsDist.byGoal)) progress.set(goalId, add(progress.get(goalId) ?? ZERO, a));
   if (row) {
     for (const g of listOrder(o.goals)) {
       const a = row.byGoal[g.id];
@@ -137,6 +142,10 @@ export function splitIncome(state: AppState, today: IsoDate, amount: Money, inco
     days,
     payments: o.untilIncome.map((u) => ({ title: u.title, amount: u.amount, date: u.date })),
     deficit: compare.step0.ok ? ZERO : compare.step0.deficit,
+    fromSavings: {
+      total: sum(Object.values(fromSavingsDist.byGoal)),
+      lines: listOrder(o.goals).filter((g) => (fromSavingsDist.byGoal[g.id] ?? 0) > 0).map((g) => ({ goalId: g.id, title: g.title, amount: fromSavingsDist.byGoal[g.id]! })),
+    },
   };
 }
 
@@ -415,6 +424,11 @@ function ensureClass(classes: ClassSettings, def: ClassDef): ClassSettings {
   return classes.custom.some((c) => c.id === def.id) ? classes : { ...classes, custom: [...classes.custom, def] };
 }
 
+/** Класс «Больше не повторится» есть в настройках (создаётся один раз) — для ответов про всплески (D175). */
+export function ensureNeverClass(classes: ClassSettings): ClassSettings {
+  return ensureClass(classes, { id: NEVER_CLASS_ID, label: 'Больше не повторится', group: 'expense', behavior: 'excluded', builtin: false });
+}
+
 /** Класс, которым категория попадает в корзину. Для «разового» — по ответу «повторится / до даты / больше не будет». */
 export function basketClass(basket: Basket, classes: ClassSettings, oneoff: OneoffKind = { kind: 'repeat' }): { cls: OpClass; classes: ClassSettings } {
   if (basket === 'everyday') return { cls: 'E_base', classes };
@@ -625,6 +639,7 @@ export function splitAmount(state: AppState, today: IsoDate, total: Money): { by
   const o = buildOverview(state, today);
   const progress = new Map<string, Money>();
   for (const f of o.fundings) progress.set(f.goalId, add(progress.get(f.goalId) ?? ZERO, f.amount));
+  for (const [goalId, a] of Object.entries(distributeSavings(o, today, 'virt').byGoal)) progress.set(goalId, add(progress.get(goalId) ?? ZERO, a));
   const thisMonth = monthKey(today);
   const fundedThisMonth = new Map<string, Money>();
   for (const f of state.fundings) if (monthKey(f.date) === thisMonth) fundedThisMonth.set(f.goalId, add(fundedThisMonth.get(f.goalId) ?? ZERO, f.amount));
@@ -657,7 +672,7 @@ export function commitSetAside(state: AppState, byGoal: Readonly<Record<string, 
   const added: GoalFunding[] = [];
   for (const [goalId, amount] of Object.entries(byGoal).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     if (amount <= 0) continue;
-    const r = assignMoney({ id: `${decisionId}-${goalId}`, goalId, accountId, amount, date: today, decisionId, note: 'отложено' }, { goals: o.goals, fundings, balances: o.balances });
+    const r = assignMoney({ id: `${decisionId}-${goalId}`, goalId, accountId, amount, date: today, decisionId, note: 'отложено' }, { goals: o.goals, fundings: withoutAuto(fundings), balances: o.balances });
     if (!r.ok) return { ok: false, error: `${r.error}. Если денег ещё нет в бэкапе — загрузи свежий`, explanation: r.explanation };
     const f: GoalFunding = { ...r.value, pending: true };
     fundings.push(f);

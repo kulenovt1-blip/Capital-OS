@@ -9,6 +9,7 @@
  *
  * Чистая функция: ничего не меняет, расчёты не трогает. Используется в tests/sanity и scripts/sanity-check.ts.
  */
+import { spikeFacts } from './spikes';
 import { add, formatKZT, mulDiv, pos, sub, sum, ZERO, type Money } from './money';
 import { addDays, formatDateRu, fullMonthsBefore, monthKey, type IsoDate, type MonthKey } from './date';
 import { monthlyFlows } from './ledger';
@@ -47,6 +48,7 @@ export type SanityId =
   | 'cushion_temporary_debt'
   | 'interest_ignored'
   | 'lumps_lost'
+  | 'spike_unconfirmed'
   | 'installment_habit'
   | 'income_omitted';
 
@@ -221,6 +223,10 @@ export function sanityCheck(state: AppState, today: IsoDate): { findings: Sanity
   const lumps = hf.lumps.filter((l) => state.settings.lumps?.[l.classId] === undefined);
   if (lumps.length) {
     out.push({ id: 'lumps_lost', level: 'fail', ref: lumps.map((l) => l.classId).join(','), text: `Крупные траты сверх обычного месяца в прогноз не входят: ${lumps.map((l) => `«${label(l.label)}» — за год ${tg(l.total)}, в прогнозе ${tg(l.median)} в месяц`).join('; ')}. Будут ещё такие?` });
+  }
+  const spikes = spikeFacts(state, today, o);
+  if (spikes.length) {
+    out.push({ id: 'spike_unconfirmed', level: 'fail', ref: spikes.map((x) => x.id).join(','), text: `Всплески трат без ответа: ${spikes.map((x) => `«${label(x.label)}» ${x.from === x.to ? mo(x.from) : `${mo(x.from)} – ${mo(x.to)}`} — ${tg(x.total)} при обычных ${tg(x.median)} в месяц`).join('; ')}. Прогноз повторяет такие суммы каждый год — если это было разово, ответь на «Прогнозе»` });
   }
   const inst = hf.installments;
   if (inst && state.settings.newInstallments === undefined && (!inst.currentEnd || inst.currentEnd < horizonEnd)) {
