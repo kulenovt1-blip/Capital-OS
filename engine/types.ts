@@ -70,5 +70,6 @@ export interface ImportedData {
   /** account_balance: эталон для сверки. */
   reportedBalances: Record<string, Money>;
   warnings: ImportWarning[];
-  meta: { entryName: string; prefixLength: number; dbBytes: number; firstDate: IsoDate | null; lastDate: IsoDate | null };
+  /** `defaultCurrency` — основная валюта из настроек MoneyManager (D181); нет поля — не читалась. */
+  meta: { entryName: string; prefixLength: number; dbBytes: number; firstDate: IsoDate | null; lastDate: IsoDate | null; defaultCurrency?: string };
 }

@@ -304,6 +304,9 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     const t = capital.accounts.find((p) => p.accountId === b.accountId)?.title ?? b.accountId;
     notices.push({ code: 'accounts.bound_invalid', level: 'warn', text: `Привязка «${t}» к цели не действует: ${b.reason}. Деньги счёта считаются свободными — поправь в «Ещё → Счета»` });
   }
+  if (data.meta.defaultCurrency && data.meta.defaultCurrency !== 'KZT') {
+    notices.push({ code: 'import.default_currency', level: 'error', text: `Основная валюта в MoneyManager — ${data.meta.defaultCurrency}, а Capital OS считает в тенге: суммы подписаны «₸», хотя это ${data.meta.defaultCurrency}. Числа и выводы приложения здесь неверны. Пока приложение рассчитано на основную валюту KZT` });
+  }
   if (data.warnings.length) notices.push({ code: 'import.warnings', level: 'warn', text: `Импорт: ${data.warnings.length} ${plural(data.warnings.length, 'замечание', 'замечания', 'замечаний')} — см. экран «Импорт»` });
   for (const s of capital.explanation) if (s.level === 'warn') notices.push({ code: s.code, level: 'warn', text: s.text });
   const stalled = new Set(installments.checks.filter((c) => c.kind === 'stalled').map((c) => c.obligationId));

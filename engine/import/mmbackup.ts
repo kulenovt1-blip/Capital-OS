@@ -169,6 +169,13 @@ export function readMoneyManager(db: SqliteDb, meta: { entryName: string; prefix
   const T = MM_SCHEMA.tables;
   const L = MM_SCHEMA.link;
   const warnings: ImportWarning[] = [];
+  // основная валюта из настроек MoneyManager (D181): суммы операций лежат в ней
+  let defaultCurrency: string | undefined;
+  if (db.hasTable('syncable_settings')) {
+    const row = db.readObjects('syncable_settings').find((r) => str(r.uid) === 'defaultCurrencyCode' && !flag(r.isRemoved));
+    const v = row ? str(row.value).trim().toUpperCase() : '';
+    if (v) defaultCurrency = v;
+  }
 
   const accounts: Account[] = db.readObjects(T.account).map((r) => ({
     id: str(r.uid),
@@ -317,7 +324,7 @@ export function readMoneyManager(db: SqliteDb, meta: { entryName: string; prefix
     operations,
     reportedBalances,
     warnings,
-    meta: { ...meta, firstDate: operations[0]?.date ?? null, lastDate: operations[operations.length - 1]?.date ?? null },
+    meta: { ...meta, firstDate: operations[0]?.date ?? null, lastDate: operations[operations.length - 1]?.date ?? null, ...(defaultCurrency ? { defaultCurrency } : {}) },
   };
 }
 
