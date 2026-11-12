@@ -109,7 +109,10 @@ describe('формулы показателей', () => {
     expect(debtLoadScore(60, 0, 400)).toBe(75); // платежи 15 %
     near(debtLoadScore(10, 4800 * 2, 400), 0, 9); // остаток долга 2 года дохода → 0, хотя платежи малы
     expect(debtLoadScore(180, 0, 400)).toBe(0); // 45 %
-    expect(debtLoadScore(100, 100, 0)).toBe(100);
+    expect(debtLoadScore(100, 100, 0)).toBe(0); // D171: нет дохода, но есть долг — не «отлично»
+    expect(debtLoadScore(100, 0, 0)).toBe(0);
+    expect(debtLoadScore(0, 100, 0)).toBe(0);
+    expect(debtLoadScore(0, 0, 0)).toBe(100); // ни дохода, ни долга
   });
   it('капитал: отрицательный → 0, 6 мес. → 25, 36 → 60, 300 и больше → 100; нет расходов → 0', () => {
     expect([-1000, 0, 600, 3600, 30000, 99999].map((n) => capitalScore(n, 100))).toEqual([0, 0, 25, 60, 100, 100]);

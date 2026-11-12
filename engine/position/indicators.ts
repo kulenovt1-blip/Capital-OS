@@ -134,9 +134,14 @@ export const reserveScore = (money: number, need: number): number => normalize(n
 export const n1Score = (liquid: number, needEssential: number, needLifestyle: number): number => (reserveScore(liquid, needEssential) + reserveScore(liquid, needLifestyle)) / 2;
 /** N2 / F4. */
 export const savingScore = (rate: number): number => normalize(rate, SCALES.saving);
-/** N3: меньшая из двух оценок — доля платежей в доходе и остаток долга в годах дохода. Нет дохода → доли 0. */
-export const debtLoadScore = (obligationsMonthly: number, debtTotal: number, incomeMonthly: number): number =>
-  Math.min(normalize(incomeMonthly > 0 ? obligationsMonthly / incomeMonthly : 0, SCALES.debtPayments), normalize(incomeMonthly > 0 ? debtTotal / (incomeMonthly * 12) : 0, SCALES.debtStock));
+/**
+ * N3: меньшая из двух оценок — доля платежей в доходе и остаток долга в годах дохода.
+ * Нет дохода (D171): есть платежи или долг — 0 («отлично» было бы неправдой: долг без дохода опаснее всего); ни платежей, ни долга — 100.
+ */
+export const debtLoadScore = (obligationsMonthly: number, debtTotal: number, incomeMonthly: number): number => {
+  if (!(incomeMonthly > 0)) return obligationsMonthly > 0 || debtTotal > 0 ? 0 : 100;
+  return Math.min(normalize(obligationsMonthly / incomeMonthly, SCALES.debtPayments), normalize(debtTotal / (incomeMonthly * 12), SCALES.debtStock));
+};
 /** N4. */
 export const capitalScore = (net: number, needLifestyle: number): number => normalize(needLifestyle > 0 ? net / needLifestyle : 0, SCALES.capital);
 
