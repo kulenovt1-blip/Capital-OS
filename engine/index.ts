@@ -32,6 +32,7 @@ export * from './route';
 export * from './roadmap';
 export * from './hidden';
 export * from './spikes';
+export * from './freshness';
 export * from './position/settings';
 export * from './position/inputs';
 export * from './position/view';
