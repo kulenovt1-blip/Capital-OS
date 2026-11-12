@@ -8,6 +8,8 @@ import { isInstalled } from '../install';
 import { fontPref, themePref } from '../theme';
 import { daysBetween, essentialMarkupMissing } from '../../engine/index';
 import { sheetHref } from '../main';
+import { backupReminder } from '../persist';
+import { persistStatus } from '../protect';
 
 export const APP_VERSION = '0.5.0';
 declare const __BUILD__: { sha: string; date: string } | undefined;
@@ -25,6 +27,7 @@ export function renderMore(): HTMLElement {
   const accounts = (st.imported?.accounts ?? []).filter((a) => !a.removed).length + st.manualAccounts.length;
   const found = o.installments.suggestions.length;
   const backupAge = st.lastBackupAt ? daysBetween(st.lastBackupAt, today()) : null;
+  const bakRem = backupReminder(backupAge, o.hasData, persistStatus());
   const reconcileBad = o.hasData && !o.reconcile?.ok;
   const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const imp = !o.hasData ? 'данных нет' : `импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`;
@@ -39,7 +42,7 @@ export function renderMore(): HTMLElement {
     accountsWait ? row({ title: 'Счета ждут ответа', sub: 'нужно подтвердить, что считать деньгами', href: '#/accounts', cls: 'warn' }) : null,
     noIncome ? row({ title: 'Доходы не заданы', sub: 'без них прогноз неполный', href: '#/incomes', cls: 'warn' }) : null,
     found ? row({ title: 'Найдены долги и рассрочки', sub: `в операциях: ${found} — проверь и заведи`, href: '#/debts', cls: 'warn' }) : null,
-    o.hasData && (backupAge === null || backupAge > 30) ? row({ title: 'Бэкап давно не скачивался', sub: st.lastBackupAt ? `последний ${fmtDay(st.lastBackupAt)}` : 'ещё ни разу', href: '#/backup', cls: 'warn' }) : null,
+    bakRem.show ? row({ title: bakRem.title, sub: bakRem.sub, href: '#/backup', cls: bakRem.level === 'bad' ? 'bad' : 'warn' }) : null,
   ].filter(Boolean) as HTMLElement[];
   return h(
     'div',

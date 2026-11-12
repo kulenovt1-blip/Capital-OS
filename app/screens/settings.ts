@@ -20,6 +20,8 @@ import { installBlock } from '../install';
 import { accountsReview, catName, incomeQuickForm } from '../blocks';
 import { badAccounts, ov } from '../ctx';
 import { scenarioWord } from './forecast';
+import { persistLine } from '../persist';
+import { persistStatus } from '../protect';
 
 const cap = (t: string) => t.replace(/^./, (c) => c.toUpperCase());
 const gray = (text: string) => h('p', { class: 'muted' }, text);
@@ -827,6 +829,7 @@ export function renderBackup(): HTMLElement {
   return h(
     'div',
     { class: 'screen' },
+    gray(persistLine(persistStatus())),
     gray(`Все данные лежат только в этом браузере. Бэкап — один файл с ними: скачивай раз в месяц и перед обновлением.${st.lastBackupAt ? ` Последний — ${fmtDate(st.lastBackupAt)}.` : ''}`),
     h(
       'div',
