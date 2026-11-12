@@ -36,6 +36,7 @@ if (ovFull.spend.usualMonthly === 0) console.log('ВНИМАНИЕ: «обычн
 const reg = classRegistry(state.settings.classes);
 const usualSet = new Set([...baseClassIds(reg, last), ...regularClassIds(reg, last), UNCHECKED_CLASS_ID]);
 const spentIn = (from, to, only) => full.operations.filter((o) => o.date > from && o.date <= to && o.kind === 'expense' && classGroup(cls.get(o.id)) === 'expense' && (!only || usualSet.has(cls.get(o.id)))).reduce((a, o) => a + amt(o), 0);
+const spentNoInst = (from, to) => full.operations.filter((o) => o.date > from && o.date <= to && o.kind === 'expense' && classGroup(cls.get(o.id)) === 'expense' && !String(cls.get(o.id)).startsWith('E_installment')).reduce((a, o) => a + amt(o), 0);
 const expenseIn = (from, to) => spentIn(from, to, true);
 const byClass = {};
 
@@ -49,7 +50,7 @@ for (let d = addDays(first, 200); d < addDays(last, -35); d = addDays(d, step)) 
   const actual = expenseIn(d, end);
   const allExp = spentIn(d, end, false);
   byClass.other = (byClass.other ?? 0) + (allExp - actual) / 100; byClass.usual = (byClass.usual ?? 0) + actual / 100;
-  rows.push({ d, days: daysBetween(d, end), predicted: predicted / 100, actual: actual / 100 });
+  rows.push({ d, days: daysBetween(d, end), predicted: predicted / 100, actual: actual / 100, allNoInst: spentNoInst(d, end) / 100 });
 }
 if (!rows.length) { console.log('Мало истории для бэктеста (нужно ≥ 7 месяцев и расписание доходов)'); process.exit(0); }
 const pct = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
@@ -62,10 +63,20 @@ console.log(`Точек: ${rows.length}, шаг ${step} дн.`);
 console.log(`Средняя ошибка (по модулю): ${fmt(mape)}; смещение: ${fmt(bias)} (плюс — прогноз трат завышен)`);
 console.log(`Ошибка p10 / медиана / p90: ${fmt(pct(err, 0.1))} / ${fmt(pct(err, 0.5))} / ${fmt(pct(err, 0.9))}`);
 console.log(`Доля точек, где реальные траты больше прогноза более чем на 20%: ${fmt(under)}`);
+// относительная ошибка раздувается, когда факт близок к нулю (окно в 2–3 дня) — поэтому ещё и суммарно и в тенге
+const sumP = rows.reduce((a, x) => a + x.predicted, 0), sumA = rows.reduce((a, x) => a + x.actual, 0);
+const diff = rows.map((x) => x.actual - x.predicted); // плюс — потратили больше прогноза
+const k = (v) => `${Math.round(v / 1000)} тыс ₸`;
+console.log(`Суммарно прогноз / факт: ${fmt(sumP / sumA)} (100% — без смещения)`);
+console.log(`Недооценка трат (факт − прогноз): медиана ${k(pct(diff, 0.5))}, p90 ${k(pct(diff, 0.9))}, макс ${k(Math.max(...diff))}`);
+const sumAll = rows.reduce((a, x) => a + x.allNoInst, 0);
+const diffAll = rows.map((x) => x.allNoInst - x.predicted);
+console.log(`Если считать ВСЕ траты кроме платежей по рассрочкам (здоровье, подарки, крупное): прогноз/факт ${fmt(sumP / sumAll)}; недооценка медиана ${k(pct(diffAll, 0.5))}, p90 ${k(pct(diffAll, 0.9))}, макс ${k(Math.max(...diffAll))}; факт больше прогноза в ${fmt(diffAll.filter((v) => v > 0).length / diffAll.length)} точек`);
 const byHorizon = [[1, 7], [8, 14], [15, 22], [23, 40]].map(([a, b]) => {
   const g = rows.filter((x) => x.days >= a && x.days <= b); if (!g.length) return null;
+  const ratio = g.reduce((t, x) => t + x.predicted, 0) / Math.max(1, g.reduce((t, x) => t + x.actual, 0));
   const e = g.map((x) => (x.actual > 0 ? (x.predicted - x.actual) / x.actual : 0));
-  return `${a}–${b} дн.: n=${g.length}, средняя |ошибка| ${fmt(e.reduce((s, v) => s + Math.abs(v), 0) / e.length)}, смещение ${fmt(e.reduce((s, v) => s + v, 0) / e.length)}`;
+  return `${a}–${b} дн.: n=${g.length}, средняя |ошибка| ${fmt(e.reduce((s, v) => s + Math.abs(v), 0) / e.length)}, суммарно прогноз/факт ${fmt(ratio)}`;
 }).filter(Boolean);
 console.log(byHorizon.join('\n'));
 console.log(`Траты вне «обычных» классов (платежи, разовое): ${fmt(byClass.other / Math.max(1, byClass.usual + byClass.other))} всех фактических трат — в прогноз «обычных» не входят`);
