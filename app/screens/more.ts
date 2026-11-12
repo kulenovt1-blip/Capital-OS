@@ -56,6 +56,7 @@ export function renderMore(): HTMLElement {
         row({ title: 'Пришли деньги', sub: 'зарплата или стипендия: сколько отложить и на что', href: '#/income' }),
         row({ title: 'Обновить данные из MoneyManager', sub: !o.hasData ? 'данных пока нет' : `последний импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`, href: '#/import', mark: reconcileBad }),
         row({ title: 'Сохранить копию приложения', sub: bak, href: '#/backup' }),
+        o.hasData ? row({ title: 'Итоги месяцев', sub: 'сколько пришло, ушло и куда сдвинулся капитал', href: '#/months' }) : null,
       ),
     ),
     h(

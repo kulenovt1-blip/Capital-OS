@@ -11,6 +11,7 @@ import { renderBaskets } from './screens/baskets';
 import { renderForecast } from './screens/forecast';
 import { renderData, renderMore, renderPrefs } from './screens/more';
 import { renderHelp } from './screens/help';
+import { renderMonths } from './screens/monthly';
 import { renderView } from './screens/view';
 import { renderImport } from './screens/import';
 import { renderClasses } from './screens/classes';
@@ -29,6 +30,7 @@ addRoute({ path: 'baskets', title: 'Раскладка трат', nav: 'more', p
 addRoute({ path: 'position', title: 'Финансовый профиль', nav: 'position', render: () => renderPosition() });
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
+addRoute({ path: 'months', title: 'Итоги месяцев', nav: 'more', parent: 'more', render: () => renderMonths() });
 addRoute({ path: 'help', title: 'Как пользоваться', nav: 'more', parent: 'more', render: () => renderHelp() });
 addRoute({ path: 'data', title: 'Данные', nav: 'more', parent: 'more', render: () => renderData() });
 addRoute({ path: 'prefs', title: 'Настройки', nav: 'more', parent: 'more', render: () => renderPrefs() });
