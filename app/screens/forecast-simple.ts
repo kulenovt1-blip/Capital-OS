@@ -236,6 +236,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const stg = reserveCtx();
   const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
   root.append(
+    h('p', { class: 'one-line' }, 'Срок прогноза, месяцев'),
     horizonSeg(k),
     h(
       'section',

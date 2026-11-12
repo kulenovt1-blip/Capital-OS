@@ -8,7 +8,6 @@ import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
 import { positionNow, reserveCtx, trust } from '../ctx';
-import { radar } from '../radar';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
@@ -22,7 +21,7 @@ const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1
 const mo = (x: number): string => (x >= 600 ? 'больше 50 лет' : `${nfDown(x)} мес.`);
 /** Большие суммы — округлённо: «≈ 105 млн ₸», а не «около 105 410 163 ₸» (С4 аудита UX). */
 const approx = (tenge: number): string => `≈ ${fmtShort(Math.round(tenge * 100) as never)}`;
-const SHORT = { N: 'Сейчас', V: 'Динамика', F: 'Будущее' } as const;
+
 
 function months(m: number | null): string {
   if (m === null) return 'не определить';
@@ -163,15 +162,16 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   );
 }
 
-function radarBlock(v: PositionView): HTMLElement {
-  const [n, vv, f] = v.directions;
-  const desc = v.directions.map((d) => `${d.name}: ${d.score === null ? 'оценить нечем' : Math.round(d.score)}`).join('; ');
-  return h(
-    'div',
-    { class: 'pos-radar' },
-    radar([{ label: SHORT.N, score: n!.score }, { label: SHORT.V, score: vv!.score }, { label: SHORT.F, score: f!.score }], `Три направления профиля. ${desc}`),
-    h('p', { class: 'one-line' }, `Пунктир — 60 очков: каждое направление должно его достичь для уровня «${LEVEL_NAMES[4]}».`),
-  );
+/** Слово рядом с очками (аудит 9, U4): «92» само по себе ничего не говорит. Черта 60 — порог уровня «Защищён от ударов». */
+export function scoreWord(score: number): string {
+  if (score >= 80) return 'сильно';
+  if (score >= 60) return 'достаточно';
+  if (score >= 40) return 'слабо';
+  return 'мало';
+}
+
+function scaleNote(): HTMLElement {
+  return h('p', { class: 'one-line' }, `Чем длиннее полоска, тем лучше. Черта — 60 из 100: столько нужно на каждом из трёх направлений для уровня «${LEVEL_NAMES[4]}».`);
 }
 
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
@@ -197,11 +197,11 @@ function directionsBlock(v: PositionView): HTMLElement {
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
-          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
+          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${scoreWord(d.score)} · ${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
             // полоска с чертой порога 60 (форма Г, D166)
             d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
           h('p', { class: 'muted' }, d.question),
-          rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : String(Math.round(i.score)), chevron: false })))),
+          rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : `${scoreWord(i.score)} · ${Math.round(i.score)}`, chevron: false })))),
       ),
     ),
   );
@@ -354,7 +354,7 @@ export function renderPosition(): HTMLElement {
     );
     return root;
   }
-  root.append(levelCard(v, radarBlock(v)));
+  root.append(levelCard(v, scaleNote()));
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
   const path = pathBlock(v);
