@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { step0 } from '../../engine/ladder';
 import { tenge } from '../../engine/money';
 
