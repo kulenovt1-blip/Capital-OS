@@ -231,6 +231,7 @@ export function planIncome(state: AppState, today: IsoDate, req: IncomeRequest):
       liquidFreeBefore: liquidFree,
       obligationGoalFunds,
       obligationGoalFundsByAvailability,
+      ...(req.simple ? { minHorizonDays: 30 } : {}),
       incomeInBalance: req.incomeInBalance,
       goalsWithLiquidFunds: [...perGoalLiquid.entries()].map(([goalId, amount]) => ({ goalId, title: goalById.get(goalId)?.title ?? goalId, amount, importance: goalById.get(goalId)?.importance ?? 0 })),
     },

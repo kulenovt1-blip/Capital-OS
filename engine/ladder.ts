@@ -3,7 +3,7 @@
  * Чистые функции; все коэффициенты — в StrategySettings, без скрытых констант.
  */
 import { add, ceilTo, min, mulDiv, pos, sub, sum, tenge, tiyn, ZERO, type Money } from './money';
-import { daysBetween, monthsBetween, type IsoDate } from './date';
+import { addDays, daysBetween, monthsBetween, type IsoDate } from './date';
 import { day, money, step, type Explanation } from './explain';
 import { goalOrderCmp, type Goal, type GoalId } from './goals';
 import type { UpcomingPayment } from './obligations';
@@ -72,6 +72,8 @@ export interface Step0Input {
    * деньгами, доступными к его дате, а `obligationGoalFunds` не используется.
    */
   obligationGoalFundsByAvailability?: readonly { amount: Money; availableFrom: IsoDate }[];
+  /** Минимальный защищаемый срок в днях: если зарплата скоро, всё равно резервируем платежи и траты на этот срок (D174). */
+  minHorizonDays?: number;
   /** Поступление уже отражено в балансах (импорт после зачисления). */
   incomeInBalance: boolean;
   /** Цели с деньгами на ликвидных счетах — варианты при дефиците. */
@@ -130,8 +132,9 @@ export function coverByAvailableFunds(
  */
 export function step0(i: Step0Input): Step0Result {
   const explanation: Explanation = [];
-  const H = Math.max(0, daysBetween(i.today, i.nextIncome));
-  const payments = i.upcoming.filter((u) => u.date >= i.today && u.date <= i.nextIncome);
+  const horizonEnd = i.minHorizonDays && addDays(i.today, i.minHorizonDays) > i.nextIncome ? addDays(i.today, i.minHorizonDays) : i.nextIncome;
+  const H = Math.max(0, daysBetween(i.today, horizonEnd));
+  const payments = i.upcoming.filter((u) => u.date >= i.today && u.date <= horizonEnd);
   const R1 = sum(payments.map((p) => p.amount));
   // R2: медиана месяца × H / (365/12) — пропорционально дням
   const R2 = mulDiv(i.baseMedian, 12 * H, 365);
@@ -149,8 +152,8 @@ export function step0(i: Step0Input): Step0Result {
   const ok = available > 0;
 
   explanation.push(
-    step('step0.horizon', `Горизонт до следующего дохода: ${H} дн. (до ${day(i.nextIncome)})`, { date: i.nextIncome }),
-    step('step0.r1', `R1 — платежи по долгам и рассрочкам до ${day(i.nextIncome)}: ${money(R1)}${payments.length ? ' (' + payments.map((p) => `«${p.title}» ${money(p.amount)} ${day(p.date)}`).join(', ') + ')' : ''}`, { amount: R1 }),
+    step('step0.horizon', `Защищаем срок: ${H} дн. (до ${day(horizonEnd)})`, { date: horizonEnd }),
+    step('step0.r1', `R1 — платежи по долгам и рассрочкам до ${day(horizonEnd)}: ${money(R1)}${payments.length ? ' (' + payments.map((p) => `«${p.title}» ${money(p.amount)} ${day(p.date)}`).join(', ') + ')' : ''}`, { amount: R1 }),
   );
   if (byGoals.covered > 0) explanation.push(step('step0.r1_goals', `Из них покрыто деньгами целей-обязательств: ${money(byGoals.covered)}`));
   for (const n of byGoals.notYetAvailable) {
@@ -170,7 +173,7 @@ export function step0(i: Step0Input): Step0Result {
     const goals = [...i.goalsWithLiquidFunds].filter((g) => g.amount > 0).sort((a, b) => (a.importance ?? 0) - (b.importance ?? 0) || (a.goalId < b.goalId ? -1 : 1));
     for (const g of goals) options.push(`Снять до ${money(min(g.amount, deficitNow))} с цели «${g.title}» (сейчас ${money(g.amount)} на ликвидных счетах)`);
     options.push('Ничего не гасить досрочно до следующего дохода');
-    if (R2 > 0) options.push(`Сократить расходы до ${day(i.nextIncome)}: заложено ${money(R2)} базовых расходов`);
+    if (R2 > 0) options.push(`Сократить расходы до ${day(horizonEnd)}: заложено ${money(R2)} базовых расходов`);
   }
   return { H, R1, R1uncovered, R2, R2uncovered, available, ok, deficit: ok ? ZERO : sub(ZERO, available), payments, options, explanation };
 }

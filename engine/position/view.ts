@@ -210,7 +210,10 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const held = base?.result.held ? heldText(base.result.held.reason, base.result.held.byScore, inputs) : base?.result.lifted ? liftedText(base.result.lifted.reason, inputs) : null;
   const confidence = confidenceOf(state, today);
   const spiral = spiralSigns(series);
-  const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps);
+  // D174: доступное за месяц — после долгов людям, платежей на 30 дней и обычных трат на 30 дней
+  const payments30 = overview.upcoming30.reduce((a, u) => a + u.amount, 0);
+  const usual30 = Math.round((overview.spend.usualMonthly * 12 * 30) / 365);
+  const spendable = Math.max(0, liquidOn(cap, addDays(today, 30)) - cap.liabilities.payablesFromOps - payments30 - usual30);
 
   return {
     status: 'ok', unrated: [], reconcileOk: !hasMismatch(overview), level, levelName: fin.name, levelMeaning: level === null ? null : level === 5 ? L5_MEANING : meaningOf(level as Level, inputs, weak?.directionName ?? null, spiral.spiral), ladder: ladderOf(level), held, basis: fin.basis, g: base?.g ?? null, directions, weak, range, rangeLevels,

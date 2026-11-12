@@ -114,7 +114,7 @@ export function renderAccounts(section?: string): HTMLElement {
   const savings = group('savings').filter((p) => !p.nonInvestable);
   const excluded = o.capital.accounts.filter((p) => p.excluded);
   root.append(
-    h('p', { class: 'one-line' }, 'Счета «для трат» — деньги на жизнь. Копилки — то, что не трогаешь: они не входят в «Можно тратить». Нажми на счёт, чтобы переключить.'),
+    h('p', { class: 'one-line' }, 'Счета «для трат» — деньги на жизнь. Копилки — то, что не трогаешь: они не входят в «Свободно после обычных трат». Нажми на счёт, чтобы переключить.'),
     sub(`Для трат · ${fmt(total(spend) as never)}`),
     spend.length ? rows(spend.map(line)) : h('p', { class: 'muted' }, 'Нет счетов для трат.'),
     sub(`Копилки · ${fmt(total(savings) as never)}`),
@@ -170,7 +170,7 @@ defineSheet('account', (id) => {
       rows(
         row({
           title: 'Копилка',
-          sub: kind === 'savings' ? 'не входит в «Можно тратить»' : 'сейчас — для трат: входит в «Можно тратить»',
+          sub: kind === 'savings' ? 'не входит в «Свободно после обычных трат»' : 'сейчас — для трат: входит в «Свободно после обычных трат»',
           value: p.excluded ? undefined : toggle(kind === 'savings', (v) => void patchAccount(id, (a) => ({ ...a, kind: v ? 'savings' : 'spend' }), v ? `«${p.title}» — копилка` : `«${p.title}» — для трат`), 'Копилка'),
           chevron: false,
         }),
@@ -251,7 +251,7 @@ export function renderIncomes(): HTMLElement {
   root.append(
     h('div', { class: 'goals-sum' }, h('div', { class: 'gs-text' }, list.length ? h('span', null, 'В месяц ', h('strong', null, fmt(list.reduce((a, x) => a + x.amount, 0) as never))) : h('span', null, 'Доходы не заданы')), h('a', { class: 'btn primary', href: sheetHref('income-new') }, '＋ Доход')),
   );
-  if (!list.length) root.append(gray(`Без доходов «Можно тратить» считает на ${st.settings.defaultIncomeHorizonDays} дней вперёд, а прогноз идёт без поступлений.`));
+  if (!list.length) root.append(gray(`Без доходов расчёт идёт на ${st.settings.defaultIncomeHorizonDays} дней вперёд, а прогноз идёт без поступлений.`));
   else
     root.append(
       rows(
@@ -541,7 +541,7 @@ defineSheet('debt', (id) => {
   if (!ob) return null;
   const status = ov().obligations.find((x) => x.obligation.id === id);
   const remove = async () => {
-    if ((await ask({ title: `Удалить «${ob.title}»?`, text: 'Платежи по ней перестанут учитываться в «Можно тратить» и прогнозе.', actions: [{ label: 'Удалить', kind: 'danger' }] })) !== 0) return;
+    if ((await ask({ title: `Удалить «${ob.title}»?`, text: 'Платежи по ней перестанут учитываться в «Свободно после обычных трат» и прогнозе.', actions: [{ label: 'Удалить', kind: 'danger' }] })) !== 0) return;
     closeSheet();
     await act((s) => ({ ...s, obligations: s.obligations.filter((x) => x.id !== id) }), `«${ob.title}» удалена`);
   };
@@ -1219,7 +1219,7 @@ function paramsBlock(st: AppState): HTMLElement {
     { class: 'stack' },
     field('Подушка — сколько месяцев обычных базовых трат', num('reserveMonths', s.reserveMonths, 1)),
     field('Обычный месяц считать по последним … полным месяцам', num('baselineMonths', s.baselineMonths, 1), 'берётся медиана — один дорогой месяц её почти не сдвигает'),
-    field('Если доходы не заданы — считать «Можно тратить» на … дней вперёд', num('defaultIncomeHorizonDays', s.defaultIncomeHorizonDays, 1)),
+    field('Если доходы не заданы — считать срок … дней вперёд', num('defaultIncomeHorizonDays', s.defaultIncomeHorizonDays, 1)),
     field('Платёж по рассрочке засчитывается, если пришёл в пределах ± … дней', num('matchWindowDays', s.matchWindowDays)),
     field('Инфляция, % в год', h('input', { name: 'inflation', inputmode: 'decimal', value: String(s.inflationBp / 100).replace('.', ',') })),
     h('button', { class: 'btn primary wide', type: 'submit' }, 'Сохранить'),

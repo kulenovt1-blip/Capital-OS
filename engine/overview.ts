@@ -128,8 +128,10 @@ export interface SpendView {
   spendNow: Money;
   /** Отложено, но ещё на счетах для трат (назначения целям на них). */
   setAsideOnSpend: Money;
-  /** Можно тратить до следующего дохода = spendNow − setAsideOnSpend − платежи до дохода. */
+  /** Свободно после обычных трат до дохода = spendNow − setAsideOnSpend − платежи до дохода − обычные траты до дохода (D174). */
   canSpend: Money;
+  /** Обычные траты до следующего дохода (usualMonthly × дни / 30,4). */
+  usualUntilIncome: Money;
   /** Дней до следующего дохода (не меньше 1). */
   days: number;
   perDay: Money;
@@ -347,13 +349,15 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     else if (k === 'spend') spendNow = add(spendNow, p.balance);
   }
   const setAsideOnSpend = sum(fundings.filter((f) => kinds[f.accountId] === 'spend').map((f) => f.amount));
-  const canSpend = sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome);
   const days = Math.max(1, daysBetween(today, nextIncome.date));
   // не узнанные категории: в «обычно уходит» — по среднему за месяц, а не медианой как регулярные (D104)
   const unchecked = averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly;
   const usualMonthly = add(add(baseline.median, regularMedian), unchecked);
+  // D174: «можно тратить» — это то, что останется после платежей И обычных трат до дохода, а не просто баланс минус платежи
+  const usualUntilIncome = mulDiv(usualMonthly, 12 * days, 365);
+  const canSpend = sub(sub(sub(spendNow, setAsideOnSpend), reserveUntilIncome), usualUntilIncome);
   const spend: SpendView = {
-    kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, days,
+    kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, usualUntilIncome, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
     onHand, inSavings, locked, obligationsMonthly, regularMedian,
