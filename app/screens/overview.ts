@@ -227,6 +227,7 @@ function emptyState(): HTMLElement {
     h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'),
     h('button', { class: 'btn big wide', type: 'button', onclick: () => void loadDemo() }, 'Посмотреть на примере'),
     h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве. Пример — выдуманный студент: можно посмотреть, как всё выглядит.'),
+    isSimpleMode(getState().settings) ? h('p', { class: 'one-line' }, 'Показано только главное. Полный режим — в «Ещё → Настройки».') : null,
     h(
       'details',
       { class: 'fold', 'data-key': 'overview:backup-help' },

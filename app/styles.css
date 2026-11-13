@@ -688,3 +688,5 @@ div.wn-card { flex-direction: column; align-items: flex-start; gap: 2px; }
 .share-check { display: flex; flex-direction: column; gap: 6px; }
 .share-check .ok { color: var(--good); }
 .share-check .no { color: var(--warn); }
+.mode-diff { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--divider); font-size: calc(14px * var(--fz)); }
+.mode-diff .tag { margin-right: 4px; }

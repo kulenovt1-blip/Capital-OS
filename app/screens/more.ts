@@ -100,6 +100,29 @@ export function renderData(): HTMLElement {
 }
 
 /** «Настройки»: вид, установка (если ещё не установлено), редкое и для продвинутых. */
+/** Чем отличаются режимы — по экранам, коротко (D189). Источник правды — сами экраны; при их изменении поправить и здесь. */
+export const MODE_DIFF: { screen: string; simple: string; full: string }[] = [
+  { screen: 'Обзор', simple: 'главное число, суммы, подушка; платежи и счета — в «Подробнее»', full: 'платежи на 30 дней и подробности сразу на экране' },
+  { screen: 'Цели', simple: 'цели по порядку', full: 'ещё папки целей и «Удалить все цели»' },
+  { screen: 'Профиль', simple: 'ступень, направления, путь; остальное — в «Подробнее»', full: 'ещё «Если доход пропадёт», жильё и независимость на экране' },
+  { screen: 'Прогноз', simple: 'главное число и цели; расчёты и планы — в «Подробнее»', full: 'расчёты и «Что если» сразу на экране' },
+  { screen: 'Ещё', simple: 'без «Разметки трат», «Редкого» и «Для продвинутых»', full: 'всё на месте' },
+];
+
+function modeDiff(): HTMLElement {
+  return h(
+    'details',
+    { class: 'fold', 'data-key': 'prefs:modes' },
+    h('summary', null, 'Чем отличаются простой и полный режим'),
+    h(
+      'div',
+      { class: 'stack' },
+      h('p', { class: 'muted' }, 'Расчёты и цифры одни и те же. Меняется только то, сколько показано на экранах: в простом — главное, остальное под «Подробнее».'),
+      MODE_DIFF.map((d) => h('div', { class: 'mode-diff' }, h('strong', null, d.screen), h('div', null, h('span', { class: 'tag' }, 'простой'), ` ${d.simple}`), h('div', null, h('span', { class: 'tag' }, 'полный'), ` ${d.full}`))),
+    ),
+  );
+}
+
 export function renderPrefs(): HTMLElement {
   const text = fontPref() === '1' ? 'крупный' : 'обычный';
   const st = getState();
@@ -124,6 +147,7 @@ export function renderPrefs(): HTMLElement {
       }),
       st.imported ? row({ title: 'Пройти первую настройку заново', sub: 'доходы, копилки, цели — три шага', href: '#/start' }) : null,
     ),
+    modeDiff(),
     rows(
       row({ title: 'О тебе', sub: p?.age || p?.desiredMonthly ? [p.age ? `${p.age} лет` : '', p.desiredMonthly ? `хочу тратить ${fmt(p.desiredMonthly)} в месяц` : ''].filter(Boolean).join(' · ') : 'возраст и сколько хочешь тратить в месяц', href: sheetHref('you') }),
       row({ title: 'Вид', sub: `тема: ${themePref() === 'auto' ? 'как в системе' : themePref() === 'dark' ? 'тёмная' : 'светлая'} · текст: ${text}`, href: '#/view' }),
