@@ -15,6 +15,7 @@ import { defineSheet, go, refresh, sheetHref } from '../main';
 import { helpSeen, markHelpSeen } from './help';
 import { isSimpleMode } from '../../engine/index';
 import { simpleHint } from '../modehint';
+import { openCapabilities } from '../whatsnew';
 
 registerExplain(
   'overview',
@@ -239,7 +240,7 @@ function emptyState(): HTMLElement {
         h('p', { class: 'muted' }, 'Начал вести бюджет недавно — это нормально. Приложение оценит по тому, что есть, и честно покажет, насколько расчёты пока приблизительные.'),
       ),
     ),
-    h('a', { class: 'btn wide', href: '#/help' }, 'Что умеет приложение'),
+    h('button', { class: 'btn wide', type: 'button', onclick: () => openCapabilities() }, 'Что умеет приложение'),
   );
 }
 

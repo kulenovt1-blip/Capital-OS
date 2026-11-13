@@ -6,7 +6,7 @@
 import { h } from '../dom';
 import { HELP } from '../help-text';
 import { sub } from '../ui';
-import { infoCard } from '../whatsnew';
+import { iconSvg, openCapabilities } from '../whatsnew';
 import { CAPABILITIES } from '../whatsnew-data';
 
 const SEEN_KEY = 'capital-os.help-seen';
@@ -48,7 +48,8 @@ export function renderHelp(): HTMLElement {
     { class: 'screen help' },
     h('p', { class: 'help-lead' }, 'Capital OS — помощник к MoneyManager. Учёт ты ведёшь там, а сюда загружаешь бэкап и видишь то, чего там нет. Ничего не переводит и не трогает счета; данные остаются на этом устройстве.'),
     sub('Что умеет'),
-    h('div', { class: 'wn-list' }, CAPABILITIES.map((c) => infoCard(c))),
+    // плитки открывают окно-карусель на нужном слайде — экран не меняется (D190)
+    h('div', { class: 'cap-grid' }, CAPABILITIES.map((c, k) => h('button', { class: 'cap-tile', type: 'button', onclick: () => openCapabilities(k + 1) }, h('span', { class: 'ci' }, iconSvg(c.icon)), h('strong', null, c.title)))),
     sub('Как сделать'),
     h(
       'div',

@@ -10,6 +10,7 @@ import { daysBetween, essentialMarkupMissing, isSimpleMode } from '../../engine/
 import { sheetHref } from '../main';
 import { backupReminder } from '../persist';
 import { persistStatus } from '../protect';
+import { openWhatsNew } from '../whatsnew';
 
 export const APP_VERSION = '0.6.0';
 declare const __BUILD__: { sha: string; date: string } | undefined;
@@ -74,7 +75,7 @@ export function renderMore(): HTMLElement {
       'div',
       { class: 'stack' },
       sub('Приложение'),
-      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Что нового', sub: 'последние изменения', href: sheetHref('whatsnew') }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и пять коротких инструкций', href: '#/help' })),
+      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Что нового', sub: 'последние изменения', onClick: openWhatsNew }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и пять коротких инструкций', href: '#/help' })),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );
