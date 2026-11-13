@@ -8,7 +8,7 @@ import { getState, replaceState, today, update } from '../store';
 import { ov } from '../ctx';
 import { fmt, fmtExact, info, nWord, row, rows, stickyBar, sub } from '../ui';
 import { explainList } from '../explain';
-import { go } from '../main';
+import { go, refresh } from '../main';
 import { isInstalled } from '../install';
 
 let pending: { data: ImportedData; report: ReconcileReport; fileName: string } | null = null;
@@ -77,7 +77,7 @@ function shareHelp(): HTMLElement {
   return h(
     'details',
     { class: 'fold', 'data-key': 'import:share' },
-    h('summary', null, 'Отправить бэкап через «Поделиться»'),
+    h('summary', null, 'Через «Поделиться» из «Файлов»'),
     h(
       'div',
       { class: 'stack' },
@@ -90,25 +90,45 @@ function shareHelp(): HTMLElement {
         h('li', null, 'Открой Capital OS один раз при включённом интернете, потом можно и без него.'),
         h('li', null, 'Сделай бэкап в MoneyManager. В «Файлах» нажми и удерживай файл .mmbackup → «Поделиться» → Capital OS.'),
       ),
-      h('p', { class: 'muted' }, 'Если Capital OS нет в списке — выбери файл кнопкой выше, это работает всегда.'),
+      h('p', { class: 'muted' }, 'В самом MoneyManager такой кнопки нет — только в приложении «Файлы». Проще всего — кнопка выше: она сразу открывает выбор файла.'),
     ),
   );
 }
 
-export function renderImport(rerender: () => void): HTMLElement {
+/** Прочитать файл бэкапа и показать сверку на «Импорте». */
+async function loadFile(f: File): Promise<void> {
+  try {
+    const data = importMmbackup(await readFileBytes(f));
+    pending = { data, report: reconcileAccounts(data), fileName: f.name };
+    lastError = null;
+  } catch (e) {
+    pending = null;
+    lastError = e instanceof Error ? e.message : String(e);
+  }
+  if (!location.hash.startsWith('#/import')) go('#/import');
+  else refresh();
+}
+
+/**
+ * Выбор бэкапа в одно нажатие (D192): в MoneyManager кнопки «Поделиться» для бэкапа нет, поэтому окно выбора файла
+ * открывается сразу с «Обзора» и «Ещё», без перехода на «Импорт»; после выбора — сразу сверка.
+ */
+export function pickBackup(): void {
+  const input = h('input', { type: 'file', accept: '.mmbackup,application/octet-stream,application/zip', class: 'visually-hidden' });
+  input.addEventListener('change', () => {
+    const f = input.files?.[0];
+    input.remove();
+    if (f) void loadFile(f);
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+export function renderImport(_rerender: () => void): HTMLElement {
   const st = getState();
   const input = h('input', { type: 'file', accept: '.mmbackup,application/octet-stream,application/zip', id: 'mm-file', class: 'visually-hidden', 'aria-label': 'Файл бэкапа .mmbackup' });
-  const load = async (f: File): Promise<void> => {
-    try {
-      const data = importMmbackup(await readFileBytes(f));
-      pending = { data, report: reconcileAccounts(data), fileName: f.name };
-      lastError = null;
-    } catch (e) {
-      pending = null;
-      lastError = e instanceof Error ? e.message : String(e);
-    }
-    rerender();
-  };
+  const load = loadFile;
+  const rerender = refresh;
   input.addEventListener('change', async () => {
     const f = input.files?.[0];
     if (f) await load(f);

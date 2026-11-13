@@ -5,7 +5,7 @@
 import { monthlyCard } from './monthly';
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, spendGap, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
 import { h } from '../dom';
-import { loadDemo } from './import';
+import { loadDemo, pickBackup } from './import';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, progress, reserveCtx } from '../ctx';
 import { attentionItems } from '../attention';
@@ -159,7 +159,7 @@ function freshnessNote(): HTMLElement | null {
   const f = dataFreshness(st.importedAt, today());
   if (f.level === 'none' || f.level === 'fresh') return null;
   const ago = nWord(f.days!, 'день', 'дня', 'дней');
-  return h('a', { class: 'warnline', href: '#/import', style: 'display:block;color:inherit' }, f.level === 'stale'
+  return h('button', { class: 'warnline', type: 'button', onclick: pickBackup, style: 'display:block;width:100%;text-align:left;color:inherit;font:inherit;border:0;cursor:pointer' }, f.level === 'stale'
     ? `Данные из MoneyManager старые: загружены ${fmtDay(st.importedAt!)}, ${ago} назад. Свободные деньги и подсказки могут быть неверны — загрузи свежий бэкап ›`
     : `Данные загружены ${fmtDay(st.importedAt!)}, ${ago} назад. Если с тех пор были траты, загрузи свежий бэкап ›`);
 }
@@ -225,7 +225,7 @@ function emptyState(): HTMLElement {
     'div',
     { class: 'screen' },
     hero('Можно тратить', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
-    h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'),
+    h('button', { class: 'btn primary big wide', type: 'button', onclick: pickBackup }, 'Загрузить бэкап'),
     h('button', { class: 'btn big wide', type: 'button', onclick: () => void loadDemo() }, 'Посмотреть на примере'),
     h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве. Пример — выдуманный студент: можно посмотреть, как всё выглядит.'),
     isSimpleMode(getState().settings) ? h('p', { class: 'one-line' }, 'Показано только главное. Полный режим — в «Ещё → Настройки».') : null,
@@ -274,6 +274,8 @@ function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { d
   );
 }
 
+const tagged = (el: HTMLElement, t: string): HTMLElement => (el.setAttribute('data-tour', t), el);
+
 export function renderOverview(): HTMLElement {
   const o = ov();
   if (!o.hasData) return emptyState();
@@ -298,7 +300,7 @@ export function renderOverview(): HTMLElement {
   const paymentsRow = o.upcoming30.length
     ? h(
         'details',
-        { class: 'rows acc', 'data-key': 'overview:payments' },
+        { class: 'rows acc', 'data-key': 'overview:payments', 'data-tour': 'payments' },
         h(
           'summary',
           { class: 'row' },
@@ -311,7 +313,7 @@ export function renderOverview(): HTMLElement {
     : null;
   const details = h(
     'details',
-    { class: 'fold', 'data-key': 'overview:details', open: getState().settings.showDetails ? true : undefined },
+    { class: 'fold', 'data-key': 'overview:details', 'data-tour': 'details', open: getState().settings.showDetails ? true : undefined },
     h('summary', null, simple ? 'Подробнее: платежи, капитал, счета' : 'Подробнее: капитал, долги, все счета'),
     h(
       'div',
@@ -344,7 +346,7 @@ export function renderOverview(): HTMLElement {
     'div',
     { class: 'screen' },
     firstTimeHint(),
-    heroBlock(o),
+    tagged(heroBlock(o), 'hero'),
     firstRunCard(),
     arrivedCard(),
     monthlyCard(),

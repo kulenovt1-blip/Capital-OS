@@ -6,6 +6,7 @@
 import { h } from './dom';
 import { CAPABILITIES, LATEST_RELEASE, shouldShowWhatsNew, type IconKey, type Slide } from './whatsnew-data';
 import { getHealth, getState, update } from './store';
+import { modeTour } from './tours';
 
 const ICONS: Record<IconKey, string> = {
   spark: 'M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2zM19 3v4M17 5h4',
@@ -38,6 +39,8 @@ let openNow: (() => void) | null = null;
 export function openSlides(slides: Slide[], opts: { start?: number; title: string; finish?: string }): void {
   if (openNow || !slides.length) return;
   let i = Math.min(Math.max(opts.start ?? 0, 0), slides.length - 1);
+  // eslint-disable-next-line prefer-const
+  let close: () => void = () => undefined;
   const last = () => i === slides.length - 1;
 
   const track = h('div', { class: 'm-track' }, slides.map((s, k) =>
@@ -52,6 +55,8 @@ export function openSlides(slides: Slide[], opts: { start?: number; title: strin
         h('div', { class: 'm-title' }, s.title),
         h('p', { class: 'm-text' }, s.text),
         s.where ? h('div', { class: 'm-where' }, h('span', { class: 'm-pin', 'aria-hidden': 'true' }, '⌖'), h('span', null, s.where)) : null,
+        // показать на настоящем экране: окно закрывается, подсказка начинается после того, как «назад» отработал
+        s.tour === 'mode' ? h('button', { class: 'm-show', type: 'button', onclick: () => (close(), setTimeout(() => void modeTour(), 320)) }, '▶ Показать на экране') : null,
       ),
     ),
   ));
@@ -88,7 +93,7 @@ export function openSlides(slides: Slide[], opts: { start?: number; title: strin
     back.classList.add('closing');
     setTimeout(() => back.remove(), 180);
   };
-  const close = () => {
+  close = () => {
     if (pushed) history.back(); // закроется в onPop
     else remove();
   };

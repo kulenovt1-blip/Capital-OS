@@ -681,8 +681,6 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .share-check { display: flex; flex-direction: column; gap: 6px; }
 .share-check .ok { color: var(--good); }
 .share-check .no { color: var(--warn); }
-.mode-diff { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--divider); font-size: calc(14px * var(--fz)); }
-.mode-diff .tag { margin-right: 4px; }
 
 /* D190: окно-карусель «Что нового» / «Что умеет» */
 body.modal-open { overflow: hidden; }
@@ -721,3 +719,46 @@ body.modal-open { overflow: hidden; }
 .cap-tile .ci { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(140deg, var(--surface-inverse), color-mix(in srgb, var(--surface-inverse) 55%, #000)); }
 .cap-tile .ci svg { width: 22px; height: 22px; }
 .cap-tile strong { font-size: calc(15px * var(--fz)); line-height: 1.25; }
+
+.m-show { align-self: flex-start; margin-top: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--primary); background: transparent; color: var(--primary); font: inherit; font-weight: 700; font-size: calc(14px * var(--fz)); cursor: pointer; }
+
+/* D191: подсказки поверх интерфейса */
+.tour-layer { position: fixed; inset: 0; z-index: 1001; animation: m-fade 0.2s ease; }
+.tour-layer.closing { animation: m-fade 0.2s ease reverse forwards; }
+.tour-spot { position: fixed; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(4, 14, 18, 0.74), 0 0 0 2px var(--primary), 0 0 24px 4px color-mix(in srgb, var(--primary) 45%, transparent); transition: top 0.38s cubic-bezier(0.3, 0.8, 0.3, 1), left 0.38s cubic-bezier(0.3, 0.8, 0.3, 1), width 0.38s cubic-bezier(0.3, 0.8, 0.3, 1), height 0.38s cubic-bezier(0.3, 0.8, 0.3, 1); pointer-events: none; }
+.tour-spot.none { box-shadow: 0 0 0 9999px rgba(4, 14, 18, 0.74); }
+.tour-tip { position: fixed; padding: 18px 18px 14px; border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45); transition: top 0.38s cubic-bezier(0.3, 0.8, 0.3, 1), left 0.38s cubic-bezier(0.3, 0.8, 0.3, 1), opacity 0.15s; }
+.tour-tip.switching { opacity: 0.35; }
+.tour-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+.tour-title { padding-right: 32px; font-size: calc(18px * var(--fz)); font-weight: 800; line-height: 1.25; }
+.tour-text { margin: 6px 0 0; font-size: calc(15px * var(--fz)); line-height: 1.45; color: var(--ink-2); }
+.tour-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 8px; margin-top: 14px; }
+.tour-tip.has-choices .tour-btns { width: 100%; }
+.tour-tip.has-choices .tour-btns .btn:not(.link) { flex: 1; }
+.tour-dots { display: flex; gap: 5px; }
+.tour-dots span { width: 7px; height: 7px; border-radius: 4px; background: var(--line-strong); transition: width 0.2s, background 0.2s; }
+.tour-dots span.on { width: 20px; background: var(--primary); }
+.tour-btns { display: flex; gap: 8px; align-items: center; }
+.tour-btns .btn { min-height: 42px; padding: 0 16px; }
+.tour-arrow { position: absolute; width: 14px; height: 14px; background: var(--surface); transform: translateX(-50%) rotate(45deg); }
+.tour-arrow.up { top: -7px; }
+.tour-arrow.down { bottom: -7px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-tip { transition: none; } }
+
+/* D191: «Профиль» без стены текста */
+.pos-steps { display: flex; justify-content: center; gap: 6px; margin: 2px 0 4px; }
+.pos-steps span { width: 34px; height: 6px; border-radius: 3px; background: var(--line-strong); }
+.pos-steps span.on { background: var(--primary); }
+.pos-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.pos-act { min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); font: inherit; font-size: calc(13px * var(--fz)); font-weight: 700; text-decoration: none; cursor: pointer; }
+.pos-focus { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.pos-focus .pf-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pos-focus .pf-k { font-size: calc(13px * var(--fz)); font-weight: 700; color: var(--muted); }
+.pos-focus .pf-v { font-size: calc(18px * var(--fz)); font-weight: 800; }
+.pos-focus .pf-chip { padding: 6px 10px; border-radius: 12px; background: var(--warn-tint); color: var(--on-warn-tint); font-size: calc(13px * var(--fz)); font-weight: 700; line-height: 1.25; }
+.pos-focus .pf-next { padding-top: 12px; border-top: 1px solid var(--divider); }
+.pos-focus .pf-next ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: calc(15px * var(--fz)); }
+.pos-focus .pf-limit { padding: 8px 10px; border-radius: 10px; background: var(--warn-tint); color: var(--on-warn-tint); font-size: calc(14px * var(--fz)); }
+.pos-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pos-tiles .cell.wide { grid-column: 1 / -1; }
+.pos-tiles .cell.wide .v { font-size: calc(26px * var(--fz)); }

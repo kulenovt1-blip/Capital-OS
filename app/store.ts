@@ -23,8 +23,28 @@ export function today(): IsoDate {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * Показ «как это выглядит в другом режиме» во время подсказки (D191): режим подменяется только для экрана, в хранилище не пишется.
+ * Производное состояние кэшируется, чтобы расчёты, привязанные к самому объекту состояния, не пересчитывались на каждый вызов.
+ */
+let preview: 'simple' | 'full' | null = null;
+let previewBase: AppState | null = null;
+let previewState: AppState | null = null;
+
 export function getState(): AppState {
-  return state;
+  if (!preview) return state;
+  if (previewBase !== state || !previewState) {
+    previewBase = state;
+    previewState = { ...state, settings: { ...state.settings, uiMode: preview } };
+  }
+  return previewState;
+}
+
+export function setPreviewMode(m: 'simple' | 'full' | null): void {
+  if (preview === m) return;
+  preview = m;
+  previewState = null;
+  notify();
 }
 
 /** Как сейчас с хранением: всё в порядке, данные не прочитались, запись не удалась или хранилища нет. */

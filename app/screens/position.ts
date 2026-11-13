@@ -13,6 +13,8 @@ import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
+import { profileTour, tourSeen } from '../tours';
+import { tourActive } from '../tour';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
@@ -61,42 +63,64 @@ function trustLine(v: PositionView): HTMLElement | null {
   return null;
 }
 
-function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
+/** Что ещё сказать про ступень — в отдельном листе, а не стеной текста под ней (D191). */
+function levelMore(v: PositionView): HTMLElement[] {
   const isL5 = v.basis === 'independence';
-  const lines: (HTMLElement | null)[] = [];
+  const out: HTMLElement[] = [];
+  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) out.push(h('p', null, `Общая оценка ${Math.round(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
+  if (v.level === 4) out.push(h('p', null, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.'));
+  if (isL5) out.push(h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.'));
   if (v.range && v.rangeLevels) {
-    lines.push(
+    out.push(
       h('p', { class: 'muted' },
         v.rangeLevels.low === v.rangeLevels.high
           ? `Часть данных неизвестна, но на ступень это не влияет: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}.`
           : `Часть данных неизвестна: оценка от ${Math.round(v.range.low)} до ${Math.round(v.range.high)}, то есть от «${v.rangeLevels.low}» до «${v.rangeLevels.high}».${v.range.showPoint ? ` Ориентир — ${Math.round(v.range.point)}.` : ' Точнее сказать нельзя.'}`),
     );
   }
-  // важное про сам уровень — на виду (одной строкой каждое), остальное свёрнуто
+  return out;
+}
+
+defineSheet('level-more', () => {
+  const v = positionNow();
+  if (v.status !== 'ok') return null;
+  return { title: `Ступень ${v.level ?? '—'} · ${v.levelName ?? ''}`, body: h('div', { class: 'stack' }, ...levelMore(v)) };
+});
+
+defineSheet('ladder', () => {
+  const v = positionNow();
+  if (v.status !== 'ok') return null;
+  return {
+    title: 'Все ступени',
+    body: h('ol', { class: 'pos-ladder-list' },
+      [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
+        h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
+        h('div', { class: 'muted' }, s.meaning)))),
+  };
+});
+
+/** Ступень: название, смысл одной строкой и три кнопки — без поясняющих абзацев (D191, замечание владельца: «много сплошного текста»). */
+function levelCard(v: PositionView): HTMLElement {
   const key: HTMLElement[] = [];
   if (v.onBorder.length) key.push(h('p', { class: 'pos-note' }, 'Ты на границе ступеней: небольшое изменение сдвинет ступень.'));
-  if (v.l4Unconfirmed) key.push(h('p', { class: 'pos-note' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало, поэтому показана ступень ниже. Данные накопятся — ступень подтвердится.`));
+  if (v.l4Unconfirmed) key.push(h('p', { class: 'pos-note' }, `По оценке это «${LEVEL_NAMES[4]}», но данных пока мало — показана ступень ниже.`));
   if (v.held) key.push(h('p', { class: 'pos-note' }, `${v.held}.`));
-  // внимание: ступень → картинка → оценка надёжности; всё остальное — одной свёрнутой строкой (аудит UX: не стена текста)
-  const more: (HTMLElement | null)[] = [
-    v.level === 4 ? h('p', null, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.') : null,
-    isL5 ? h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.') : null,
-    ...lines,
-  ].filter(Boolean) as HTMLElement[];
-  // общая оценка — внутрь свёрнутого блока: на виду только ступень, смысл и полоски (аудит владельца: «много сплошного текста»)
-  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) more.unshift(h('p', null, `Общая оценка ${Math.round(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
   return h(
     'div',
-    { class: 'card stack pos-level-card' },
-    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, info('levels'), v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
+    { class: 'card stack pos-level-card', 'data-tour': 'level' },
+    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
     h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
     v.levelMeaning ? h('p', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null,
-    // радар — главное на экране: в одной карточке со ступенью, сразу под названием (D167)
-    chart,
+    v.level !== null ? h('div', { class: 'pos-steps', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= v.level! ? 'on' : '' }))) : null,
     ...key,
     trustLine(v),
-    more.length ? h('details', { class: 'fold', 'data-key': 'position:more' }, h('summary', null, 'Что ещё важно про эту ступень'), h('div', { class: 'stack' }, ...more)) : null,
-    ladderFold(v),
+    h(
+      'div',
+      { class: 'pos-actions' },
+      h('a', { class: 'pos-act', href: sheetHref('ladder') }, 'Все ступени'),
+      levelMore(v).length ? h('a', { class: 'pos-act', href: sheetHref('level-more') }, 'Подробнее') : null,
+      h('button', { class: 'pos-act', type: 'button', onclick: () => void profileTour() }, 'Как читать'),
+    ),
   );
 }
 
@@ -104,16 +128,6 @@ function levelCard(v: PositionView, chart: HTMLElement): HTMLElement {
 function meaningOf(v: PositionView): string {
   if (v.level === 2 && v.spiral.spiral && !(v.levelMeaning ?? '').startsWith('Расходы больше доходов')) return 'Долги растут быстрее, чем гасятся. Начни с одного платежа';
   return v.levelMeaning ?? '';
-}
-
-/** Все пять ступеней: где ты и что значит каждая (D151). */
-function ladderFold(v: PositionView): HTMLElement {
-  return h('details', { class: 'fold pos-ladder', 'data-key': 'position:ladder' },
-    h('summary', null, 'Все ступени'),
-    h('ol', { class: 'pos-ladder-list' },
-      [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
-        h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
-        h('div', { class: 'muted' }, s.meaning)))));
 }
 
 /** Один маленький первый шаг, когда есть долговая спираль или просрочки (К4 аудита UX). */
@@ -145,14 +159,14 @@ function pathBlock(v: PositionView): HTMLElement | null {
   const open = (): void => setRouteTarget(target);
   const planned = getState().settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
   if (planned) {
-    return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени' },
+    return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени', 'data-tour': 'path' },
       h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
       h('strong', null, 'План принят'),
       h('p', null, `В прогнозе: «${planned.title}». ${pace}`),
       h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посмотреть или убрать'),
     );
   }
-  return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени' },
+  return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени', 'data-tour': 'path' },
     h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
     h('strong', null, `Нужно отложить в запас ещё ${approx(r.missing / 100)}`),
     h('p', null, pace),
@@ -180,10 +194,6 @@ export function scoreWord(score: number): string {
   return 'мало';
 }
 
-function scaleNote(): HTMLElement {
-  return h('p', { class: 'one-line' }, 'Оранжевая черта — порог ступени. Чем длиннее полоска, тем лучше.');
-}
-
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
 const INDICATOR_HINTS: Readonly<Record<string, string>> = {
   N1: 'На сколько месяцев хватит денег без дохода. 100 — запас большой, 0 — почти нет.',
@@ -203,7 +213,7 @@ const INDICATOR_HINTS: Readonly<Record<string, string>> = {
 function directionsBlock(v: PositionView): HTMLElement {
   return h(
     'div',
-    { class: 'stack' },
+    { class: 'stack', 'data-tour': 'dirs' },
     rows(
       ...v.directions.map((d) =>
         h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
@@ -217,34 +227,39 @@ function directionsBlock(v: PositionView): HTMLElement {
   );
 }
 
+/** Слабое место и что нужно для следующей ступени — одной карточкой: заголовок крупно, показатель — плашкой (D191). */
 function weakBlock(v: PositionView, hasPath = false): HTMLElement | null {
-  const items: (HTMLElement | null)[] = [];
-  if (v.weak) {
-    items.push(row({ title: `Слабое место: ${v.weak.directionName}`, sub: v.weak.indicator ? `самое слабое в нём — «${v.weak.indicator.label}», ${Math.round(v.weak.indicator.score)} из 100` : undefined, chevron: false }));
-  }
-  if (v.next && !hasPath) items.push(row({ title: `Чтобы подняться на «${v.next.name}»`, sub: `нужно: ${v.next.needs.join('; ')}`, chevron: false }));
-  for (const l of v.limitsFired) items.push(row({ title: 'Сдерживает ступень', sub: l.text, chevron: false, cls: 'warn' }));
-  return items.length ? rows(...items) : null;
+  const next = v.next && !hasPath ? v.next : null;
+  if (!v.weak && !next && !v.limitsFired.length) return null;
+  return h(
+    'div',
+    { class: 'pos-focus', 'data-tour': 'weak' },
+    v.weak
+      ? h('div', { class: 'pf-row' },
+          h('div', null, h('div', { class: 'pf-k' }, 'Слабое место'), h('div', { class: 'pf-v' }, v.weak.directionName)),
+          v.weak.indicator ? h('span', { class: 'pf-chip' }, `${v.weak.indicator.label} · ${Math.round(v.weak.indicator.score)}`) : null)
+      : null,
+    next ? h('div', { class: 'pf-next' }, h('div', { class: 'pf-k' }, `До «${next.name}»`), h('ul', null, next.needs.map((n) => h('li', null, n)))) : null,
+    v.limitsFired.map((l) => h('div', { class: 'pf-limit' }, `Сдерживает: ${l.text}`)),
+  );
 }
 
+/** Деньги — плитками: капитал крупно с арифметикой «есть − долги» мелко, запас и «можно снять» рядом. Пояснения — в ⓘ (D191). */
 function moneyBlock(v: PositionView): HTMLElement {
   const m = v.money;
   const debts = m.gross - m.total;
-  // «есть − долги = капитал» — арифметика на виду; «можно снять за месяц» — другая величина и подписана как другая (замечание владельца: «доступно» больше капитала)
+  const short = (t: number) => fmtShort(Math.round(t * 100) as never);
+  const spendable = Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1);
   return h(
     'div',
-    { class: 'stack' },
+    { class: 'stack', 'data-tour': 'money' },
     sub('Деньги', info('capitalTwo')),
-    rows(
-      row({ title: 'Всё, что есть', sub: 'счета, вклады, жильё и другие активы', value: money(m.gross), chevron: false }),
-      debts > 0.5 ? row({ title: 'Долги и рассрочки', sub: 'всё, что ещё предстоит выплатить', value: `−${money(debts)}`, chevron: false }) : null,
-      row({ title: 'Всего капитал', sub: debts > 0.5 ? 'то, что останется после всех выплат' : 'всё, что есть', value: money(m.total), chevron: false }),
-    ),
-    rows(
-      Math.abs(m.total - m.spendable) > 0.05 * Math.max(Math.abs(m.total), 1)
-        ? row({ title: 'Можно снять за 30 дней', sub: 'после платежей и обычных трат этого месяца; рассрочки растянуты на годы, поэтому тут вычтены только ближайшие платежи', value: money(m.spendable), chevron: false })
-        : null,
-      row({ title: 'Запас', sub: 'сколько месяцев проживёшь без дохода', value: mo(m.reserveEssentialMonths), href: sheetHref('reserve-info') }),
+    h(
+      'div',
+      { class: 'pos-tiles' },
+      h('div', { class: 'cell wide' }, h('div', { class: 'k' }, 'Всего капитал'), h('div', { class: 'v' }, money(m.total)), h('div', { class: 'cs' }, debts > 0.5 ? `есть ${short(m.gross)} − долги ${short(debts)}` : 'долгов нет')),
+      h('a', { class: 'cell', href: sheetHref('reserve-info') }, h('div', { class: 'k' }, 'Запас'), h('div', { class: 'v' }, mo(m.reserveEssentialMonths)), h('div', { class: 'cs' }, 'без дохода ›')),
+      spendable ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Снять за месяц'), h('div', { class: 'v' }, short(m.spendable)), h('div', { class: 'cs' }, 'после платежей и трат')) : null,
     ),
   );
 }
@@ -353,7 +368,7 @@ function independenceSection(v: PositionView): HTMLElement[] {
   // человек сам задал «желаемые траты» — сценарий показываем сразу, он за ним и пришёл
   const near = v.level === 5 || v.desired !== null || (i.status !== 'not_assessed' && i.total.central >= INDEPENDENCE_INLINE_FROM);
   if (i.status === 'not_assessed' || near) return [independenceBlock(v), desiredBlock(v)].filter((x): x is HTMLElement => x !== null);
-  return [rows(row({ title: `Независимость: ${pct(i.total.central)} пути`, sub: 'сколько расходов покрывают капитал и независимый доход — подробности и «а если бы тратил больше»', href: sheetHref('independence') }))];
+  return [rows(row({ title: 'Независимость', sub: 'когда можно не работать', value: `${pct(i.total.central)} пути`, href: sheetHref('independence') }))];
 }
 
 export function renderPosition(): HTMLElement {
@@ -370,7 +385,9 @@ export function renderPosition(): HTMLElement {
     );
     return root;
   }
-  root.append(levelCard(v, scaleNote()));
+  root.append(levelCard(v));
+  // первый заход на «Профиль» — подсказка по блокам сама, один раз (не поверх окна «Что нового»)
+  if (!tourSeen('profile') && !tourActive()) setTimeout(() => !tourActive() && !document.querySelector('.modal-back') && location.hash.startsWith('#/position') && !tourSeen('profile') && void profileTour(), 700);
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
   const path = pathBlock(v);
@@ -386,7 +403,7 @@ export function renderPosition(): HTMLElement {
   // простой режим (D185): жильё, «если доход пропадёт» и независимость — за одной строкой «Подробнее»; тревожные признаки (спираль, просрочки) остаются на виду
   if (isSimpleMode(getState().settings)) {
     if (sp) root.append(sp);
-    root.append(rows(row({ title: 'Подробнее', sub: 'если доход пропадёт, жильё и активы, независимость', href: sheetHref('profile-more') })));
+    root.append(rows(row({ title: 'Подробнее', sub: 'без дохода, жильё, независимость', href: sheetHref('profile-more') })));
     root.append(h('div', { class: 'foot-note' }, explainLink('position')));
     return root;
   }
