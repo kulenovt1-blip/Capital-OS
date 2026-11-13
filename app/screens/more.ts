@@ -13,8 +13,9 @@ import { persistStatus } from '../protect';
 import { openWhatsNew } from '../whatsnew';
 import { modeTour } from '../tours';
 import { pickBackup } from './import';
+import { tile, tiles } from '../tiles';
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.7.0';
 declare const __BUILD__: { sha: string; date: string } | undefined;
 /** «сборка a1b2c3d · 11.11» — по хэшу видно, какая версия открыта; в разработке — «разработка». */
 export const buildLabel = (): string => (typeof __BUILD__ === 'undefined' ? 'разработка' : `сборка ${__BUILD__.sha} · ${__BUILD__.date.slice(8, 10)}.${__BUILD__.date.slice(5, 7)}`);
@@ -36,48 +37,46 @@ export function renderMore(): HTMLElement {
   const bak = st.lastBackupAt ? `бэкап ${fmtDay(st.lastBackupAt)}` : 'бэкап не скачивался';
   const noIncome = !st.settings.incomeSchedule.length;
   const markup = o.hasData && essentialMarkupMissing(o);
-  // «Требует внимания» — только то, что реально ждёт; остальное разложено по назначению: действие, мои данные, приложение (аудит UX: семь одинаковых плиток)
+  // «Требует внимания» (D193): цветная точка и короткая фраза; объяснение — на экране, куда ведёт строка
+  const att = (title: string, href: string, level: 'warn' | 'bad', value?: string) => row({ title, href, value, lead: h('span', { class: `adot ${level}`, 'aria-hidden': 'true' }) });
   const attention = [
-    setupOpen ? row({ title: 'Настройка', sub: o.hasData ? `сделано ${p.done} из ${p.total}` : 'шаг 1 — загрузить бэкап', href: '#/setup', cls: 'warn' }) : null,
-    markup ? row({ title: 'Что обязательно?', sub: 'отметь траты «без этого не прожить» — иначе запас посчитан неточно', href: '#/markup', cls: 'warn' }) : null,
-    reconcileBad ? row({ title: 'Сверка не сошлась', sub: 'цифры могут расходиться с MoneyManager', href: '#/data', cls: 'bad' }) : null,
-    accountsWait ? row({ title: 'Счета ждут ответа', sub: 'нужно подтвердить, что считать деньгами', href: '#/accounts', cls: 'warn' }) : null,
-    noIncome ? row({ title: 'Доходы не заданы', sub: 'без них прогноз неполный', href: '#/incomes', cls: 'warn' }) : null,
-    found ? row({ title: 'Найдены долги и рассрочки', sub: `в операциях: ${found} — проверь и заведи`, href: '#/debts', cls: 'warn' }) : null,
-    bakRem.show ? row({ title: bakRem.title, sub: bakRem.sub, href: '#/backup', cls: bakRem.level === 'bad' ? 'bad' : 'warn' }) : null,
+    reconcileBad ? att('Сверка не сошлась', '#/data', 'bad') : null,
+    bakRem.show ? att(st.lastBackupAt ? 'Пора сохранить копию' : 'Сохрани копию — её ещё нет', '#/backup', bakRem.level === 'bad' ? 'bad' : 'warn') : null,
+    setupOpen ? att('Настройка', '#/setup', 'warn', o.hasData ? `${p.done} из ${p.total}` : 'начать') : null,
+    markup ? att('Отметь обязательные траты', '#/markup', 'warn') : null,
+    accountsWait ? att('Подтверди счета', '#/accounts', 'warn') : null,
+    noIncome ? att('Укажи доходы', '#/incomes', 'warn') : null,
+    found ? att('Найден долг — проверь', '#/debts', 'warn', String(found)) : null,
   ].filter(Boolean) as HTMLElement[];
+  void bak;
   return h(
     'div',
     { class: 'screen' },
     attention.length ? h('div', { class: 'stack' }, sub('Требует внимания'), rows(...attention)) : null,
-    // порядок — по частоте: действия (деньги пришли, обновить данные, сохранить копию) → что хранится → приложение (замечание владельца: большая плитка «Пришли деньги» стояла в меню настроек)
-    h(
-      'div',
-      { class: 'stack' },
-      sub('Действия'),
-      rows(
-        row({ title: 'Пришли деньги', sub: 'зарплата или стипендия: сколько отложить и на что', href: '#/income' }),
-        row({ title: 'Обновить данные из MoneyManager', sub: !o.hasData ? 'выбрать файл .mmbackup' : `последний импорт ${fmtDay(st.importedAt ?? today())}${reconcileBad ? ' · сверка: расхождение' : ''}`, onClick: pickBackup, mark: reconcileBad }),
-        row({ title: 'Сохранить копию приложения', sub: bak, href: '#/backup' }),
-        o.hasData ? row({ title: 'Итоги месяцев', sub: 'сколько пришло, ушло и куда сдвинулся капитал', href: '#/months' }) : null,
-      ),
+    // частые действия — плитками (D193); «Обновить данные» сразу открывает выбор файла (D192)
+    sub('Действия'),
+    tiles(
+      tile({ icon: 'arrive', title: 'Пришли деньги', href: '#/income', tour: 'arrived-tile' }),
+      tile({ icon: 'upload', title: 'Обновить данные', sub: !o.hasData ? 'из MoneyManager' : `импорт ${fmtDay(st.importedAt ?? today())}`, onClick: pickBackup, tour: 'update', warn: reconcileBad }),
+      tile({ icon: 'save', title: 'Сохранить копию', sub: st.lastBackupAt ? `копия ${fmtDay(st.lastBackupAt)}` : 'ещё нет', href: '#/backup', tour: 'save', warn: bakRem.show }),
+      o.hasData ? tile({ icon: 'calendar', title: 'Итоги месяцев', href: '#/months' }) : null,
     ),
     h(
       'div',
       { class: 'stack' },
       sub('Мои данные'),
       rows(
-        row({ title: 'Счета', sub: !o.hasData ? 'после импорта' : nWord(accounts, 'счёт', 'счёта', 'счетов'), href: '#/accounts' }),
-        row({ title: 'Доходы', sub: noIncome ? 'не заданы' : `доходов: ${st.settings.incomeSchedule.length}`, href: '#/incomes' }),
-        row({ title: 'Долги и рассрочки', sub: st.obligations.length ? `заведено: ${st.obligations.length}` : 'нет', href: '#/debts' }),
-        isSimpleMode(st.settings) ? null : row({ title: 'Разметка трат', sub: 'категории, раскладка, правила', href: '#/data' }),
+        row({ title: 'Счета', value: o.hasData ? String(accounts) : undefined, href: '#/accounts' }),
+        row({ title: 'Доходы', value: noIncome ? 'нет' : String(st.settings.incomeSchedule.length), href: '#/incomes' }),
+        row({ title: 'Долги и рассрочки', value: st.obligations.length ? String(st.obligations.length) : 'нет', href: '#/debts' }),
+        isSimpleMode(st.settings) ? null : row({ title: 'Разметка трат', href: '#/data' }),
       ),
     ),
     h(
       'div',
       { class: 'stack' },
       sub('Приложение'),
-      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Что нового', sub: 'последние изменения', onClick: openWhatsNew }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и пять коротких инструкций', href: '#/help' })),
+      rows(row({ title: 'Настройки', href: '#/prefs' }), row({ title: 'Что нового', onClick: openWhatsNew }), row({ title: 'Как пользоваться', href: '#/help' })),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );

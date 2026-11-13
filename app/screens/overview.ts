@@ -12,10 +12,11 @@ import { attentionItems } from '../attention';
 import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
 import { defineSheet, go, refresh, sheetHref } from '../main';
-import { helpSeen, markHelpSeen } from './help';
 import { isSimpleMode } from '../../engine/index';
 import { simpleHint } from '../modehint';
 import { openCapabilities } from '../whatsnew';
+import { iconBox } from '../tiles';
+import { autoTour, spendTour } from '../tours';
 
 registerExplain(
   'overview',
@@ -118,7 +119,14 @@ function arrivedCard(): HTMLElement | null {
   const found = arrivedIncomes(st, today(), ov());
   if (!found.length) return null;
   const x = found[0]!;
-  return rows(row({ title: `Пришло ${fmtShort(x.amount)}: ${x.title}`, sub: `${fmtDay(x.date)} · распределить на цели и жизнь?${found.length > 1 ? ` Ещё ${found.length - 1}` : ''}`, href: '#/income', cls: 'warn' }));
+  // карточка-действие с кнопкой (D193), а не строка со стрелкой
+  return h(
+    'section',
+    { class: 'act-card', 'data-tour': 'arrived' },
+    iconBox('arrive'),
+    h('div', { class: 'ac-main' }, h('strong', null, `+${fmtShort(x.amount)}${found.length > 1 ? ` · ещё ${found.length - 1}` : ''}`), h('div', { class: 'ct-sub' }, `${x.title}, ${fmtDay(x.date)}`)),
+    h('a', { class: 'btn primary', href: '#/income' }, 'Распределить'),
+  );
 }
 
 function heroBlock(o: Overview): HTMLElement {
@@ -137,10 +145,9 @@ function heroBlock(o: Overview): HTMLElement {
       extra: h('div', { class: 'stack tight' }, h('a', { class: 'link', href: '#/forecast~save-where' }, 'Что можно сделать ›'), h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')),
     });
   }
-  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно после обычных трат до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно после обычных трат · 30 дней', info('free'));
-  // С8: рядом с «≈ 29 тыс в день» — сколько обычно уходит, чтобы лимит не читался как разрешение тратить всё
-  const usual = sp.usualPerDay > 0 ? ` · обычно уходит ~${fmtShort(sp.usualPerDay)}` : '';
-  const subline = h('span', null, `≈ ${fmtShort(sp.perDay)} в день сверх обычного${usual}`);
+  const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно на 30 дней', info('free'));
+  // D193: одна строка. «После обычных трат» — смысл числа (С8: чтобы лимит не читался как «можно потратить всё»); «обычно уходит» — в «Как посчитано»
+  const subline = h('span', null, `после обычных трат · ≈ ${fmtShort(sp.perDay)} в день`);
   return hero(label, fmtShort(sp.canSpend), subline, { extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
 }
 
@@ -250,17 +257,6 @@ function firstRunCard(): HTMLElement | null {
   return h('a', { class: 'hint-card first-run', href: '#/start' }, h('strong', null, 'Число предварительное. '), h('span', null, 'Ответь на 3 коротких вопроса — доходы, счета, цели — и оно станет точнее. Минута ›'));
 }
 
-/** «Впервые здесь?» — пока человек не открывал справку и не закрыл подсказку (D94). */
-function firstTimeHint(): HTMLElement | null {
-  if (helpSeen()) return null;
-  return h(
-    'div',
-    { class: 'hint-card' },
-    h('a', { href: '#/help' }, h('strong', null, 'Впервые здесь?'), h('span', null, ' Коротко: что умеет приложение и когда его открывать ›')),
-    h('button', { class: 'close', type: 'button', 'aria-label': 'Скрыть подсказку', onclick: () => (markHelpSeen(), refresh()) }, '×'),
-  );
-}
-
 /** Всё, что ждёт ответа, — одной сворачиваемой строкой «Нужно решение · N» (этап 2): вопросы не вклиниваются в экран. */
 function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { done: number; total: number }): HTMLElement | null {
   const income = newIncomeLine();
@@ -279,6 +275,8 @@ const tagged = (el: HTMLElement, t: string): HTMLElement => (el.setAttribute('da
 export function renderOverview(): HTMLElement {
   const o = ov();
   if (!o.hasData) return emptyState();
+  // первый раз с данными — подсказка «сколько можно тратить» поверх экрана (D193; заменила плашку «Впервые здесь?»)
+  autoTour('overview', '#/overview', spendTour);
   const c = o.capital;
   const sp = o.spend;
   const bad = badAccounts();
@@ -345,7 +343,6 @@ export function renderOverview(): HTMLElement {
   return h(
     'div',
     { class: 'screen' },
-    firstTimeHint(),
     tagged(heroBlock(o), 'hero'),
     firstRunCard(),
     arrivedCard(),
@@ -354,9 +351,9 @@ export function renderOverview(): HTMLElement {
     historyNote(o),
     h(
       'div',
-      { class: 'cells' },
+      { class: 'cells', 'data-tour': 'cells' },
       h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), !simple && lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
-      h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
+      h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'В копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
     cushionRow(o),
     simple ? null : paymentsRow,

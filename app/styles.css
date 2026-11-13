@@ -602,7 +602,7 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .top .ttl-row h1 { flex: 0 1 auto; max-width: 100%; }
 /* на вложенных экранах значок доверия — только цветная точка (название экрана важнее); смысл — в aria-label и в листе по нажатию (D167) */
 .top.sub-top .trust { max-width: none; flex: none; min-width: 44px; justify-content: center; padding: 0 12px; }
-.top.sub-top .trust span:not(.td) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.top.sub-top .trust span:not(.td):not(.acc-meter) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .top.sub-top .trust .td { width: 12px; height: 12px; }
 
 /* Строка о надёжности уровня под названием ступени (аудит UX, К3) */
@@ -762,3 +762,43 @@ body.modal-open { overflow: hidden; }
 .pos-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pos-tiles .cell.wide { grid-column: 1 / -1; }
 .pos-tiles .cell.wide .v { font-size: calc(26px * var(--fz)); }
+
+/* D193: плитки, карточки-действия, итоги месяца плиткой, «Требует внимания» точками */
+.cap-tile .ct-sub, .ct-sub { font-size: calc(13px * var(--fz)); color: var(--muted); margin-top: 2px; line-height: 1.3; font-weight: 500; }
+.cap-tile .ci.warn { background: linear-gradient(140deg, var(--warn), color-mix(in srgb, var(--warn) 55%, #000)); }
+.cap-tile[data-tour] { position: relative; }
+.ibox { flex: none; width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(140deg, var(--surface-inverse), color-mix(in srgb, var(--surface-inverse) 55%, #000)); }
+.ibox svg { width: 22px; height: 22px; }
+.act-card { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.act-card .ac-main { flex: 1; min-width: 0; }
+.act-card .ac-main strong { display: block; font-size: calc(16px * var(--fz)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-card .btn { flex: none; min-height: 42px; padding: 0 14px; font-size: calc(14px * var(--fz)); }
+.act-card.col { flex-direction: column; align-items: stretch; }
+.act-card .ac-row { display: flex; gap: 12px; align-items: center; }
+.plan-cta { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius); background: color-mix(in srgb, var(--primary) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); color: inherit; text-decoration: none; }
+.plan-cta > div { flex: 1; }
+.plan-cta strong { font-size: calc(17px * var(--fz)); }
+.plan-cta .ibox { background: var(--primary); color: var(--on-primary); }
+.plan-cta .chev { color: var(--muted); font-size: 22px; }
+.mcard { padding: 14px 16px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.mcard .mhead { display: flex; align-items: center; gap: 8px; font-size: calc(13px * var(--fz)); font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.mcard .mhead span { flex: 1; }
+.mcard .mhead a { color: var(--muted); text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.mcard .mclose { width: 32px; height: 32px; margin: -6px -8px -6px 0; border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+.mcard .mval { margin-top: 4px; font-size: calc(28px * var(--fz)); font-weight: 900; color: var(--good); }
+.mcard .mval.neg { color: var(--bad); }
+.mcard .msub { font-size: calc(14px * var(--fz)); color: var(--muted); }
+.mcard .mbars { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 10px; align-items: center; margin-top: 12px; font-size: calc(14px * var(--fz)); }
+.mcard .mtrack { height: 8px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; }
+.mcard .mbar { display: block; height: 100%; border-radius: 4px; }
+.mcard .mbar.in { background: var(--primary); }
+.mcard .mbar.out { background: var(--line-strong); }
+.adot { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; }
+.adot.warn { background: var(--warn); }
+.adot.bad { background: var(--bad); }
+.row > .adot { align-self: center; }
+.play { flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, transparent); }
+.play svg path { fill: currentColor; }
+.seg button { white-space: nowrap; }
+a.cap-tile, a.cap-tile *, a.plan-cta, a.plan-cta * { text-decoration: none; color: inherit; }
+a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }

@@ -5,8 +5,10 @@
  */
 import { h } from '../dom';
 import { HELP } from '../help-text';
-import { sub } from '../ui';
-import { iconSvg, openCapabilities } from '../whatsnew';
+import { row, rows, sub } from '../ui';
+import { HOW_TO } from '../tours';
+import { openCapabilities } from '../whatsnew';
+import { iconSvg } from '../icons';
 import { CAPABILITIES } from '../whatsnew-data';
 
 const SEEN_KEY = 'capital-os.help-seen';
@@ -28,17 +30,6 @@ export function markHelpSeen(): void {
   }
 }
 
-/** Одна задача: вопрос человека → до трёх коротких шагов. */
-function task(q: string, steps: string[], tip?: string): HTMLElement {
-  return h(
-    'details',
-    { class: 'fold help-task', 'data-key': `help:${q}` },
-    h('summary', null, q),
-    h('ol', { class: 'help-steps' }, steps.map((s) => h('li', null, s))),
-    tip ? h('p', { class: 'muted' }, tip) : null,
-  );
-}
-
 export function renderHelp(): HTMLElement {
   markHelpSeen();
   const key = (t: string) => t.replace(/[«»]/g, '');
@@ -46,37 +37,17 @@ export function renderHelp(): HTMLElement {
   return h(
     'div',
     { class: 'screen help' },
-    h('p', { class: 'help-lead' }, 'Capital OS — помощник к MoneyManager. Учёт ты ведёшь там, а сюда загружаешь бэкап и видишь то, чего там нет. Ничего не переводит и не трогает счета; данные остаются на этом устройстве.'),
+    h('p', { class: 'help-lead' }, 'Учёт — в MoneyManager, выводы — здесь. Данные не покидают телефон.'),
     sub('Что умеет'),
     // плитки открывают окно-карусель на нужном слайде — экран не меняется (D190)
     h('div', { class: 'cap-grid' }, CAPABILITIES.map((c, k) => h('button', { class: 'cap-tile', type: 'button', onclick: () => openCapabilities(k + 1) }, h('span', { class: 'ci' }, iconSvg(c.icon)), h('strong', null, c.title)))),
-    sub('Как сделать'),
-    h(
-      'div',
-      { class: 'stack tight' },
-      task('Загрузить свежие данные', ['В MoneyManager сделай резервную копию (файл .mmbackup).', 'Здесь: «Ещё → Обновить данные из MoneyManager» или «Поделиться → Capital OS».', 'Если все счета сошлись — «Принять импорт».'], 'Разметка, цели, доходы и рассрочки остаются.'),
-      task('Пришли деньги — что с ними делать', ['Загрузи свежий бэкап и открой «Обзор»: приложение само найдёт приход.', '«Да, посчитай» покажет, сколько отложить на каждую цель.', 'Переведи сумму на копилку в банке и нажми «Перевёл — подтвердить».'], 'Приложение само ничего не переводит.'),
-      task('Хочу накопить на что-то', ['«Цели → ＋ Цель»: название, сумма, срок (срок можно не указывать).', 'Сразу видно: «успеваешь» или сколько нужно ещё в месяц.'], 'Кто выше в списке — получает деньги раньше.'),
-      task('Что будет, если…', ['«Прогноз → Планирую…»: работа, переезд, покупка, рассрочка, потеря дохода.', 'Заполни 2–3 поля, нажми «Посчитать» и, если подходит, «Добавить в план».']),
-      task('Не потерять настройки', ['Данные хранятся только в этом браузере.', '«Ещё → Сохранить копию приложения» — раз в две недели и перед сменой телефона.'], 'На новом устройстве: «Восстановить из файла».'),
-    ),
-    h(
-      'details',
-      { class: 'fold', 'data-key': 'help:strange' },
-      h('summary', null, 'Если что-то непонятно'),
-      h(
-        'ul',
-        { class: 'help-list' },
-        h('li', null, h('strong', null, 'Откуда число?'), ' Под ним «Как посчитано ›»; кружок ⓘ объясняет слово.'),
-        h('li', null, h('strong', null, 'Цифры странные.'), ' Посмотри метку «Точность» вверху: мало истории или бэкап не сошёлся — она скажет.'),
-        h('li', null, h('strong', null, 'Категория без названия.'), ' «Ещё → Данные → Раскладка трат» — нажми на неё и назови.'),
-        h('li', null, h('strong', null, 'Прогноз спрашивает «Повторятся?»'), ' — это про траты, которые были 1–2 раза за год; ответь, и прогноз станет точнее.'),
-      ),
-    ),
+    // инструкции — подсказками поверх настоящих экранов, а не текстом по шагам (D193)
+    sub('Покажу на экране'),
+    rows(...HOW_TO.map((t) => row({ title: t.title, sub: `${t.steps} ${t.steps < 5 ? 'шага' : 'шагов'}`, lead: h('span', { class: 'play', 'aria-hidden': 'true' }, iconSvg('play', 16)), onClick: () => void t.run() }))),
     h(
       'details',
       { class: 'fold', 'data-key': 'help:dictionary' },
-      h('summary', null, `Словарь — что значат слова в приложении (${terms.length})`),
+      h('summary', null, `Словарь — что значат слова (${terms.length})`),
       h('div', { class: 'stack tight' }, terms.map((t) => h('details', { class: 'fold', 'data-key': `help:term:${t.title}` }, h('summary', null, t.title), h('p', null, t.text)))),
     ),
   );

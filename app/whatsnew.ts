@@ -4,34 +4,12 @@
  * Живёт вне #app, поэтому перерисовка экрана его не закрывает; кнопка «назад» телефона закрывает окно.
  */
 import { h } from './dom';
-import { CAPABILITIES, LATEST_RELEASE, shouldShowWhatsNew, type IconKey, type Slide } from './whatsnew-data';
+import { CAPABILITIES, LATEST_RELEASE, shouldShowWhatsNew, type Slide } from './whatsnew-data';
+import { iconSvg } from './icons';
 import { getHealth, getState, update } from './store';
-import { modeTour } from './tours';
+import { modeTour, noteWhatsNewShown } from './tours';
 
-const ICONS: Record<IconKey, string> = {
-  spark: 'M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2zM19 3v4M17 5h4',
-  wallet: 'M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM3 7l12-4v4M17 13.5h.01',
-  arrive: 'M12 3v10M8 9l4 4 4-4M4 16c0 2.2 3.6 4 8 4s8-1.8 8-4',
-  target: 'M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5M12 11a1 1 0 1 0 1 1M14 10l6-6M17 4h3v3',
-  chart: 'M4 19h16M5 15l4-5 4 3 6-8',
-  profile: 'M12 4 20 18H4zM12 10l4 6H8z',
-  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3',
-  layers: 'M12 3 21 8l-9 5-9-5zM3 13l9 5 9-5',
-  share: 'M18 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
-  shield: 'M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6zM9 12l2 2 4-4',
-};
-
-export function iconSvg(key: IconKey): SVGSVGElement {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  const p = document.createElementNS(NS, 'path');
-  p.setAttribute('d', ICONS[key]);
-  for (const [k, v] of Object.entries({ fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) p.setAttribute(k, v);
-  svg.appendChild(p);
-  return svg;
-}
+export { iconSvg };
 
 let openNow: (() => void) | null = null;
 
@@ -150,6 +128,7 @@ export function maybeShowWhatsNew(): void {
   const raw = location.hash.replace(/^#\/?/, '');
   const path = raw.split('/')[0] ?? '';
   if (raw.includes('~') || !['', 'overview', 'goals', 'position', 'forecast', 'more'].includes(path)) return;
+  noteWhatsNewShown();
   setTimeout(openWhatsNew, 350);
   mark();
 }

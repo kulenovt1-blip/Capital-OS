@@ -18,7 +18,10 @@ function lines(s: MonthlySummary, step?: { level: number; name: string } | null)
   ].filter((x): x is HTMLElement => x !== null);
 }
 
-/** Карточка для «Обзора»: null — показывать нечего (не первые дни месяца, закрыта, данных мало). */
+/**
+ * Карточка для «Обзора» (D193): одна плитка — сколько осталось за месяц крупно и две полоски «пришло / ушло».
+ * Таблица и совет — на экране «Итоги месяцев» по «Подробнее». null — показывать нечего (не первые дни месяца, закрыта, данных мало).
+ */
 export function monthlyCard(): HTMLElement | null {
   const st = getState();
   const m = monthlyCardMonth(st, today());
@@ -26,13 +29,17 @@ export function monthlyCard(): HTMLElement | null {
   const s = monthlySummary(st, today(), m);
   if (!s || s.partial) return null;
   const close = () => void act((x) => ({ ...x, settings: { ...x.settings, summarySeen: [...new Set([...(x.settings.summarySeen ?? []), m])] } }), 'Итоги закрыты — они остались в «Ещё → Итоги месяцев»');
+  const top = Math.max(s.income as number, s.spent as number, 1);
+  const bar = (v: Money, cls: string) => h('span', { class: `mbar ${cls}`, style: `width:${Math.max(4, Math.round(((v as number) / top) * 100))}%` });
+  const share = s.leftShare !== null && s.income > 0 ? `осталось ${Math.round(s.leftShare * 100)} % дохода` : null;
+  const cap = s.capitalDelta !== null ? `капитал ${signed(s.capitalDelta)}` : null;
   return h(
     'section',
-    { class: 'card stack', 'aria-label': `Итоги ${monthTitleGen(m)}` },
-    h('strong', null, `Итоги: ${monthTitle(m).toLowerCase()}`),
-    rows(...lines(s, currentStepName(st, today()))),
-    h('p', null, s.advice),
-    h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: '#/months' }, 'Все месяцы'), h('button', { class: 'chip', type: 'button', onclick: close }, 'Закрыть')),
+    { class: 'mcard', 'aria-label': `Итоги ${monthTitleGen(m)}`, 'data-tour': 'month' },
+    h('div', { class: 'mhead' }, h('span', null, `Итоги ${monthTitleGen(m).toLowerCase()}`), h('a', { href: '#/months' }, 'Подробнее ›'), h('button', { class: 'mclose', type: 'button', 'aria-label': 'Закрыть итоги', onclick: close }, '×')),
+    h('div', { class: `mval${s.left < 0 ? ' neg' : ''}` }, signed(s.left)),
+    h('div', { class: 'msub' }, [share, cap].filter(Boolean).join(' · ')),
+    h('div', { class: 'mbars' }, h('span', null, 'Пришло'), h('span', { class: 'mtrack' }, bar(s.income, 'in')), h('b', null, fmt(s.income)), h('span', null, 'Ушло'), h('span', { class: 'mtrack' }, bar(s.spent, 'out')), h('b', null, fmt(s.spent))),
   );
 }
 

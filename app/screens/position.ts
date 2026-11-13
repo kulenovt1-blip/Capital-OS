@@ -13,8 +13,7 @@ import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
-import { profileTour, tourSeen } from '../tours';
-import { tourActive } from '../tour';
+import { autoTour, profileTour } from '../tours';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
@@ -387,7 +386,7 @@ export function renderPosition(): HTMLElement {
   }
   root.append(levelCard(v));
   // первый заход на «Профиль» — подсказка по блокам сама, один раз (не поверх окна «Что нового»)
-  if (!tourSeen('profile') && !tourActive()) setTimeout(() => !tourActive() && !document.querySelector('.modal-back') && location.hash.startsWith('#/position') && !tourSeen('profile') && void profileTour(), 700);
+  autoTour('profile', '#/position', profileTour);
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
   const path = pathBlock(v);

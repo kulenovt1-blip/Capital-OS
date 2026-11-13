@@ -15,6 +15,8 @@ import { HORIZONS, warningItems } from './forecast';
 import { KINDS, PLAN_CHIPS, eventLine } from './plan';
 import { levelShiftLine, futureSummary, futureTrack, plansCount, unknownNote } from '../future';
 import { reserveChart } from '../chart';
+import { tile, tiles } from '../tiles';
+import { iconSvg, type Icon } from '../icons';
 
 /** Траты в прогнозе теми же частями, что на «Обзоре» (D109). */
 function spendParts(): HTMLElement | null {
@@ -202,10 +204,31 @@ function hiddenQuestions(found: SanityFinding[]): { nodes: HTMLElement[]; shown:
 /** Какой по счёту вопрос показан: «Потом» листает дальше (D121). */
 let qSkip = 0;
 
+/** Срок прогноза (D193): короткие сроки 1–3 месяца остаются (просьба владельца), 4 и 5 убраны — их почти не выбирают. */
+const VIEW: [number, string, string][] = [
+  [1, '1 мес', 'месяц'],
+  [2, '2 мес', '2 месяца'],
+  [3, '3 мес', '3 месяца'],
+  [6, 'полгода', 'полгода'],
+  [12, 'год', 'год'],
+];
+const viewOf = (k: number): number => VIEW.reduce((best, [m]) => (Math.abs(m - k) < Math.abs(best - k) ? m : best), 12);
+
 function horizonSeg(k: number): HTMLElement {
-  // С13 аудита UX: «год» среди цифр сбивал шкалу — все пункты в месяцах (12), единицы названы в подписи главного числа и для читалки
-  return seg(HORIZONS.map(([m]) => [String(m), String(m)] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза, месяцев');
+  return seg(VIEW.map(([m, label]) => [String(m), label] as const), String(k), (v) => void update((s) => ({ ...s, settings: { ...s.settings, forecastViewMonths: Number(v) } })), 'Срок прогноза');
 }
+
+/** «Планирую…»: все события жизни плитками в одном листе (D193) — раньше прятались свёрнутой строкой внизу. */
+const PLAN_ICONS: Record<string, Icon> = { job: 'job', study: 'study', loss: 'down', change: 'up', cut: 'cut', move: 'home', buy: 'cart', inst: 'card', payoff: 'check' };
+defineSheet('plan-pick', () => ({
+  title: 'Планирую…',
+  body: h(
+    'div',
+    { class: 'stack' },
+    h('p', { class: 'muted' }, 'Выбери, что изменится. Заполнишь 2–3 поля — и увидишь, что станет с деньгами и целями.'),
+    tiles(...(Object.keys(KINDS) as (keyof typeof KINDS)[]).map((k) => tile({ icon: PLAN_ICONS[k] ?? 'plus', title: KINDS[k].label, href: sheetHref('plan', k) })), tile({ icon: 'plus', title: 'Другое', sub: 'своя сумма и дата', href: sheetHref('plan', 'own') })),
+  ),
+}));
 
 export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const st = getState();
@@ -221,7 +244,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     if (att) root.append(att);
     return root;
   }
-  const k = Math.min(12, st.settings.forecastViewMonths ?? 12);
+  const k = viewOf(Math.min(12, st.settings.forecastViewMonths ?? 12));
   const sim = forecastNow();
   // «на руках», как на «Обзоре» (D123): все счета, а не «капитал» (деньги минус долги); срок — «сегодня + N мес.» (D142), а не конец месяца
   const until = forecastDate(today(), k);
@@ -232,18 +255,18 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   const onHand = bal ? bal.assets : null;
   const debtThen = bal ? bal.liabilities : (0 as Money);
   const stg = reserveCtx();
-  const word = HORIZONS.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
+  const word = VIEW.find(([mm]) => mm === k)?.[2] ?? `${k} мес.`;
+  // главное число — одной строкой подписи (D193); дата, траты по шагам — в «Как посчитано»
   root.append(
-    h('p', { class: 'one-line' }, 'Срок прогноза, месяцев'),
     horizonSeg(k),
     h(
       'section',
-      { class: 'hero', 'aria-label': 'Прогноз' },
-      h('div', { class: 'label' }, `На руках через ${word} будет`),
+      { class: 'hero', 'aria-label': 'Прогноз', 'data-tour': 'fc-hero' },
+      h('div', { class: 'label' }, `Через ${word} на руках`),
       h('div', { class: `value${(onHand ?? 0) < 0 ? ' neg' : ''}` }, onHand === null ? '—' : fmtShort(onHand)),
-      h('div', { class: 'subline' }, `на ${formatDateRu(until)}, если всё пойдёт так же, как сейчас · сейчас ${fmtShort(ov().spend.onHand)}`),
-      debtThen > 0 ? h('div', { class: 'subline' }, `Долги к тому времени: ещё ${fmtShort(debtThen)} — они не вычтены.`) : null,
-      spendParts(),
+      h('div', { class: 'subline' }, `сегодня ${fmtShort(ov().spend.onHand)} · без изменений`),
+      debtThen > 0 ? h('div', { class: 'subline' }, `долги к ${formatDateRu(until)} — ещё ${fmtShort(debtThen)}, не вычтены`) : null,
+      h('a', { class: 'link', href: sheetHref('explain', 'forecast'), style: 'color:inherit;font-weight:800;display:block;margin-top:10px' }, 'Как посчитано ›'),
     ),
   );
   if (sim.gaps.length) root.append(h('div', { class: 'badline' }, `Денег не хватит с ${fmtDay(sim.gaps[0]!.start)}: до ${fmt(sim.gaps[0]!.maxDeficit)}`));
@@ -253,16 +276,23 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     if (ft && ft.months.length >= 2) {
       const sm = futureSummary(ft);
       const width = Math.min(720, document.documentElement.clientWidth - 56);
+      // заголовок — сама арифметика «было → станет» (D193): два абзаца над графиком убраны
+      const mo = (x: number) => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
+      const last = ft.reserve[ft.reserve.length - 1] ?? ft.now;
       root.append(
-        h('section', { class: `card stack${sm.changed ? ' warn' : ''}`, 'aria-label': 'Запас в будущем' },
-          h('strong', null, sm.headline),
-          h('div', { class: 'muted' }, `Столько месяцев проживёшь без дохода — ${sm.detail}`),
+        h('section', { class: `card stack${sm.changed ? ' warn' : ''}`, 'aria-label': 'Запас в будущем', 'data-tour': 'fc-chart' },
+          h('div', null, h('strong', null, `Запас: ${mo(ft.now)} → ${mo(last)} мес.`), h('div', { class: 'muted' }, sm.changed ? sm.headline : 'без дохода · ступень не упадёт')),
           reserveChart(ft.months, ft.now, ft.reserve, `На сколько месяцев хватит денег без дохода: ${sm.headline}`, width),
-          h('p', { class: 'muted' }, unknownNote(plansCount())),
         ),
       );
     }
   }
+  root.append(
+    h('a', { class: 'plan-cta', href: sheetHref('plan-pick'), 'data-tour': 'plan' },
+      h('span', { class: 'ibox' }, iconSvg('plus')),
+      h('div', null, h('strong', null, 'Планирую…'), h('div', { class: 'ct-sub' }, 'покупка, рассрочка, переезд, работа')),
+      h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
+  );
   const tuneStart = root.children.length;
   // проверка здравого смысла (D107): допущения, которые меняют вывод, — на виду, а не в «Как посчитано»
   // проверка здравого смысла (D107, D108): сначала вопросы, на которые человек может ответить, потом допущения
@@ -417,20 +447,17 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
 
   {
     const order = (st.settings.drawOrder ?? []).map((id) => ov().goals.find((g) => g.id === id)?.title).filter(Boolean);
-    // одна группа строк вместо четырёх отдельных карточек (D121)
+    // расчёты — плитками со значком (D193); «Если что-то изменится» переехало в «Планирую…»
     const calc = [
-      rows(
-        row({ title: 'Как набрать запас', sub: stg ? `сейчас хватит на ${stg.coverMonths.toString().replace('.', ',')} мес. · сколько откладывать, чтобы набрать больше` : 'сколько откладывать и к какому сроку', href: sheetHref('a-to-b') }),
-        row({ title: 'Где сэкономить', sub: 'на чём уходит больше всего и что даст экономия', href: sheetHref('save-where') }),
-        row({ title: 'Что, если доход или траты изменятся', sub: 'как выглядит прогноз в плохом и хорошем случае', href: '#/forecast-more' }),
-        row({ title: 'Откуда брать, если денег не хватит', sub: order.length ? `сейчас: ${order.map((t) => `«${t}»`).join(', ')}` : 'сейчас: свободные деньги, потом ничего не выбрано', href: sheetHref('fc-draw', '') }),
-      ),
-      // события — одной свёрнутой группой, у каждого понятная подпись (раньше были голые кнопки)
-      h('details', { class: 'fold', 'data-key': 'forecast:plan' }, h('summary', null, 'Если что-то изменится в жизни'),
-        rows(...[...PLAN_CHIPS, 'own' as const].map((k) => (k === 'own' ? row({ title: 'Другое', sub: 'своё событие: сумма и дата', href: sheetHref('plan', 'own') }) : row({ title: KINDS[k].label, sub: KINDS[k].hint, href: sheetHref('plan', k) }))))),
+      h('div', { 'data-tour': 'calc' }, tiles(
+        tile({ icon: 'shield', title: 'Набрать запас', sub: stg ? `сейчас ${stg.coverMonths.toString().replace('.', ',')} мес.` : undefined, href: sheetHref('a-to-b') }),
+        tile({ icon: 'cut', title: 'Где сэкономить', href: sheetHref('save-where') }),
+        tile({ icon: 'scale', title: 'Хуже или лучше', sub: 'если доход изменится', href: '#/forecast-more' }),
+        tile({ icon: 'drain', title: 'Откуда брать', sub: order.length ? `${order.length} ${order.length === 1 ? 'цель' : 'цели'} по порядку` : 'не выбрано', href: sheetHref('fc-draw', '') }),
+      )),
     ];
     // простой режим (D185): все расчёты и планы — за одной строкой «Подробнее»
-    if (isSimpleMode(st.settings)) root.append(h('details', { class: 'fold', 'data-key': 'forecast:calc' }, h('summary', null, 'Подробнее: расчёты и планы'), h('div', { class: 'stack' }, ...calc)));
+    if (isSimpleMode(st.settings)) root.append(h('details', { class: 'fold', 'data-key': 'forecast:calc' }, h('summary', null, 'Подробнее: расчёты'), h('div', { class: 'stack' }, ...calc)));
     else root.append(sub('Посчитать'), ...calc);
   }
   if (st.settings.plannedEvents.length) {

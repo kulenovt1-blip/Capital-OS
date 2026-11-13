@@ -15,6 +15,7 @@ import { explainLink, registerExplain } from '../explain';
 import { forecastNow, ov, verdicts } from '../ctx';
 import { isSimpleMode } from '../../engine/index';
 import { simpleHint } from '../modehint';
+import { iconBox, tile, tiles } from '../tiles';
 
 const FLEX: Record<Flexibility, string> = { fixed: 'жёсткий', flexible: 'гибкий', open: 'без срока' };
 
@@ -119,7 +120,9 @@ defineSheet('goal-new', (arg) => {
   const st = getState();
   const err = h('div');
   const folder = arg === 'folder';
-  const { form, read } = goalForm('goal-new-form', folder ? { folder: true } : {}, st.goals, { withReason: false });
+  // «tpl:Ноутбук» — из готовых вариантов на пустом экране: название уже вписано (D193)
+  const tplName = arg.startsWith('tpl:') ? arg.slice(4) : '';
+  const { form, read } = goalForm('goal-new-form', folder ? { folder: true } : tplName ? { title: tplName } : {}, st.goals, { withReason: false });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { patch, errs } = read();
@@ -356,12 +359,13 @@ function goalCard(n: GoalNode, vd: ReturnType<typeof verdicts>): HTMLElement {
 }
 
 function cushionCard(n: GoalNode | undefined): HTMLElement {
+  // подушки нет — карточка-действие со значком и кнопкой (D193), а не серая строка «создать»
   if (!n)
     return h(
-      'a',
-      { class: 'gcard', href: sheetHref('cushion') },
-      h('div', { class: 'gh' }, h('span', { class: 'gt' }, 'Подушки нет'), h('span', { class: 'bad' }, 'создать')),
-      h('div', { class: 'gs' }, 'запас на 3 месяца на случай, если доход пропадёт'),
+      'section',
+      { class: 'act-card col', 'data-tour': 'cushion' },
+      h('div', { class: 'ac-row' }, iconBox('shield'), h('div', { class: 'ac-main' }, h('strong', null, 'Подушка'), h('div', { class: 'ct-sub' }, 'запас на 3 месяца, если доход пропадёт'))),
+      h('a', { class: 'btn primary wide', href: sheetHref('cushion') }, 'Создать подушку'),
     );
   const g = n.goal;
   const months = g.targetRule ? `${g.targetRule.months ?? getState().settings.reserveMonths} мес.` : 'своя сумма';
@@ -382,6 +386,14 @@ function cushionCard(n: GoalNode | undefined): HTMLElement {
     h('div', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)} · `, h('a', { href: sheetHref('cushion') }, 'сумма и срок ›')),
   );
 }
+
+/** Готовые варианты цели для пустого экрана (D193). */
+const GOAL_TEMPLATES: { icon: 'laptop' | 'plane' | 'home' | 'study' | 'plus'; title: string; sub: string; name: string }[] = [
+  { icon: 'laptop', title: 'Техника', sub: 'ноутбук, телефон', name: 'Техника' },
+  { icon: 'plane', title: 'Поездка', sub: 'отпуск, билеты', name: 'Поездка' },
+  { icon: 'home', title: 'Переезд', sub: 'аренда, залог', name: 'Переезд' },
+  { icon: 'plus', title: 'Своя цель', sub: 'любая сумма', name: '' },
+];
 
 let reordering = false;
 /** Даты целей на момент, когда включили «Порядок» (D114): показываем, что сдвинулось от перестановок. */
@@ -466,7 +478,7 @@ export function renderGoals(): HTMLElement {
       h('p', { class: 'one-line' }, reordering ? 'Двигай стрелками. Кто выше — получает деньги раньше, и подушка тоже.' : 'Кто выше — получает деньги раньше. Порядок можно менять.'),
       h(
         'div',
-        { class: 'goal-stack' },
+        { class: 'goal-stack', 'data-tour': 'goal-list' },
         list.map((n) =>
           reordering
             ? h(
@@ -485,13 +497,20 @@ export function renderGoals(): HTMLElement {
       ),
     ]);
   } else if (!cushion || st.goals.length <= 1) {
-    root.append(h('div', { class: 'card stack' }, h('strong', null, 'На что копишь?'), h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.')));
+    // пустой экран — готовые варианты в одно нажатие (D193): название подставится, останется сумма и срок
+    root.append(
+      sub('На что копишь?'),
+      h('div', { 'data-tour': 'templates' }, tiles(...GOAL_TEMPLATES.map((t) => tile({ icon: t.icon, title: t.title, sub: t.sub, href: t.name ? sheetHref('goal-new', `tpl:${t.name}`) : sheetHref('goal-new') })))),
+      h('p', { class: 'one-line' }, 'Нажми — останется вписать сумму и срок.'),
+    );
   }
   // простой режим (D186): папки спрятаны — достаточно целей по порядку
   const simple = isSimpleMode(st.settings);
-  root.append(
-    h('div', { class: 'stack' }, h('a', { class: 'btn primary wide', href: sheetHref('goal-new') }, '＋ Цель'), simple ? null : h('a', { class: 'btn wide', href: sheetHref('goal-new', 'folder') }, '＋ Папка')),
-  );
+  // на пустом экране «＋ Цель» и «＋ Папка» повторяли плитки вариантов — показываем их, когда цели уже есть
+  if (list.length)
+    root.append(
+      h('div', { class: 'stack' }, h('a', { class: 'btn primary wide', href: sheetHref('goal-new'), 'data-tour': 'goal-new' }, '＋ Цель'), simple ? null : h('a', { class: 'btn wide', href: sheetHref('goal-new', 'folder') }, '＋ Папка')),
+    );
 
   const closed = v.tree.filter((n) => n.goal.status === 'cancelled' || n.goal.status === 'done');
   root.append(
