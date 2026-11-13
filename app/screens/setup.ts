@@ -35,7 +35,7 @@ function body(s: SetupStep, rerender: () => void): HTMLElement {
   switch (s.id) {
     case 'import':
       return !o.hasData
-        ? h('div', { class: 'stack' }, h('p', null, 'В MoneyManager: «Настройки → Данные → Резервное копирование → Создать резервную копию» — получится файл .mmbackup. Потом загрузи его здесь — файл читается на устройстве и никуда не отправляется.'), h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'))
+        ? h('div', { class: 'stack' }, h('p', null, 'В MoneyManager: «Настройки → Данные → Резервное копирование → Создать резервную копию» → «Поделиться» → Capital OS. Или «Сохранить в загрузки» и загрузи файл здесь. Файл читается на устройстве и никуда не отправляется.'), h('a', { class: 'btn primary big wide', href: '#/import' }, 'Загрузить бэкап'))
         : o.reconcile?.ok
           ? h('div', { class: 'okline' }, '✓ Бэкап загружен, все счета сходятся')
           : h('div', { class: 'stack' }, h('div', { class: 'badline' }, 'Загружен с расхождением: по некоторым счетам сумма операций не совпала с балансом MoneyManager.'), h('a', { class: 'btn', href: '#/import' }, 'Посмотреть ›'));

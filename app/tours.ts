@@ -108,8 +108,9 @@ export async function updateTour(): Promise<void> {
   await openScreen('#/more');
   startTour(
     [
-      { title: 'Шаг 1. В MoneyManager', text: 'Открой MoneyManager → «Настройки» → «Данные» → «Резервное копирование» → «Создать резервную копию». Получится файл .mmbackup.' },
-      { target: '[data-tour=update]', title: 'Шаг 2. Здесь', text: '«Обновить данные» сразу откроет выбор файла. Выбери свежий .mmbackup — обычно он сверху в «Недавних».' },
+      { title: 'Шаг 1. В MoneyManager', text: '«Настройки» → «Данные» → «Резервное копирование» → «Создать резервную копию».' },
+      { title: 'Шаг 2. Поделиться', text: 'В окне «Резервная копия создана» нажми «Поделиться» и выбери Capital OS — файл сразу откроется здесь.' },
+      { target: '[data-tour=update]', title: 'Нет Capital OS в списке?', text: 'Нажми в MoneyManager «Сохранить в загрузки», а здесь — «Обновить данные»: сразу откроется выбор файла.' },
       { title: 'Шаг 3. Сверка', text: 'Приложение сверит каждый счёт с MoneyManager. Всё сошлось — «Принять». Цели, доходы и разметка при этом не теряются.' },
     ],
     { label: 'Обновить данные' },
@@ -182,7 +183,7 @@ export async function trustTour(): Promise<void> {
 /** Список для «Как пользоваться → Покажу на экране» — по частоте нужды. */
 export const HOW_TO: { title: string; steps: number; run: () => void | Promise<void> }[] = [
   { title: 'Сколько можно тратить сегодня', steps: 4, run: spendTour },
-  { title: 'Обновить данные из MoneyManager', steps: 3, run: updateTour },
+  { title: 'Обновить данные из MoneyManager', steps: 4, run: updateTour },
   { title: 'Пришла зарплата — что делать', steps: 3, run: arrivedTour },
   { title: 'Накопить на цель', steps: 3, run: goalTour },
   { title: 'Потяну ли покупку или рассрочку', steps: 3, run: planTour },

@@ -6,6 +6,7 @@ import { findZipStart, readZip } from './zip';
 import { openSqlite, type SqliteDb, type SqlValue } from './sqlite';
 import { tiyn, type Money } from '../money';
 import { isIsoDate } from '../date';
+import { plural } from '../explain';
 import type { Account, Category, ImportedData, ImportWarning, Operation, Tag, TxOperation } from '../types';
 
 export const MM_SCHEMA = {
@@ -304,7 +305,7 @@ export function readMoneyManager(db: SqliteDb, meta: { entryName: string; prefix
   const removedAccounts = new Set(accounts.filter((a) => a.removed).map((a) => a.id));
   const onRemoved = operations.filter((o) => (o.kind === 'transfer' ? removedAccounts.has(o.fromAccountId) || removedAccounts.has(o.toAccountId) : removedAccounts.has(o.accountId)));
   if (onRemoved.length) {
-    warnings.push({ code: 'account.removed.ops', text: `${onRemoved.length} операций на удалённых счетах — проверь, не ошибка ли это` });
+    warnings.push({ code: 'account.removed.ops', text: `${onRemoved.length} ${plural(onRemoved.length, 'операция', 'операции', 'операций')} на счетах, удалённых в MoneyManager. Удаляли сами — всё в порядке; удалили по ошибке — верни счёт в MoneyManager` });
   }
 
   const reportedBalances: Record<string, Money> = {};
