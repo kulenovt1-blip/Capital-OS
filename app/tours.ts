@@ -108,7 +108,7 @@ export async function updateTour(): Promise<void> {
   await openScreen('#/more');
   startTour(
     [
-      { title: 'Шаг 1. В MoneyManager', text: 'Открой MoneyManager → «Настройки» → «Резервная копия» и сохрани копию на телефон. Получится файл .mmbackup.' },
+      { title: 'Шаг 1. В MoneyManager', text: 'Открой MoneyManager → «Настройки» → «Данные» → «Резервное копирование» → «Создать резервную копию». Получится файл .mmbackup.' },
       { target: '[data-tour=update]', title: 'Шаг 2. Здесь', text: '«Обновить данные» сразу откроет выбор файла. Выбери свежий .mmbackup — обычно он сверху в «Недавних».' },
       { title: 'Шаг 3. Сверка', text: 'Приложение сверит каждый счёт с MoneyManager. Всё сошлось — «Принять». Цели, доходы и разметка при этом не теряются.' },
     ],
