@@ -13,6 +13,8 @@ import { chip, errorsBox, fmt, fmtDate, info, monthWord, toggle, moneyInput, new
 import { closeSheet, defineSheet, openSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
 import { forecastNow, ov, verdicts } from '../ctx';
+import { isSimpleMode } from '../../engine/index';
+import { simpleHint } from '../modehint';
 
 const FLEX: Record<Flexibility, string> = { fixed: 'жёсткий', flexible: 'гибкий', open: 'без срока' };
 
@@ -485,8 +487,10 @@ export function renderGoals(): HTMLElement {
   } else if (!cushion || st.goals.length <= 1) {
     root.append(h('div', { class: 'card stack' }, h('strong', null, 'На что копишь?'), h('p', { class: 'muted' }, 'Цель — сумма, к которой копишь. Деньги остаются на счетах, за целью они просто закрепляются.')));
   }
+  // простой режим (D186): папки спрятаны — достаточно целей по порядку
+  const simple = isSimpleMode(st.settings);
   root.append(
-    h('div', { class: 'stack' }, h('a', { class: 'btn primary wide', href: sheetHref('goal-new') }, '＋ Цель'), h('a', { class: 'btn wide', href: sheetHref('goal-new', 'folder') }, '＋ Папка')),
+    h('div', { class: 'stack' }, h('a', { class: 'btn primary wide', href: sheetHref('goal-new') }, '＋ Цель'), simple ? null : h('a', { class: 'btn wide', href: sheetHref('goal-new', 'folder') }, '＋ Папка')),
   );
 
   const closed = v.tree.filter((n) => n.goal.status === 'cancelled' || n.goal.status === 'done');
@@ -500,15 +504,17 @@ export function renderGoals(): HTMLElement {
         { class: 'stack' },
         hasData ? h('p', { class: 'muted' }, `Всего отложено на цели ${fmt(v.totalAssigned)}`) : null,
         closed.length ? rows(closed.map((n) => row({ title: n.goal.title, sub: STATUS_LABELS[n.goal.status], href: sheetHref('goal', n.goal.id) }))) : null,
-        new URLSearchParams(location.search).has('demo')
+        !simple && new URLSearchParams(location.search).has('demo')
           ? h('button', { class: 'btn', type: 'button', onclick: () => act((s) => ({ ...s, goals: exampleGoals(today()) }), 'Созданы цели из примера — подтверди суммы') }, 'Создать пример целей')
           : null,
-        st.goals.length
+        !simple && st.goals.length
           ? confirmButton('Удалить все цели', 'Удалить', () => update((s) => ({ ...s, goals: [], fundings: [] })).then(() => toast('Цели удалены')), 'danger link', 'Все цели и отложенные на них суммы пропадут вместе с историей. Деньги на счетах не изменятся.')
           : null,
       ),
     ),
   );
+
+  append(root, [simpleHint('папки и массовое удаление целей спрятаны')]);
 
   // новая цель: прокрутить к ней и подсветить
   if (flash && Date.now() < flash.until) {

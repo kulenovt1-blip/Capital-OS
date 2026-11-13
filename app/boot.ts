@@ -11,6 +11,7 @@ import { renderBaskets } from './screens/baskets';
 import { renderForecast } from './screens/forecast';
 import { renderData, renderMore, renderPrefs } from './screens/more';
 import { renderHelp } from './screens/help';
+import { maybeShowWhatsNew } from './whatsnew';
 import { renderMonths } from './screens/monthly';
 import { renderView } from './screens/view';
 import { renderImport } from './screens/import';
@@ -45,4 +46,4 @@ addRoute({ path: 'install', title: 'Установить', nav: 'more', parent: 
 addRoute({ path: 'rare', title: 'Редкое', nav: 'more', parent: 'prefs', render: (_r, sec) => renderRare(sec) });
 addRoute({ path: 'advanced', title: 'Для продвинутых', nav: 'more', parent: 'prefs', render: (_r, sec) => renderAdvanced(sec) });
 void initPersistence();
-void start();
+void start().then(maybeShowWhatsNew);

@@ -13,6 +13,8 @@ import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId,
 import { registerExplain } from '../explain';
 import { defineSheet, go, refresh, sheetHref } from '../main';
 import { helpSeen, markHelpSeen } from './help';
+import { isSimpleMode } from '../../engine/index';
+import { simpleHint } from '../modehint';
 
 registerExplain(
   'overview',
@@ -289,13 +291,31 @@ export function renderOverview(): HTMLElement {
       ? `из них ${fmt(groups[0]!.amount)} снять можно с ${fmtDay(groups[0]!.date)}`
       : `пока не снять: ${groups.slice(0, 2).map((g) => `${fmt(g.amount)} до ${fmtDay(g.date)}`).join(', ')}${groups.length > 2 ? ` и ещё ${groups.length - 2}` : ''}`
     : null;
+  const simple = isSimpleMode(getState().settings);
+  // платежи на 30 дней: в полном режиме отдельной строкой, в простом — внутри «Подробнее» (D186)
+  const paymentsRow = o.upcoming30.length
+    ? h(
+        'details',
+        { class: 'rows acc', 'data-key': 'overview:payments' },
+        h(
+          'summary',
+          { class: 'row' },
+          h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей'))),
+          h('div', { class: 'val' }, fmtShort(total30 as never)),
+          h('span', { class: 'chev', 'aria-hidden': 'true' }, '›'),
+        ),
+        o.upcoming30.map((u) => row({ title: `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, sub: fmtDay(u.date), value: fmt(u.amount), cls: 'sub-row' })),
+      )
+    : null;
   const details = h(
     'details',
     { class: 'fold', 'data-key': 'overview:details', open: getState().settings.showDetails ? true : undefined },
-    h('summary', null, 'Подробнее: капитал, долги, все счета'),
+    h('summary', null, simple ? 'Подробнее: платежи, капитал, счета' : 'Подробнее: капитал, долги, все счета'),
     h(
       'div',
       { class: 'stack' },
+      simple ? paymentsRow : null,
+      simple && lockedLine ? h('p', { class: 'muted' }, `Всего на счетах: ${lockedLine}`) : null,
       h(
         'div',
         { class: 'cells' },
@@ -331,25 +351,13 @@ export function renderOverview(): HTMLElement {
     h(
       'div',
       { class: 'cells' },
-      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
+      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), !simple && lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'Из них в копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
     cushionRow(o),
-    o.upcoming30.length
-      ? h(
-          'details',
-          { class: 'rows acc', 'data-key': 'overview:payments' },
-          h(
-            'summary',
-            { class: 'row' },
-            h('div', { class: 'main' }, h('div', { class: 'title' }, 'Платежи на 30 дней'), h('div', { class: 'rsub' }, nWord(o.upcoming30.length, 'платёж', 'платежа', 'платежей'))),
-            h('div', { class: 'val' }, fmtShort(total30 as never)),
-            h('span', { class: 'chev', 'aria-hidden': 'true' }, '›'),
-          ),
-          o.upcoming30.map((u) => row({ title: `${u.title}${u.owner === 'family' ? ' (семья)' : ''}`, sub: fmtDay(u.date), value: fmt(u.amount), cls: 'sub-row' })),
-        )
-      : null,
+    simple ? null : paymentsRow,
     decisions,
     details,
+    simpleHint('платежи, капитал и счета — в «Подробнее»'),
   );
 }

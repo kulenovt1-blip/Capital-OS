@@ -11,7 +11,7 @@ import { sheetHref } from '../main';
 import { backupReminder } from '../persist';
 import { persistStatus } from '../protect';
 
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.6.0';
 declare const __BUILD__: { sha: string; date: string } | undefined;
 /** «сборка a1b2c3d · 11.11» — по хэшу видно, какая версия открыта; в разработке — «разработка». */
 export const buildLabel = (): string => (typeof __BUILD__ === 'undefined' ? 'разработка' : `сборка ${__BUILD__.sha} · ${__BUILD__.date.slice(8, 10)}.${__BUILD__.date.slice(5, 7)}`);
@@ -74,7 +74,7 @@ export function renderMore(): HTMLElement {
       'div',
       { class: 'stack' },
       sub('Приложение'),
-      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и когда его открывать', href: '#/help' })),
+      rows(row({ title: 'Настройки', sub: `текст: ${text}`, href: '#/prefs' }), row({ title: 'Что нового', sub: 'последние изменения', href: sheetHref('whatsnew') }), row({ title: 'Как пользоваться', sub: 'что умеет приложение и пять коротких инструкций', href: '#/help' })),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );

@@ -9,6 +9,7 @@ import { ov } from '../ctx';
 import { fmt, fmtExact, info, nWord, row, rows, stickyBar, sub } from '../ui';
 import { explainList } from '../explain';
 import { go } from '../main';
+import { isInstalled } from '../install';
 
 let pending: { data: ImportedData; report: ReconcileReport; fileName: string } | null = null;
 let lastError: string | null = null;
@@ -65,6 +66,35 @@ async function takeSharedFile(): Promise<File | null> {
   }
 }
 
+/**
+ * «Поделиться → Capital OS» не появляется или не срабатывает: живая проверка и четыре шага (D187).
+ * Приложение само показывает то, что может узнать: установлено ли оно как приложение и работает ли service worker.
+ */
+function shareHelp(): HTMLElement {
+  const installed = isInstalled();
+  const worker = 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
+  const line = (ok: boolean, yes: string, no: string) => h('div', { class: ok ? 'ok' : 'no' }, ok ? `✓ ${yes}` : `✗ ${no}`);
+  return h(
+    'details',
+    { class: 'fold', 'data-key': 'import:share' },
+    h('summary', null, 'Отправить бэкап через «Поделиться»'),
+    h(
+      'div',
+      { class: 'stack' },
+      h('div', { class: 'share-check' }, line(installed, 'Открыто как установленное приложение', 'Открыто в браузере: «Поделиться» работает только у установленного приложения'), line(worker, 'Приложение готово принять файл', 'Приложение ещё не готово принять файл: открой его один раз при интернете')),
+      h(
+        'ol',
+        { class: 'help-steps' },
+        h('li', null, 'В Chrome: ⋮ → «Установить приложение» (не «Добавить на главный экран» — ярлык не принимает файлы).'),
+        h('li', null, 'Установил давно — удали значок и установи заново: Android запоминает «Поделиться» при установке.'),
+        h('li', null, 'Открой Capital OS один раз при включённом интернете, потом можно и без него.'),
+        h('li', null, 'Сделай бэкап в MoneyManager. В «Файлах» нажми и удерживай файл .mmbackup → «Поделиться» → Capital OS.'),
+      ),
+      h('p', { class: 'muted' }, 'Если Capital OS нет в списке — выбери файл кнопкой выше, это работает всегда.'),
+    ),
+  );
+}
+
 export function renderImport(rerender: () => void): HTMLElement {
   const st = getState();
   const input = h('input', { type: 'file', accept: '.mmbackup,application/octet-stream,application/zip', id: 'mm-file', class: 'visually-hidden', 'aria-label': 'Файл бэкапа .mmbackup' });
@@ -84,7 +114,11 @@ export function renderImport(rerender: () => void): HTMLElement {
     if (f) await load(f);
   });
   // файл, присланный через «Поделиться → Capital OS» (D183)
-  void takeSharedFile().then((f) => f && load(f));
+  void takeSharedFile().then((f) => {
+    if (!f) return;
+    toast('Файл получен через «Поделиться»');
+    return load(f);
+  });
   const pick = (primary: boolean, label: string) => h('label', { class: `btn ${primary ? 'primary big' : ''} wide file-btn` }, label, input);
 
   const root = h('div', { class: 'screen' });
@@ -135,6 +169,7 @@ export function renderImport(rerender: () => void): HTMLElement {
       pick(true, 'Выбрать файл .mmbackup'),
       h('button', { class: 'btn link wide', type: 'button', onclick: loadDemo }, 'Посмотреть на демо-данных'),
       lastError ? h('div', { class: 'error-box', role: 'alert' }, `Не удалось прочитать файл: ${lastError}`) : null,
+      shareHelp(),
     ]);
     return root;
   }
@@ -158,6 +193,7 @@ export function renderImport(rerender: () => void): HTMLElement {
     pick(true, 'Загрузить новый бэкап'),
     h('p', { class: 'one-line' }, 'Новый бэкап заменит данные; настройки, цели и рассрочки сохранятся.'),
     h('details', { class: 'fold', 'data-key': 'import:explain' }, h('summary', null, 'Сверка подробно'), explainList(rep.explanation)),
+    shareHelp(),
   ]);
   return root;
 }
