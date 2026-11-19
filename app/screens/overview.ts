@@ -241,7 +241,7 @@ function roadCard(): HTMLElement | null {
   const nodes = [1, 2, 3, 4, 5].map((n) => h('span', { class: `rs-n ${n < lvl ? 'past' : n === lvl ? 'here' : n === lvl + 1 ? 'next' : 'far'}`, 'aria-hidden': 'true' }, String(n)));
   return h(
     'a',
-    { class: 'rs', href: '#/position', 'aria-label': `Дорога: сейчас ступень ${lvl}, следующая — ${m.next.name}` },
+    { class: `rs${lvl === 1 ? ' tone-warm' : ''}`, href: '#/position', 'aria-label': `Дорога: сейчас ступень ${lvl}, следующая — ${m.next.name}` },
     h('div', { class: 'rs-head' }, h('span', { class: 'rs-k' }, 'Дорога'), h('span', { class: 'rs-more' }, 'Вся дорога ›')),
     h('div', { class: 'rs-line', 'aria-hidden': 'true' }, h('span', { class: 'rs-fill', style: `width:calc((100% - 28px) * ${(lvl - 1) / 4})` }), ...nodes),
     h('div', { class: 'rs-next' }, `Следующая: ступень ${m.next.level} · «${m.next.name}»`),

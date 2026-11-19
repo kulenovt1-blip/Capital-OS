@@ -156,6 +156,23 @@ function meaningOf(v: PositionView): string {
   return v.levelMeaning ?? '';
 }
 
+/**
+ * «Главное сейчас» (D6, дизайн A+): на ступени 1 с дефицитом — одно спокойное предложение про разницу и выход «Что можно сделать».
+ * Без упрёков и без придуманных шагов: сумма из `runway`, ссылка на уже существующий «Где сэкономить».
+ */
+function mainNowBlock(v: PositionView): HTMLElement | null {
+  const r = v.runway;
+  if (v.level !== 1 || r.status !== 'deficit' || r.deficit <= 0) return null;
+  return h(
+    'section',
+    { class: 'pos-now', 'aria-label': 'Главное сейчас' },
+    h('div', { class: 'pn-k' }, 'Главное сейчас'),
+    h('div', { class: 'pn-t' }, `Расходы больше доходов на ${approx(r.deficit)} в месяц`),
+    h('div', { class: 'pn-s' }, r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'денег при этом хватит больше чем на 50 лет' : `денег при этом хватит на ${months(r.months)}`),
+    h('a', { class: 'btn wide', href: '#/forecast~save-where' }, 'Что можно сделать'),
+  );
+}
+
 /** Один маленький первый шаг, когда есть долговая спираль или просрочки (К4 аудита UX). */
 function firstStepBlock(v: PositionView): HTMLElement | null {
   if (!v.spiral.spiral && v.overdue <= 0) return null;
@@ -363,7 +380,7 @@ function runwayBlock(v: PositionView): HTMLElement | null {
     'div',
     { class: 'stack' },
     sub('Если ничего не менять', info('runway')),
-    rows(row({ title: `Тратишь больше, чем получаешь: ${money(r.deficit)} в месяц`, sub: r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'при этом денег хватит более чем на 50 лет' : `при этом денег хватит на ${months(r.months)}`, chevron: false, cls: 'warn' })),
+    rows(row({ title: `Расходы больше доходов: на ${money(r.deficit)} в месяц`, sub: r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'при этом денег хватит более чем на 50 лет' : `при этом денег хватит на ${months(r.months)}`, chevron: false, cls: 'warn' })),
     r.scenarios.length
       ? h('details', { class: 'fold', 'data-key': 'position:runway' }, h('summary', null, 'А если…'), rows(...r.scenarios.map((s) => row({ title: s.name, value: months(s.months), chevron: false }))))
       : null,
@@ -466,6 +483,10 @@ export function renderPosition(): HTMLElement {
   root.append(levelCard(v));
   // первый заход на «Профиль» — подсказка по блокам сама, один раз (не поверх окна «Что нового»)
   autoTour('profile', '#/position', profileTour);
+  // ступень 1: тёплый тон (оранжевый вместо бирюзового) и «Главное сейчас» без упрёков (D6)
+  if (v.level === 1) root.classList.add('tone-warm');
+  const mn = mainNowBlock(v);
+  if (mn) root.append(mn);
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
   const road = roadBlock(v);

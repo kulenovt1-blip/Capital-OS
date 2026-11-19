@@ -892,3 +892,13 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .rc-pill { fill: var(--primary); }
 .rc-pill-t { font-size: 13px; font-weight: 800; fill: var(--on-primary); }
 
+/* D6 (дизайн A+): ступень 1 — тёплый тон: оранжевый (токен порога) вместо бирюзового в лесенке, дороге и карточке «Обзора» */
+.tone-warm { --primary: var(--warm, var(--threshold)); --accent: var(--warm, var(--threshold)); }
+:root { --warm: #b04c16; }
+:root[data-theme='dark'] { --warm: #f08a4b; }
+.pos-now { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--threshold); }
+.pos-now .pn-k { font-size: calc(13px * var(--fz)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.pos-now .pn-t { font-size: calc(19px * var(--fz)); font-weight: 800; line-height: 1.25; }
+.pos-now .pn-s { font-size: calc(14px * var(--fz)); color: var(--ink-2); }
+.pos-now .btn { margin-top: 8px; }
+
