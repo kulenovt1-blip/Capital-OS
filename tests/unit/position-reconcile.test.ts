@@ -45,8 +45,8 @@ const pool: Row[] = [];
   for (let i = 0; i < 320; i++) { const c = stressCase(i); states.push({ name: c.name, state: applyProbeOpts(c.state, c.opts) }); }
   for (const { name, state } of states) {
     const series = buildPositionSeries(state, TODAY);
-    const report = computeIndicators(state, TODAY, series);
-    const probe = computeIndicators(state, TODAY, series, { v1CapMonths: Infinity });
+    const report = computeIndicators(state, TODAY, series, { incomeFromSchedule: false }); // эффект D209 — в n3-income-run-rate.test.ts
+    const probe = computeIndicators(state, TODAY, series, { v1CapMonths: Infinity, incomeFromSchedule: false });
     pool.push({ name, state, report, probe, level: byScore(levelFromIndicators(report)!), probeLevel: byScore(levelFromIndicators(probe)!) });
   }
 }

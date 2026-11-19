@@ -27,7 +27,7 @@ import type { AppState } from '../state';
 import { buildOverview } from '../overview';
 import { assetChoiceOf } from './inputs';
 import { buildSimInput } from '../plan';
-import { simulate, DEFAULT_SCENARIOS } from '../simulate';
+import { simulate, DEFAULT_SCENARIOS, assembleIncomeStreams } from '../simulate';
 import type { IsoDate } from '../date';
 import { buildPositionSeries, SERIES_LOOKBACK, type PositionSeries } from './series';
 import { incomeSources } from './sources';
@@ -236,6 +236,8 @@ export interface IndicatorsReport {
 export interface IndicatorOptions {
   /** Предел знаменателя V1 в месяцах; для сверки с пробой без правки D — `Infinity`. */
   v1CapMonths?: number;
+  /** D209: доход для N3 не выше суммы действующих сегодня строк расписания; для сверки с пробой (в ней среднее за 6 мес.) — `false`. По умолчанию включено. */
+  incomeFromSchedule?: boolean;
 }
 
 const T = (m: Money | number): number => m / 100;
@@ -259,6 +261,11 @@ export function securedDebtOf(state: AppState, o: { obligations: readonly { obli
   return debt > 0 && value > 0 ? { debt, value } : null;
 }
 
+/** D209: доход сегодня по расписанию — сумма месячных выплат потоков, действующих сегодня (начался не позже сегодня, не закончился), в тенге. */
+export function scheduledIncomeNow(streams: ReturnType<typeof assembleIncomeStreams>, today: IsoDate): number {
+  return streams.reduce((acc, s) => acc + ((!s.start || s.start <= today) && (!s.end || s.end >= today) ? T(s.amount) : 0), 0);
+}
+
 export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today), options: IndicatorOptions = {}): IndicatorsReport {
   if (!series.hasData) return { values: emptyIndicators(), inputs: null, forecast: null };
   const o = buildOverview(state, today);
@@ -279,7 +286,12 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const free = toT(series.free);
   // только действующие сегодня строки, и не те, что уже есть в операциях (D170): закончившийся или ещё не начавшийся доход в нагрузку по долгам не входит (С5, D162)
   const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true && i.inHistory !== true && (!i.start || i.start <= today) && (!i.end || i.end >= today) ? T(i.amount) : 0), 0);
-  const incomeMonthly = mean(inc.slice(-6)) + manualIncomeMonthly;
+  const { input } = buildSimInput(state, today);
+  const incomeHistory = mean(inc.slice(-6)) + manualIncomeMonthly;
+  // D209: среднее за 6 месяцев включает уже закончившиеся источники (летняя подработка, которой нет в расписании) и завышает доход для нагрузки по долгам.
+  // Есть действующие сегодня строки расписания — доход не выше их суммы (берётся меньшее); нет таких строк — расписание о текущем доходе ничего не говорит, остаётся история.
+  const scheduledNow = scheduledIncomeNow(assembleIncomeStreams(input.incomes, input.events, today), today);
+  const incomeMonthly = options.incomeFromSchedule !== false && scheduledNow > 0 ? Math.min(incomeHistory, scheduledNow) : incomeHistory;
 
   const values: Indicators = {};
   // I. Здесь и сейчас
@@ -302,7 +314,6 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
     values.V1 = null; values.V2 = null; values.V4 = null;
   }
   // III. Безопасность будущего
-  const { input } = buildSimInput(state, today);
   const base = simulate({ ...input, horizonMonths: 12 });
   const adverse = simulate({ ...input, horizonMonths: 12 }, DEFAULT_SCENARIOS.find((s) => s.id === 'adverse')!);
   const trough = Math.min(...adverse.months.slice(1, 13).map((m) => T(m.liquidEnd)));

@@ -29,7 +29,7 @@ const generated = (label: 'R' | 'D', i: number) => build((label === 'R' ? random
 
 function rangeFor(state: ReturnType<typeof build>, kind: MaskKind, v1CapMonths?: number) {
   const series = buildPositionSeries(state, TODAY);
-  const report = computeIndicators(state, TODAY, series, v1CapMonths === undefined ? {} : { v1CapMonths });
+  const report = computeIndicators(state, TODAY, series, { ...(v1CapMonths === undefined ? {} : { v1CapMonths }), incomeFromSchedule: false }); // как в пробе: доход — среднее за 6 мес. (D209)
   const masked = maskIndicators(report.values, kind);
   if (!Object.values(masked).some((v) => v === null)) return null;
   const ctx = boundsContext(series, report.inputs!, v1CapMonths);
