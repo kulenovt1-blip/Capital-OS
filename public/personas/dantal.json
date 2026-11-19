@@ -1,0 +1,984 @@
+{
+ "app": "capital-os",
+ "exportedAt": "2026-11-04",
+ "state": {
+  "adjustments": [],
+  "decisions": [],
+  "fundings": [],
+  "goals": [],
+  "imported": {
+   "accounts": [
+    {
+     "archived": false,
+     "currency": "KZT",
+     "id": "card",
+     "ignoreInBalance": false,
+     "removed": false,
+     "title": "Карта"
+    },
+    {
+     "archived": false,
+     "currency": "KZT",
+     "id": "save",
+     "ignoreInBalance": false,
+     "removed": false,
+     "title": "Заначка"
+    }
+   ],
+   "categories": [
+    {
+     "icon": "",
+     "id": "c_int",
+     "label": "Проценты и аренда",
+     "removed": false,
+     "title": "Проценты и аренда",
+     "type": "income"
+    },
+    {
+     "icon": "",
+     "id": "c_food",
+     "label": "Еда",
+     "removed": false,
+     "title": "Еда",
+     "type": "expense"
+    },
+    {
+     "icon": "",
+     "id": "c_home",
+     "label": "Коммунальные и связь",
+     "removed": false,
+     "title": "Коммунальные и связь",
+     "type": "expense"
+    },
+    {
+     "icon": "",
+     "id": "c_fun",
+     "label": "Жизнь и путешествия",
+     "removed": false,
+     "title": "Жизнь и путешествия",
+     "type": "expense"
+    }
+   ],
+   "meta": {
+    "dbBytes": 0,
+    "entryName": "test",
+    "firstDate": "2025-09-01",
+    "lastDate": "2026-10-26",
+    "prefixLength": 0
+   },
+   "operations": [
+    {
+     "accountId": "save",
+     "amount": 15000000000,
+     "categoryId": null,
+     "comment": "",
+     "date": "2025-09-01",
+     "id": "op-00359",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 2000000,
+     "categoryId": null,
+     "comment": "",
+     "date": "2025-09-01",
+     "id": "op-00360",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2025-09-01",
+     "id": "op-00363",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-09-03",
+     "id": "op-00362",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2025-09-05",
+     "id": "op-00361",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-09-20",
+     "id": "op-00364",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-09-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00365",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2025-10-01",
+     "id": "op-00368",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-10-03",
+     "id": "op-00367",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2025-10-05",
+     "id": "op-00366",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-10-20",
+     "id": "op-00369",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-10-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00370",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2025-11-01",
+     "id": "op-00373",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-11-03",
+     "id": "op-00372",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2025-11-05",
+     "id": "op-00371",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-11-20",
+     "id": "op-00374",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-11-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00375",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2025-12-01",
+     "id": "op-00378",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2025-12-03",
+     "id": "op-00377",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2025-12-05",
+     "id": "op-00376",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2025-12-20",
+     "id": "op-00379",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2025-12-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00380",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-01-01",
+     "id": "op-00383",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-01-03",
+     "id": "op-00382",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-01-05",
+     "id": "op-00381",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-01-20",
+     "id": "op-00384",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-01-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00385",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-02-01",
+     "id": "op-00388",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-02-03",
+     "id": "op-00387",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-02-05",
+     "id": "op-00386",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-02-20",
+     "id": "op-00389",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-02-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00390",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-03-01",
+     "id": "op-00393",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-03-03",
+     "id": "op-00392",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-03-05",
+     "id": "op-00391",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-03-20",
+     "id": "op-00394",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-03-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00395",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-04-01",
+     "id": "op-00398",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-04-03",
+     "id": "op-00397",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-04-05",
+     "id": "op-00396",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-04-20",
+     "id": "op-00399",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-04-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00400",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-05-01",
+     "id": "op-00403",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-05-03",
+     "id": "op-00402",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-05-05",
+     "id": "op-00401",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-05-20",
+     "id": "op-00404",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-05-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00405",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-06-01",
+     "id": "op-00408",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-06-03",
+     "id": "op-00407",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-06-05",
+     "id": "op-00406",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-06-20",
+     "id": "op-00409",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-06-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00410",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-07-01",
+     "id": "op-00413",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-07-03",
+     "id": "op-00412",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-07-05",
+     "id": "op-00411",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-07-20",
+     "id": "op-00414",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-07-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00415",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-08-01",
+     "id": "op-00418",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-08-03",
+     "id": "op-00417",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-08-05",
+     "id": "op-00416",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-08-20",
+     "id": "op-00419",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-08-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00420",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-09-01",
+     "id": "op-00423",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-09-03",
+     "id": "op-00422",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-09-05",
+     "id": "op-00421",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-09-20",
+     "id": "op-00424",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-09-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00425",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_home",
+     "comment": "",
+     "date": "2026-10-01",
+     "id": "op-00428",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 15000000,
+     "categoryId": "c_food",
+     "comment": "",
+     "date": "2026-10-03",
+     "id": "op-00427",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 40000000,
+     "categoryId": "c_int",
+     "comment": "",
+     "date": "2026-10-05",
+     "id": "op-00426",
+     "kind": "income",
+     "tagIds": []
+    },
+    {
+     "accountId": "card",
+     "amount": 20000000,
+     "categoryId": "c_fun",
+     "comment": "",
+     "date": "2026-10-20",
+     "id": "op-00429",
+     "kind": "expense",
+     "tagIds": []
+    },
+    {
+     "comment": "",
+     "date": "2026-10-26",
+     "fromAccountId": "save",
+     "fromAmount": 10000000,
+     "id": "op-00430",
+     "kind": "transfer",
+     "toAccountId": "card",
+     "toAmount": 10000000
+    }
+   ],
+   "reportedBalances": {
+    "card": 2000000,
+    "save": 14860000000
+   },
+   "tags": [],
+   "warnings": []
+  },
+  "importedAt": "2026-11-04",
+  "lastBackupAt": null,
+  "manualAccounts": [
+   {
+    "assetKind": "securities",
+    "balance": 45000000000,
+    "balanceDate": "2026-11-04",
+    "comment": "введено вручную",
+    "id": "sec",
+    "liquidity": {
+     "days": 3,
+     "kind": "days"
+    },
+    "title": "Ценные бумаги"
+   }
+  ],
+  "manualMatches": {},
+  "obligations": [],
+  "settings": {
+   "accounts": [
+    {
+     "accountId": "card",
+     "excluded": false,
+     "kind": "spend",
+     "liquidity": {
+      "kind": "instant"
+     }
+    },
+    {
+     "accountId": "save",
+     "excluded": false,
+     "kind": "savings",
+     "liquidity": {
+      "kind": "instant"
+     }
+    }
+   ],
+   "baselineMonths": 6,
+   "categoryLabels": {},
+   "classes": {
+    "custom": [],
+    "overrides": {}
+   },
+   "classification": {
+    "familyTags": [],
+    "rules": [
+     {
+      "categoryTitle": "Накопительный счёт",
+      "class": "T_savings_out",
+      "opKind": "expense"
+     },
+     {
+      "categoryTitle": "Накопление",
+      "class": "T_savings_in",
+      "opKind": "income"
+     },
+     {
+      "categoryTitle": "Долг",
+      "class": "F_lent"
+     },
+     {
+      "categoryTitle": "Возвращают долг",
+      "class": "F_lent_back"
+     },
+     {
+      "categoryTitle": "Беру в долг",
+      "class": "F_borrowed"
+     },
+     {
+      "categoryTitle": "Возвращаю долг",
+      "class": "F_borrowed_back"
+     },
+     {
+      "categoryTitle": "Бонус",
+      "class": "I_cashback"
+     },
+     {
+      "categoryTitle": "Размен",
+      "class": "T_correction"
+     },
+     {
+      "categoryTitle": "Рассрочка",
+      "class": "E_installment_own",
+      "refine": [
+       {
+        "class": "E_installment_family",
+        "tagGroup": "family"
+       }
+      ]
+     },
+     {
+      "categoryId": "c_int",
+      "categoryTitle": "Проценты и аренда",
+      "class": "I_interest",
+      "opKind": "income"
+     },
+     {
+      "categoryId": "c_food",
+      "categoryTitle": "Еда",
+      "class": "E_base",
+      "opKind": "expense"
+     },
+     {
+      "categoryId": "c_home",
+      "categoryTitle": "Коммунальные и связь",
+      "class": "E_base",
+      "opKind": "expense"
+     },
+     {
+      "categoryId": "c_fun",
+      "categoryTitle": "Жизнь и путешествия",
+      "class": "E_fun",
+      "opKind": "expense"
+     }
+    ]
+   },
+   "defaultIncomeHorizonDays": 30,
+   "dismissedInstallments": [],
+   "firstRunDone": true,
+   "forecastViewMonths": 12,
+   "horizonMonths": [
+    3,
+    12,
+    36
+   ],
+   "incomeKinds": [],
+   "incomeSchedule": [
+    {
+     "amount": 40000000,
+     "dayOfMonth": 5,
+     "id": "int",
+     "kind": "stable",
+     "passive": true,
+     "title": "Проценты и аренда"
+    }
+   ],
+   "inflationBp": 1000,
+   "matchWindowDays": 15,
+   "openingDebts": {
+    "payable": 0,
+    "receivable": 0
+   },
+   "planStrategy": "S",
+   "plannedEvents": [],
+   "reserveMonths": 3,
+   "savingsFlows": {
+    "mode": "estimate"
+   },
+   "scenarios": [
+    {
+     "id": "base",
+     "name": "Базовый",
+     "patch": {}
+    },
+    {
+     "id": "adverse",
+     "name": "Неблагоприятный",
+     "patch": {
+      "expenseFactorBp": 11500,
+      "irregularIncomeFactorBp": 0,
+      "oneOffMonthOffset": 1,
+      "oneOffMonthsOfBaseBp": 10000,
+      "workDelayMonths": 3,
+      "workIncomeFactorBp": 8000
+     }
+    },
+    {
+     "id": "favorable",
+     "name": "Благоприятный",
+     "patch": {
+      "workIncomeFactorBp": 11500
+     }
+    }
+   ],
+   "simpleMigrated": true,
+   "simulationMonths": 36,
+   "strategy": {
+    "comfortReserveBp": 15000,
+    "cushionShareBp": 7000,
+    "mergeTolerance": 100000,
+    "requiredStep": 10000,
+    "urgencyMonths": 12
+   }
+  }
+ },
+ "version": 1
+}
