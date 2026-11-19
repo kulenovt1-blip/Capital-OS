@@ -361,6 +361,27 @@ function goalCard(n: GoalNode, vd: ReturnType<typeof verdicts>): HTMLElement {
   );
 }
 
+/**
+ * Обычная цель — плитка с кольцом (D4, сетка колец из макета A+): кольцо с процентом, название, «X из Y» и вердикт. Папки и подушка — на всю ширину.
+ * Те же данные, что в `goalCard`; ничего нового не считается.
+ */
+function goalTile(n: GoalNode, vd: ReturnType<typeof verdicts>): HTMLElement {
+  const g = n.goal;
+  const dim = g.status !== 'active';
+  const fl = flash && flash.ids.includes(g.id) && Date.now() < flash.until ? ' flash' : '';
+  const vl = verdictLine(g, vd);
+  const ratio = Math.min(1, n.pctPermille / 1000);
+  return h(
+    'a',
+    { class: `gcard gtile${dim ? ' dim' : ''}${n.achieved ? ' done' : ''}${fl}`, href: sheetHref('goal', g.id), 'data-goal': g.id, 'aria-label': `«${g.title}»: ${Math.round(ratio * 100)} %` },
+    ring(ratio, 64, `${Math.round(ratio * 100)}%`),
+    h('span', { class: 'gt' }, g.title),
+    g.status !== 'active' ? h('span', { class: 'gs' }, STATUS_LABELS[g.status]) : vl.tag,
+    h('span', { class: 'gs' }, `${fmt(n.progress)} из ${fmt(g.targetMin)}`),
+    g.deadline ? h('span', { class: 'gs' }, deadlineText(g)) : null,
+  );
+}
+
 function cushionCard(n: GoalNode | undefined): HTMLElement {
   // подушки нет — карточка-действие со значком и кнопкой (D193), а не серая строка «создать»
   if (!n)
@@ -537,6 +558,8 @@ export function renderGoals(): HTMLElement {
 
   const list = v.tree.filter((n) => n.goal.status !== 'cancelled' && n.goal.status !== 'done');
   const card = (n: GoalNode) => (n === cushion ? cushionCard(n) : goalCard(n, vd));
+  // обычная цель — плитка с кольцом, папка и подушка — на всю ширину; при смене порядка остаются прежние строки со стрелками
+  const cell = (n: GoalNode): HTMLElement => (n !== cushion && !n.goal.folder && !n.children.length ? goalTile(n, vd) : card(n));
   const ids = list.map((n) => n.goal.id);
   if (list.length) {
     append(root, [
@@ -545,7 +568,7 @@ export function renderGoals(): HTMLElement {
       h('p', { class: 'one-line' }, reordering ? 'Двигай стрелками. Кто выше — получает деньги раньше, и подушка тоже.' : 'Кто выше — получает деньги раньше. Порядок можно менять.'),
       h(
         'div',
-        { class: 'goal-stack', 'data-tour': 'goal-list' },
+        { class: `goal-stack${reordering ? '' : ' goal-grid'}`, 'data-tour': 'goal-list' },
         list.map((n) =>
           reordering
             ? h(
@@ -559,7 +582,7 @@ export function renderGoals(): HTMLElement {
                   h('button', { class: 'btn', type: 'button', 'aria-label': `«${n.goal.title}» ниже`, disabled: ids[ids.length - 1] === n.goal.id, onclick: () => void move(ids, n.goal.id, 1) }, '↓'),
                 ),
               )
-            : card(n),
+            : cell(n),
         ),
       ),
     ]);

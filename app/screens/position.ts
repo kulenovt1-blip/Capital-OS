@@ -169,8 +169,25 @@ function mainNowBlock(v: PositionView): HTMLElement | null {
     h('div', { class: 'pn-k' }, 'Главное сейчас'),
     h('div', { class: 'pn-t' }, `Расходы больше доходов на ${approx(r.deficit)} в месяц`),
     h('div', { class: 'pn-s' }, r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'денег при этом хватит больше чем на 50 лет' : `денег при этом хватит на ${months(r.months)}`),
+    flowBars(v),
     h('a', { class: 'btn wide', href: '#/forecast~save-where' }, 'Что можно сделать'),
   );
+}
+
+/** Две полоски «Доход / Расходы» в месяц и, если платежи по долгам берут треть дохода и больше, одна спокойная строка про это (D6). Числа — `v.flow`. */
+function flowBars(v: PositionView): HTMLElement | null {
+  const f = v.flow;
+  if (!f || !(f.income > 0) || !(f.spending > 0)) return null;
+  const top = Math.max(f.income, f.spending);
+  const bar = (label: string, x: number, cls: string): HTMLElement =>
+    h('div', { class: 'pn-bar' },
+      h('div', { class: 'pn-bar-row' }, h('span', null, label), h('strong', null, approx(x))),
+      h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: `dfill ${cls}`, style: `width:${Math.round((x / top) * 100)}%` })));
+  const share = f.obligations / f.income;
+  return h('div', { class: 'pn-flow' },
+    bar('Доход в месяц', f.income, 'inc'),
+    bar('Расходы в месяц', f.spending, 'exp'),
+    share >= 1 / 3 ? h('div', { class: 'pn-s' }, `Платежи по долгам — ${Math.round(share * 100)} % дохода`) : null);
 }
 
 /** Один маленький первый шаг, когда есть долговая спираль или просрочки (К4 аудита UX). */

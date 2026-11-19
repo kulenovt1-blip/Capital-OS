@@ -531,6 +531,12 @@ details.acc > .row.sub-row { padding-left: 28px; background: var(--surface-sunke
 .gcard .kids { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-left: 12px; border-left: 3px solid var(--line); }
 .gcard .kids a { display: flex; justify-content: space-between; gap: 8px; text-decoration: none; color: inherit; min-height: 44px; align-items: center; }
 .gcard.flash { outline: 3px solid var(--focus); }
+.goal-stack.goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.goal-grid > .gcard:not(.gtile) { grid-column: 1 / -1; }
+.gtile { align-items: flex-start; gap: 4px; padding: 14px 14px 14px; min-height: 44px; }
+.gtile .ring { margin-bottom: 4px; }
+.gtile.done .ring-fg { stroke: var(--good); }
+.gtile .gt { font-size: calc(15px * var(--fz)); line-height: 1.25; overflow-wrap: anywhere; }
 .gcard .progress { height: 8px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; }
 .gcard .progress span { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
 .gcard .progress.done span { background: var(--good); }
@@ -901,6 +907,12 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .pos-now .pn-t { font-size: calc(19px * var(--fz)); font-weight: 800; line-height: 1.25; }
 .pos-now .pn-s { font-size: calc(14px * var(--fz)); color: var(--ink-2); }
 .pos-now .btn { margin-top: 8px; }
+.pn-flow { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pn-bar-row { display: flex; justify-content: space-between; font-size: calc(14px * var(--fz)); }
+.pn-bar .dbar { position: relative; display: block; height: 8px; border-radius: 4px; background: var(--surface-sunken); margin-top: 4px; }
+.pn-bar .dfill { position: absolute; left: 0; top: 0; height: 8px; border-radius: 4px; background: var(--primary); }
+.pn-bar .dfill.inc { opacity: 0.55; }
+.pn-bar .dfill.exp { background: var(--warm, var(--warn)); }
 
 
 /* D201: «На примере» — выдуманные люди, плашка режима примера */

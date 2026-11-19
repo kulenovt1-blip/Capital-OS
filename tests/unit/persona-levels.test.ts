@@ -47,3 +47,17 @@ describe('демо-персонажи: ступени через настоящ�
     expect(v.independence.status).toBe('confirmed');
   });
 });
+
+describe('поток для полосок «Доход / Расходы» (D6)', () => {
+  test('Берик: доход 220 тыс, расходы 330 тыс — разница равна дефициту из runway', () => {
+    const v = positionViewOf(personaState('berik'), PERSONA_TODAY);
+    expect(v.flow).not.toBeNull();
+    expect(Math.round(v.flow!.spending - v.flow!.income)).toBe(Math.round(v.runway.deficit));
+    expect(v.flow!.obligations / v.flow!.income).toBeGreaterThan(1 / 3);
+  });
+  test('Серик: дефицита нет, платежи меньше трети дохода', () => {
+    const v = positionViewOf(personaState('serik'), PERSONA_TODAY);
+    expect(v.flow!.income).toBeGreaterThan(v.flow!.spending);
+    expect(v.flow!.obligations / v.flow!.income).toBeLessThan(1 / 3);
+  });
+});
