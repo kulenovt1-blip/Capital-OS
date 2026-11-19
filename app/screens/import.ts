@@ -2,7 +2,7 @@
  * «Импорт» (D84): одна главная кнопка; сверка одной строкой, если всё сошлось, и раскрытыми расхождениями, если нет;
  * «Принять импорт» — в нижней полосе; после принятия открывается мастер. Разметки здесь нет — только ссылка.
  */
-import { autoLabelCategories, formatDateRu, importMmbackup, mergeAccountSettings, parseState, reconcileAccounts, settleSetAsides, type AppState, type ImportedData, type ReconcileReport } from '../../engine/index';
+import { L5_NAME, LEVEL_NAMES, autoLabelCategories, formatDateRu, importMmbackup, mergeAccountSettings, parseState, reconcileAccounts, settleSetAsides, type AppState, type ImportedData, type ReconcileReport } from '../../engine/index';
 import { append, h, readFileBytes, toast } from '../dom';
 import { getDemo, getState, replaceState, today, update } from '../store';
 import { ov } from '../ctx';
@@ -172,9 +172,12 @@ export function renderImport(_rerender: () => void): HTMLElement {
 
   if (!st.imported) {
     append(root, [
-      h('div', { class: 'card stack' }, h('strong', null, 'Загрузи бэкап MoneyManager'), h('p', { class: 'muted', style: 'margin:0' }, 'Файл .mmbackup читается на этом устройстве и никуда не отправляется.')),
+      h('div', { class: 'card stack' },
+        h('strong', null, 'Узнай свою ступень'),
+        h('p', { style: 'margin:0' }, `Загрузи бэкап MoneyManager — за минуту увидишь, на какой ты из пяти ступеней (от «${LEVEL_NAMES[1]}» до «${L5_NAME}»), и дорогу к следующей.`),
+        h('p', { class: 'muted', style: 'margin:0' }, 'Файл .mmbackup читается на этом устройстве и никуда не отправляется.')),
       pick(true, 'Выбрать файл .mmbackup'),
-      h('a', { class: 'btn link wide', href: '#/examples' }, 'Посмотреть на примере'),
+      h('a', { class: 'btn wide', href: '#/examples' }, 'Посмотреть на примере'),
       lastError ? h('div', { class: 'error-box', role: 'alert' }, `Не удалось прочитать файл: ${lastError}`) : null,
       shareHelp(),
     ]);
