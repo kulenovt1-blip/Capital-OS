@@ -3,6 +3,9 @@ import { act, getState, setPreviewMode, update } from './store';
 import { go } from './main';
 import { startTour, tourActive, type TourStep } from './tour';
 import { isSimpleMode } from '../engine/index';
+import { positionNow } from './ctx';
+import { personaTourSteps } from './persona-tours';
+import type { PersonaId } from './personas';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function openScreen(hash: string): Promise<void> {
@@ -62,6 +65,15 @@ export async function profileTour(): Promise<void> {
     ],
     { label: 'Как читать профиль' },
   );
+}
+
+/** Тур по профилю примера (у каждого персонажа свой): те же блоки экрана, но про этого человека. */
+export async function personaTour(id: PersonaId): Promise<void> {
+  markTour('profile');
+  await openScreen('#/position');
+  const v = positionNow();
+  if (v.status !== 'ok') return;
+  startTour(personaTourSteps(id, v), { label: 'Как читать этот пример' });
 }
 
 /**

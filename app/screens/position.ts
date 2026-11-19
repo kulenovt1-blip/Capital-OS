@@ -7,14 +7,14 @@ import { roadOf, roadHowOf, type RoadCond } from '../road';
 import { DESIRED_LABEL, INDEPENDENCE_TEXTS, SAVING_CUT_PCT, savingOptions, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
-import { getState, today } from '../store';
+import { getDemo, getState, today } from '../store';
 import { isSimpleMode } from '../../engine/index';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
 import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
-import { autoTour, profileTour } from '../tours';
+import { autoTour, personaTour, profileTour } from '../tours';
 
 const nf = (x: number, d = 1): string => x.toFixed(d).replace('.', ',');
 const money = (tenge: number) => fmt(Math.round(tenge * 100) as never);
@@ -560,7 +560,8 @@ export function renderPosition(): HTMLElement {
   }
   root.append(levelCard(v));
   // первый заход на «Профиль» — подсказка по блокам сама, один раз (не поверх окна «Что нового»)
-  autoTour('profile', '#/position', profileTour);
+  const demo = getDemo();
+  autoTour('profile', '#/position', demo ? () => personaTour(demo.id) : profileTour);
   // ступень 1: тёплый тон (оранжевый вместо бирюзового) и «Главное сейчас» без упрёков (D6)
   if (v.level === 1) root.classList.add('tone-warm');
   const mn = mainNowBlock(v);
