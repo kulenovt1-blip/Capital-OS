@@ -870,3 +870,17 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .pos-dir .pd-note { font-size: calc(13px * var(--fz)); color: var(--muted); }
 .rd-cond-hint { font-size: calc(13px * var(--fz)); color: var(--muted); line-height: 1.3; }
 .foot-note .foot-act { display: block; margin: 0 auto; min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+/* D4 (дизайн A+): «Цели» — шаг дороги отдельно от своих целей; кнопка действия не меньше 48 px */
+.act-card.col > .btn.wide { min-height: 48px; font-size: calc(16px * var(--fz)); }
+.road-step { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--primary); border-radius: 24px; background: var(--surface); color: inherit; text-decoration: none; min-height: 68px; }
+.road-step .ring { flex: none; }
+.ring-bg { stroke: var(--surface-sunken); }
+.ring-fg { stroke: var(--primary); }
+.ring-t { font-size: 16px; font-weight: 800; fill: var(--ink); }
+.rst-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rst-k { font-size: calc(13px * var(--fz)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.rst-t { font-size: calc(19px * var(--fz)); font-weight: 800; line-height: 1.2; }
+.rst-s { font-size: calc(14px * var(--fz)); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rst-go { flex: none; font-size: 22px; color: var(--muted); }
+

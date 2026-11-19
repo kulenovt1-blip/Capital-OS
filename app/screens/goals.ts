@@ -5,14 +5,17 @@
 import {
   STATUS_LABELS, assignMoney, withoutAuto, baseForecast, cushionFill, deleteGoal, buildGoalsView, changeStatus, createGoal, distributeSavings, exampleGoals, goalShifts, moveFunding, nextOrder, reorderGoals,
   starterGoals, unassignedSavings, updateGoal, withdrawMoney,
+  L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, routeTo, type ReserveTarget,
   type Goal, type GoalNode, type GoalStatus, type GoalsView, type Flexibility, type Money,
 } from '../../engine/index';
 import { append, ask, confirmButton, field, h, toast } from '../dom';
 import { act, getState, today, update } from '../store';
-import { chip, errorsBox, fmt, fmtDate, info, monthWord, toggle, moneyInput, newId, pct, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
+import { chip, errorsBox, fmt, fmtDate, fmtShort, info, monthTo, monthWord, toggle, moneyInput, newId, pct, readMoney, readStr, row, rows, seg, stickyBar, sub } from '../ui';
 import { closeSheet, defineSheet, openSheet, refresh, sheetHref } from '../main';
 import { explainLink, registerExplain } from '../explain';
-import { forecastNow, ov, verdicts } from '../ctx';
+import { forecastNow, ov, positionNow, verdicts } from '../ctx';
+import { roadOf } from '../road';
+import { setRouteTarget } from './forecast-simple';
 import { isSimpleMode } from '../../engine/index';
 import { simpleHint } from '../modehint';
 import { iconBox, tile, tiles } from '../tiles';
@@ -387,6 +390,69 @@ function cushionCard(n: GoalNode | undefined): HTMLElement {
   );
 }
 
+/** Кольцо прогресса (D4): доля 0–1, значение — в центре. */
+function ring(ratio: number, size: number, label: string): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const r = size / 2 - 7;
+  const c = 2 * Math.PI * r;
+  const el = (tag: string, attrs: Record<string, string>): SVGElement => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    return n;
+  };
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('ring');
+  const k = Math.max(0, Math.min(1, ratio));
+  svg.append(
+    el('circle', { cx: String(size / 2), cy: String(size / 2), r: String(r), class: 'ring-bg', 'stroke-width': '8', fill: 'none' }),
+    el('circle', { cx: String(size / 2), cy: String(size / 2), r: String(r), class: 'ring-fg', 'stroke-width': '8', fill: 'none', 'stroke-linecap': 'round', transform: `rotate(-90 ${size / 2} ${size / 2})`, 'stroke-dasharray': `${(c * k).toFixed(1)} ${c.toFixed(1)}` }),
+  );
+  const t = document.createElementNS(NS, 'text');
+  t.setAttribute('x', String(size / 2));
+  t.setAttribute('y', String(size / 2 + 5));
+  t.setAttribute('text-anchor', 'middle');
+  t.setAttribute('class', 'ring-t');
+  t.textContent = label;
+  svg.append(t);
+  return svg;
+}
+
+/**
+ * «На твоей дороге» (D4, дизайн A+): шаг дороги — довести запас до цели следующей ступени — отдельно от своих целей.
+ * Это не цель в списке (деньги за ней не закрепляются и порядок не двигается), а путь из «Из А в Б»: сколько осталось и к какому месяцу.
+ * Нет дороги (ступень 4 и выше, данных мало) или запас уже есть — карточки нет. Ничего не считает: `roadOf` и `routeTo`.
+ */
+function roadStepCard(): HTMLElement | null {
+  const v = positionNow();
+  if (v.status !== 'ok' || v.level === null) return null;
+  const m = roadOf(v);
+  const c = m?.next.conds.find((x) => x.kind === 'reserve' && !x.done);
+  if (!m || !c || c.ratio === null) return null;
+  const target = (m.next.level === 3 ? L3_RESERVE_MONTHS : L4_RESERVE_MONTHS) as ReserveTarget;
+  const r = routeTo(getState(), today(), target);
+  if (!r || r.missing <= 0) return null;
+  const when = r.deficitMonthly > 0 ? 'пока расходы больше доходов' : r.by ? `к ${monthTo(r.by)}` : 'нынешним темпом не успеть';
+  return h(
+    'section',
+    { class: 'stack tight', 'data-tour': 'road-step' },
+    sub('На твоей дороге'),
+    h(
+      'a',
+      { class: 'road-step', href: sheetHref('a-to-b'), onclick: () => setRouteTarget(target), 'aria-label': `Шаг к ступени ${m.next.level}: запас на ${target} месяцев. Посчитать путь` },
+      ring(c.ratio, 68, `${Math.round(c.ratio * 100)}%`),
+      h('span', { class: 'rst-main' },
+        h('span', { class: 'rst-k' }, `Шаг к ступени ${m.next.level}`),
+        h('span', { class: 'rst-t' }, `Запас на ${target} ${target === 1 ? 'месяц' : target < 5 ? 'месяца' : 'месяцев'}`),
+        h('span', { class: 'rst-s' }, `${c.value} · осталось ≈ ${fmtShort(r.missing)} · ${when}`)),
+      h('span', { class: 'rst-go', 'aria-hidden': 'true' }, '›'),
+    ),
+  );
+}
+
 /** Готовые варианты цели для пустого экрана (D193). */
 const GOAL_TEMPLATES: { icon: 'laptop' | 'plane' | 'home' | 'study' | 'plus'; title: string; sub: string; name: string }[] = [
   { icon: 'laptop', title: 'Техника', sub: 'ноутбук, телефон', name: 'Техника' },
@@ -464,6 +530,7 @@ export function renderGoals(): HTMLElement {
   } else root.append(h('p', { class: 'one-line' }, 'Балансы целей появятся после ', h('a', { href: '#/import' }, 'загрузки бэкапа'), '.'));
 
   const vd = hasData ? verdicts() : new Map();
+  if (hasData) append(root, [roadStepCard()]);
   const cushion = v.tree.find((n) => isCushion(n.goal) && n.goal.status !== 'cancelled');
   // подушка — в общем списке: по умолчанию первая, но её можно подвинуть (D100)
   if (!cushion) root.append(cushionCard(undefined));
@@ -473,7 +540,7 @@ export function renderGoals(): HTMLElement {
   const ids = list.map((n) => n.goal.id);
   if (list.length) {
     append(root, [
-      sub('Цели', list.length > 1 ? h('button', { class: `btn${reordering ? ' primary' : ''}`, type: 'button', onclick: () => ((reordering = !reordering), (orderStart = reordering ? { ...forecastNow().goalDates } : null), refresh()) }, reordering ? 'Готово' : '↑↓ Порядок') : null),
+      sub('Твои цели', list.length > 1 ? h('button', { class: `btn${reordering ? ' primary' : ''}`, type: 'button', onclick: () => ((reordering = !reordering), (orderStart = reordering ? { ...forecastNow().goalDates } : null), refresh()) }, reordering ? 'Готово' : '↑↓ Порядок') : null),
       reordering && orderStart ? orderShift(list.map((n) => n.goal)) : null,
       h('p', { class: 'one-line' }, reordering ? 'Двигай стрелками. Кто выше — получает деньги раньше, и подушка тоже.' : 'Кто выше — получает деньги раньше. Порядок можно менять.'),
       h(
