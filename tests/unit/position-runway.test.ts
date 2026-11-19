@@ -161,7 +161,7 @@ describe('именной профиль D34 (спец. 9A.2)', () => {
 });
 
 // ───────────── выборки пула проб ─────────────
-const OPTS = { v1CapMonths: Infinity };
+const OPTS = { v1CapMonths: Infinity, incomeFromSchedule: false }; // как в пробе (D209)
 const pools = {
   random: () => Array.from({ length: 400 }, (_, i) => build(randomSpec(i + 1))),
   dynamic: () => Array.from({ length: 400 }, (_, i) => build(randomSpecDyn(i + 1))),
