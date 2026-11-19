@@ -319,6 +319,13 @@ defineSheet('direction', (id) => {
 
 /** Слабое место и что нужно для следующей ступени — одной карточкой: заголовок крупно, показатель — плашкой (D191). */
 function weakBlock(v: PositionView): HTMLElement | null {
+  // ступень 5 (независимость подтверждена): копить уже не обязательно, низкая «Динамика» — не упрёк (D203)
+  if (v.level === 5) {
+    return h('div', { class: 'pos-focus', 'data-tour': 'weak' },
+      h('div', { class: 'pf-k' }, 'Откладывать уже не обязательно'),
+      h('p', { class: 'muted' }, 'Капитал сам покрывает жизнь. Поэтому низкие «Привычка откладывать» и «Динамика» здесь не тревога. Следи за тем, чтобы расходы не росли быстрее, чем доход от капитала.'),
+      v.limitsFired.map((l) => h('div', { class: 'pf-limit' }, `Сдерживает: ${l.text}`)));
+  }
   const next = v.next ?? null;
   if (!v.weak && !next && !v.limitsFired.length) return null;
   return h(
