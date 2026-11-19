@@ -58,10 +58,21 @@ describe('N3: доход по действующему расписанию (D20
     expect(rep.values.N3).toBe(0);
   });
 
-  it('строка, которая ещё не началась, в доход сегодня не входит', () => {
+  it('в расписании только будущие строки: о доходе сегодня оно не говорит — история, N3 как без расписания (будущее меняет только III)', () => {
     const base = build(spec([stipend]));
     const s = { ...base, settings: { ...base.settings, incomeSchedule: base.settings.incomeSchedule.map((i) => ({ ...i, start: '2027-01-01' })) } };
-    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBe(0);
+    const none = { ...base, settings: { ...base.settings, incomeSchedule: [] } };
+    const r = computeIndicators(s, TODAY);
+    const r0 = computeIndicators(none, TODAY);
+    expect(r.inputs!.incomeMonthly).toBeCloseTo(r0.inputs!.incomeMonthly, 0);
+    expect(r.values.N3).toBe(r0.values.N3);
+  });
+
+  it('действующая строка плюс будущая: будущая в доход сегодня не входит', () => {
+    const base = build(spec([stipend]));
+    const row = base.settings.incomeSchedule[0]!;
+    const s = { ...base, settings: { ...base.settings, incomeSchedule: [row, { ...row, id: 'future', start: '2027-01-01' }] } };
+    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBe(computeIndicators(base, TODAY).inputs!.incomeMonthly);
   });
 
   it('больше строк расписания — доход и N3 не ниже (монотонность)', () => {

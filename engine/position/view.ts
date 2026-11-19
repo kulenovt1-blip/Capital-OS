@@ -156,6 +156,17 @@ function housingOf(state: AppState, overview: Overview): PositionView['housing']
   return { assets, debt, equity: assets - debt, items: locked.length, linked: linked.length };
 }
 
+/**
+ * Очки для показа: целое, но не округлённое вверх через границу, до которой не дошли (74,9 при границе 75 — «74», 59,6 при полу 60 — «59», 79,6 при «сильно» с 80 — «79»).
+ * Границы — ступеней (20 / 40 / 75), пола направления (60) и слова «сильно» (80). Аудит 10, находка 8.
+ */
+export const SCORE_SHOWN_BOUNDS = [20, 40, 60, 75, 80] as const;
+export function shownScore(x: number): number {
+  const r = Math.round(x);
+  for (const b of SCORE_SHOWN_BOUNDS) if (x < b && r >= b) return b - 1;
+  return r;
+}
+
 /** D210: «Слабое место» не показывается, когда самый низкий из действуемых показателей слабого направления не ниже этого значения; это же граница слова «сильно» рядом с очками (`scoreWord`). */
 export const WEAK_NONE_FROM = 80;
 
@@ -198,7 +209,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     const actionable = inputs.reserveEssentialMonths >= L3_RESERVE_MONTHS ? known.filter((x) => x.id !== 'N4') : known;
     const low = actionable.length ? actionable.reduce((a, b) => (b.score < a.score ? b : a)) : null;
     // D210: если даже самый низкий из «действуемых» показателей слабого направления не ниже порога, слабого места нет — не называем хорошее слабым
-    weak = low && low.score >= WEAK_NONE_FROM ? null : { direction: weakestId, directionName: dv.name, indicator: low };
+    weak = low && shownScore(low.score) >= WEAK_NONE_FROM ? null : { direction: weakestId, directionName: dv.name, indicator: low };
   }
 
   // диапазон: только если что-то неизвестно
@@ -210,7 +221,9 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     const states = scheduleKnown ? baseStates : withoutForecast(baseStates);
     range = positionRange(report.values, actualBounds(boundsContext(series, inputs), series.histMonths, scheduleKnown), states);
     // края диапазона проходят те же правила, что и сама ступень: срез по фактам и подъём ступени 1 по D156 (аудит 10, находка 3)
-    const edgeName = (lv: number): string => { const gated = gateLevel(Math.min(lv, 4) as Level, factsOf(inputs)); return LEVEL_NAMES[gated.held ? gated.level : liftLevel1(gated.level, factsOf(inputs)).level]; };
+    // факты по запасу ступень проверяет только при необходимых расходах > 0 (D158) — края тоже
+    const edgeFacts = inputs.needEssential > 0 ? factsOf(inputs) : undefined;
+    const edgeName = (lv: number): string => { const gated = gateLevel(Math.min(lv, 4) as Level, edgeFacts); return LEVEL_NAMES[gated.held ? gated.level : liftLevel1(gated.level, edgeFacts).level]; };
     if (range) rangeLevels = { low: edgeName(range.levelLow), high: edgeName(range.levelHigh) };
   }
 

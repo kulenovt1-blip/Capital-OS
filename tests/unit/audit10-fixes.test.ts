@@ -78,3 +78,26 @@ describe('находка 5: нет необходимых расходов — �
     expect(l4Warnings({ reserveEssentialMonths: 0, needEssential: 0, troughNet: 0 }, 0).some((w) => w.id === 'reserve')).toBe(false);
   });
 });
+
+import { shownScore } from '../../engine/position/view';
+describe('shownScore (аудит 10, находка 8): не округляем вверх через границу', () => {
+  it('74,6 → 74, 59,6 → 59, 79,6 → 79, 39,5 → 39, 19,9 → 19', () => {
+    expect(shownScore(74.6)).toBe(74);
+    expect(shownScore(59.6)).toBe(59);
+    expect(shownScore(79.6)).toBe(79);
+    expect(shownScore(39.5)).toBe(39);
+    expect(shownScore(19.9)).toBe(19);
+  });
+  it('на границе и выше — обычное округление; везде монотонно и не больше round', () => {
+    expect(shownScore(75)).toBe(75);
+    expect(shownScore(80)).toBe(80);
+    expect(shownScore(60.4)).toBe(60);
+    let prev = -1;
+    for (let x = 0; x <= 100; x += 0.1) {
+      const v = shownScore(x);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      expect(v).toBeLessThanOrEqual(Math.round(x));
+      prev = v;
+    }
+  });
+});

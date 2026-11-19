@@ -9,7 +9,7 @@ import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getDemo, getState, today } from '../store';
 import { isSimpleMode } from '../../engine/index';
-import { WEAK_NONE_FROM } from '../../engine/position/view';
+import { WEAK_NONE_FROM, shownScore } from '../../engine/position/view';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
@@ -68,7 +68,7 @@ function trustLine(v: PositionView): HTMLElement | null {
 function levelMore(v: PositionView): HTMLElement[] {
   const isL5 = v.basis === 'independence';
   const out: HTMLElement[] = [];
-  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) out.push(h('p', null, `Общая оценка ${Math.round(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
+  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) out.push(h('p', null, `Общая оценка ${shownScore(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
   if (v.level === 4) out.push(h('p', null, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.'));
   if (isL5) out.push(h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.'));
   if (v.range && v.rangeLevels) {
@@ -113,9 +113,9 @@ function directionsRow(v: PositionView): HTMLElement | null {
       const low = d.score !== null && d.score < 60;
       return h(
         'a',
-        { class: `pos-dir${low ? ' low' : ''}`, href: sheetHref('direction', d.id), 'aria-label': `${d.name}: ${d.score === null ? 'мало данных' : `${scoreWord(d.score)}, ${Math.round(d.score)} из 100`}. Из чего состоит` },
+        { class: `pos-dir${low ? ' low' : ''}`, href: sheetHref('direction', d.id), 'aria-label': `${d.name}: ${d.score === null ? 'мало данных' : `${scoreWord(d.score)}, ${shownScore(d.score)} из 100`}. Из чего состоит` },
         h('span', { class: 'pd-name' }, d.name),
-        h('span', { class: 'pd-val' }, d.score === null ? '—' : String(Math.round(d.score))),
+        h('span', { class: 'pd-val' }, d.score === null ? '—' : String(shownScore(d.score))),
         h('span', { class: 'dbar', 'aria-hidden': 'true' }, d.score === null ? null : h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' })),
         d.score === null || !d.reliable ? h('span', { class: 'pd-note' }, 'данных мало') : null,
       );
@@ -350,7 +350,7 @@ defineSheet('road-how', () => {
   if (how.weak.length) {
     parts.push(
       sub('Что тянет оценку вниз'),
-      rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(Math.min(Math.round(w.score), 59)), href: sheetHref('direction', w.direction) }))),
+      rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(shownScore(w.score)), href: sheetHref('direction', w.direction) }))),
     );
   }
   if (!parts.length) parts.push(h('div', { class: 'okline' }, 'Условия, которые зависят от денег и оценки, выполнены.'));
@@ -384,8 +384,8 @@ defineSheet('direction', (id) => {
       h('p', { class: 'muted' }, d.question),
       d.score === null
         ? h('p', null, 'Оценить пока нечем: данных мало.')
-        : h('p', null, `${scoreWord(d.score)[0]!.toUpperCase()}${scoreWord(d.score).slice(1)} · ${Math.round(d.score)} из 100${d.reliable ? '' : ' · данных мало'}. Оранжевая черта на полоске — 60: от неё направление считается достаточным.`),
-      rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : `${scoreWord(i.score)} · ${Math.round(i.score)}`, chevron: false })))),
+        : h('p', null, `${scoreWord(d.score)[0]!.toUpperCase()}${scoreWord(d.score).slice(1)} · ${shownScore(d.score)} из 100${d.reliable ? '' : ' · данных мало'}. Оранжевая черта на полоске — 60: от неё направление считается достаточным.`),
+      rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : `${scoreWord(i.score)} · ${shownScore(i.score)}`, chevron: false })))),
   };
 });
 
@@ -408,7 +408,7 @@ function weakBlock(v: PositionView): HTMLElement | null {
     v.weak
       ? h('div', { class: 'pf-row' },
           h('div', null, h('div', { class: 'pf-k' }, 'Слабое место'), h('div', { class: 'pf-v' }, v.weak.directionName)),
-          v.weak.indicator ? h('span', { class: 'pf-chip' }, `${v.weak.indicator.label} · ${Math.round(v.weak.indicator.score)}`) : null)
+          v.weak.indicator ? h('span', { class: 'pf-chip' }, `${v.weak.indicator.label} · ${shownScore(v.weak.indicator.score)}`) : null)
       : noWeak
         ? h('div', { class: 'pf-row' }, h('div', null, h('div', { class: 'pf-k' }, 'Слабое место'), h('div', { class: 'pf-v' }, 'Слабых мест нет')))
         : null,

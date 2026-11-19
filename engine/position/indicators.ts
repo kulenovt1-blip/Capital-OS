@@ -266,12 +266,14 @@ export function securedDebtOf(state: AppState, o: { obligations: readonly { obli
  * D209: доход сегодня по расписанию — сумма месячных выплат потоков, действующих сегодня (начался не позже сегодня, не закончился), в тенге.
  * Рост (индексация) считается так же, как в прогнозе: по числу полных периодов от якоря до сегодня.
  */
-export function scheduledIncomeNow(streams: ReturnType<typeof assembleIncomeStreams>, today: IsoDate): number {
-  return streams.reduce((acc, s) => {
+export function scheduledIncomeNow(streams: ReturnType<typeof assembleIncomeStreams>, today: IsoDate): { now: number; anyEnded: boolean } {
+  const anyEnded = streams.some((s) => s.end && s.end < today && !(s.start && s.start > today));
+  const now = streams.reduce((acc, s) => {
     if ((s.start && s.start > today) || (s.end && s.end < today)) return acc;
     const steps = s.growth && s.growth.everyMonths > 0 ? Math.floor(Math.max(0, monthsBetween(s.anchor, today)) / s.growth.everyMonths) : 0;
     return acc + T(s.growth ? grow(s.amount, s.growth.rateBp, steps) : s.amount);
   }, 0);
+  return { now, anyEnded };
 }
 
 export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today), options: IndicatorOptions = {}): IndicatorsReport {
@@ -301,8 +303,9 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const scheduleKnown = declaredIncomes.length > 0 || input.events.some((e) => e.kind === 'income_start');
   // D209 (ред. аудита 10): когда расписание известно, доход для нагрузки по долгам — то, что по нему действует сегодня, как и в F и в прогнозе.
   // Среднее за 6 месяцев включало закончившиеся источники (летняя подработка). Закончился единственный источник — доход 0 (так считает и F); расписания нет — история, как раньше.
-  const scheduledNow = scheduledIncomeNow(assembleIncomeStreams(declaredIncomes, input.events, today), today);
-  const incomeMonthly = options.incomeFromSchedule !== false && scheduleKnown ? scheduledNow : incomeHistory;
+  // Будущее событие меняет только III (спец. v3 §2): расписание, в котором ничего не действует сегодня и ничего не закончилось (только будущие строки и «начало дохода»), о доходе сегодня не говорит — остаётся история.
+  const { now: scheduledNow, anyEnded } = scheduledIncomeNow(assembleIncomeStreams(declaredIncomes, input.events, today), today);
+  const incomeMonthly = options.incomeFromSchedule !== false && scheduleKnown && (scheduledNow > 0 || anyEnded) ? scheduledNow : incomeHistory;
 
   const values: Indicators = {};
   // I. Здесь и сейчас

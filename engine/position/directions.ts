@@ -32,7 +32,7 @@ export function directionScore(ind: Indicators, d: Direction): DirectionScore {
     if (x !== null && x !== undefined) { sw += w; sx += w * x; kw += w; nk++; }
   }
   const keysKnown = KEY_INDICATORS[d].filter((k) => k in ind).every((k) => ind[k] !== null && ind[k] !== undefined);
-  return { score: sw > 0 ? sx / sw : null, knownWeight: kw, totalWeight: tw, known: nk, applicable: keys.length, keysKnown };
+  return { score: sw > 0 ? Math.round((sx / sw) * 1e9) / 1e9 : null, knownWeight: kw, totalWeight: tw, known: nk, applicable: keys.length, keysKnown };
 }
 
 export function isDirectionSufficient(o: DirectionScore, share = SUFFICIENT_WEIGHT_SHARE): boolean {
