@@ -584,11 +584,6 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .pos-cols { display: flex; gap: 12px; }
 .pos-col { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .pos-col .v { font-size: 24px; font-weight: 700; }
-.row-fold summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; min-height: 44px; align-items: center; }
-.row-fold .dbar { position: relative; order: 3; flex: 0 0 100%; height: 8px; border-radius: 4px; background: var(--surface-sunken); margin: 2px 0 8px; }
-.row-fold .dfill { display: block; height: 8px; border-radius: 4px; background: var(--primary); }
-.row-fold .dtick { position: absolute; left: 60%; top: -5px; width: 2px; height: 18px; background: var(--threshold); }
-.row-fold .rf-val { color: var(--ink-2); }
 
 /* ===== 9. Форма Г (D166): карточки без обводки, крупное скругление ===== */
 .card, .rows, .cell, .hint-card, .attention, details.fold { border: 0; border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -642,26 +637,6 @@ a.chip { text-decoration: none; display: inline-flex; align-items: center; }
 .trust.warn .acc-meter i.on { background: var(--warn); }
 .trust .acc-low .acc-meter i.on, .trust .acc-mid .acc-meter i.on { background: var(--warn); }
 .tune > summary { border-left: 4px solid var(--warn); padding-left: 10px; font-weight: 600; }
-.dirs { display: grid; gap: 4px; }
-.dirs .row-fold { border-bottom: 1px solid var(--divider); padding: 6px 0 2px; }
-.dirs .row-fold:last-child { border-bottom: 0; }
-.dirs .rf-title { font-size: 18px; font-weight: 700; }
-.dirs .rf-val { font-weight: 600; }
-.dirs .dbar { height: 14px; border-radius: 7px; margin: 4px 0 2px; }
-.dirs .dfill { height: 14px; border-radius: 7px; }
-.dirs .dtick { top: -4px; height: 22px; width: 3px; }
-.dirs .dir-low .dfill { background: var(--warn); }
-.dirs .dir-ok .dfill { background: var(--good); }
-.dirs .dir-verdict { order: 4; flex: 0 0 100%; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
-.dirs .dir-ok .dir-verdict { color: var(--on-good-tint); }
-.dirs .dir-low .dir-verdict { color: var(--on-warn-tint); font-weight: 600; }
-.dirs .row-fold { background: none; box-shadow: none; border-radius: 0; padding-left: 0; padding-right: 0; }
-.dirs .row-fold summary { text-align: left; flex-wrap: wrap; }
-.dirs .rf-title { font-size: 17px; flex: 1 1 auto; }
-.dirs .rf-val { white-space: nowrap; margin-left: auto; }
-.dirs .dir-verdict { text-align: left; }
-.dirs .rf-title { font-size: 16px; }
-.dirs .rf-val { font-size: 15px; }
 .rc-z-low { fill: var(--warn-tint); }
 .rc-z-mid { fill: var(--surface-sunken); }
 .rc-z-ok { fill: var(--good-tint); }
@@ -747,16 +722,7 @@ body.modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-tip { transition: none; } }
 
 /* D191: «Профиль» без стены текста */
-.pos-steps { display: flex; justify-content: center; align-items: flex-end; gap: 6px; margin: 2px 0 4px; }
-.pos-steps span { width: 34px; height: 6px; border-radius: 3px; background: var(--line-strong); }
 /* лестница (A+): ступени растут слева направо */
-.pos-steps span:nth-child(2) { height: 10px; }
-.pos-steps span:nth-child(3) { height: 14px; }
-.pos-steps span:nth-child(4) { height: 18px; }
-.pos-steps span:nth-child(5) { height: 22px; }
-.pos-steps span.on { background: var(--primary); }
-.pos-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
-.pos-act { min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); font: inherit; font-size: calc(13px * var(--fz)); font-weight: 700; text-decoration: none; cursor: pointer; }
 .pos-focus { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
 .pos-focus .pf-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .pos-focus .pf-k { font-size: calc(13px * var(--fz)); font-weight: 700; color: var(--muted); }
@@ -875,3 +841,32 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .today-cover.short { color: var(--bad); }
 .today-full { align-self: center; min-height: 48px; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-size: calc(15px * var(--fz)); font-weight: 700; cursor: pointer; }
 .today .act-card .chev { flex: none; color: var(--muted); font-size: calc(22px * var(--fz)); }
+
+/* D2 (дизайн A+): «Профиль» — компактная карточка ступени, три направления в строку, подсказка под условием дороги */
+.pos-level-card.pos-level-card { text-align: left; gap: 12px; }
+.pos-head { display: flex; align-items: flex-end; gap: 12px; min-height: 68px; color: inherit; text-decoration: none; }
+.pos-bars { flex: none; display: flex; align-items: flex-end; gap: 5px; height: 68px; }
+.pos-bars span { width: 16px; border-radius: 4px; box-sizing: border-box; background: var(--line); }
+.pos-bars span:nth-child(1) { height: 16px; }
+.pos-bars span:nth-child(2) { height: 28px; }
+.pos-bars span:nth-child(3) { height: 42px; }
+.pos-bars span:nth-child(4) { height: 54px; }
+.pos-bars span:nth-child(5) { height: 66px; }
+.pos-bars span.on { background: var(--primary); }
+.pos-bars span.next { background: transparent; border: 2px dashed var(--line-strong); }
+.pos-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pos-head .pos-level-code { justify-content: flex-start; }
+.pos-head .pos-level-name { font-size: calc(20px * var(--fz)); line-height: 1.15; }
+.pos-head .pos-meaning { font-size: calc(14px * var(--fz)); color: var(--ink-2); line-height: 1.3; }
+.pos-head-go { flex: none; align-self: center; font-size: 22px; color: var(--muted); }
+.pos-dirs { display: flex; gap: 8px; }
+.pos-dir { flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; gap: 2px; padding: 2px 0; color: inherit; text-decoration: none; }
+.pos-dir .pd-name { font-size: calc(13px * var(--fz)); font-weight: 700; color: var(--muted); line-height: 1.2; min-height: 2.4em; }
+.pos-dir .pd-val { font-size: calc(20px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pos-dir .dbar { position: relative; display: block; height: 6px; border-radius: 3px; background: var(--surface-sunken); margin-top: 4px; }
+.pos-dir .dfill { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: var(--primary); }
+.pos-dir.low .dfill { background: var(--warn); }
+.pos-dir .dtick { position: absolute; left: 60%; top: -2px; width: 2px; height: 10px; background: var(--threshold); }
+.pos-dir .pd-note { font-size: calc(13px * var(--fz)); color: var(--muted); }
+.rd-cond-hint { font-size: calc(13px * var(--fz)); color: var(--muted); line-height: 1.3; }
+.foot-note .foot-act { display: block; margin: 0 auto; min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }

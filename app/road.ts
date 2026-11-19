@@ -17,6 +17,8 @@ export interface RoadCond {
   done: boolean;
   /** Запас/оценка — условия, которые можно подвинуть деньгами; нужны экрану, чтобы повесить «Посчитать путь» к запасу. */
   kind: 'reserve' | 'score' | 'directions' | 'text';
+  /** Одна строка под условием: что именно тянет вниз (из уже посчитанного, ничего не выдумываем). Пусто — нечего добавить. */
+  hint?: string;
 }
 
 export interface RoadModel {
@@ -47,7 +49,8 @@ export function roadOf(v: PositionView): RoadModel | null {
 
   const thr = SCORE_THRESHOLD[to];
   if (thr !== undefined && v.g !== null) {
-    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${Math.round(v.g)}` : `${Math.round(v.g)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score' });
+    const weakHint = v.g < thr && v.weak ? `Слабее всего: ${v.weak.directionName}${v.weak.indicator ? ` · ${v.weak.indicator.label}` : ''}` : undefined;
+    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${Math.round(v.g)}` : `${Math.round(v.g)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score', ...(weakHint ? { hint: weakHint } : {}) });
   }
 
   if (to === 4) {

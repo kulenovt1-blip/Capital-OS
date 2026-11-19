@@ -81,25 +81,51 @@ function levelMore(v: PositionView): HTMLElement[] {
   return out;
 }
 
-defineSheet('level-more', () => {
-  const v = positionNow();
-  if (v.status !== 'ok') return null;
-  return { title: `Ступень ${v.level ?? '—'} · ${v.levelName ?? ''}`, body: h('div', { class: 'stack' }, ...levelMore(v)) };
-});
-
 defineSheet('ladder', () => {
   const v = positionNow();
   if (v.status !== 'ok') return null;
+  const more = levelMore(v);
   return {
-    title: 'Все ступени',
-    body: h('ol', { class: 'pos-ladder-list' },
-      [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
-        h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
-        h('div', { class: 'muted' }, s.meaning)))),
+    title: 'Ступени',
+    body: h('div', { class: 'stack' },
+      h('ol', { class: 'pos-ladder-list' },
+        [...v.ladder].reverse().map((s) => h('li', { class: s.current ? 'is-current' : '' },
+          h('div', { class: 'pos-ladder-name' }, `${s.level}. ${s.name}`, s.current ? h('span', { class: 'chip static' }, 'ты здесь') : null),
+          h('div', { class: 'muted' }, s.meaning)))),
+      ...more),
   };
 });
 
-/** Ступень: название, смысл одной строкой и три кнопки — без поясняющих абзацев (D191, замечание владельца: «много сплошного текста»). */
+/** Лесенка из пяти ступенек (D2): пройденные и текущая закрашены, следующая — пунктиром. */
+function ladderBars(v: PositionView): HTMLElement {
+  const lvl = v.level ?? 0;
+  return h('span', { class: 'pos-bars', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= lvl ? 'on' : n === lvl + 1 ? 'next' : '' })));
+}
+
+/** Три направления в одну строку: число и полоска с чертой 60. Нажатие — из чего направление (лист `direction`). */
+function directionsRow(v: PositionView): HTMLElement | null {
+  if (!v.directions.length) return null;
+  return h(
+    'div',
+    { class: 'pos-dirs', 'data-tour': 'dirs' },
+    v.directions.map((d) => {
+      const low = d.score !== null && d.score < 60;
+      return h(
+        'a',
+        { class: `pos-dir${low ? ' low' : ''}`, href: sheetHref('direction', d.id), 'aria-label': `${d.name}: ${d.score === null ? 'мало данных' : `${scoreWord(d.score)}, ${Math.round(d.score)} из 100`}. Из чего состоит` },
+        h('span', { class: 'pd-name' }, d.name),
+        h('span', { class: 'pd-val' }, d.score === null ? '—' : String(Math.round(d.score))),
+        h('span', { class: 'dbar', 'aria-hidden': 'true' }, d.score === null ? null : h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' })),
+        d.score === null || !d.reliable ? h('span', { class: 'pd-note' }, 'данных мало') : null,
+      );
+    }),
+  );
+}
+
+/**
+ * Карточка ступени (D2): компактная лесенка, название и смысл одной строкой, под ними три направления.
+ * Заголовок — ссылка на лист «Ступени» (все пять и пояснения); отдельных кнопок нет (старые были 36 px).
+ */
 function levelCard(v: PositionView): HTMLElement {
   const key: HTMLElement[] = [];
   if (v.onBorder.length) key.push(h('p', { class: 'pos-note' }, 'Ты на границе ступеней: небольшое изменение сдвинет ступень.'));
@@ -107,20 +133,20 @@ function levelCard(v: PositionView): HTMLElement {
   if (v.held) key.push(h('p', { class: 'pos-note' }, `${v.held}.`));
   return h(
     'div',
-    { class: 'card stack pos-level-card', 'data-tour': 'level' },
-    h('div', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
-    h('div', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
-    v.levelMeaning ? h('p', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null,
-    v.level !== null ? h('div', { class: 'pos-steps', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= v.level! ? 'on' : '' }))) : null,
+    { class: 'card stack pos-level-card' },
+    h(
+      'a',
+      { class: 'pos-head', href: sheetHref('ladder'), 'data-tour': 'level', 'aria-label': `${v.level === null ? 'Ступень не определена' : `Ступень ${v.level} из 5`}: ${v.levelName ?? ''}. Все ступени` },
+      ladderBars(v),
+      h('span', { class: 'pos-head-text' },
+        h('span', { class: 'pos-level-code' }, v.level === null ? '—' : `Ступень ${v.level} из 5`, v.preliminary ? h('span', { class: 'chip static' }, 'предварительно') : null),
+        h('span', { class: 'pos-level-name' }, v.levelName ?? 'Оценить нечем'),
+        v.levelMeaning ? h('span', { class: 'pos-meaning' }, `${meaningOf(v)}.`) : null),
+      h('span', { class: 'pos-head-go', 'aria-hidden': 'true' }, '›'),
+    ),
     ...key,
     trustLine(v),
-    h(
-      'div',
-      { class: 'pos-actions' },
-      h('a', { class: 'pos-act', href: sheetHref('ladder') }, 'Все ступени'),
-      levelMore(v).length ? h('a', { class: 'pos-act', href: sheetHref('level-more') }, 'Подробнее') : null,
-      h('button', { class: 'pos-act', type: 'button', onclick: () => void profileTour() }, 'Как читать'),
-    ),
+    directionsRow(v),
   );
 }
 
@@ -178,6 +204,12 @@ function pathParts(v: PositionView): (HTMLElement | null)[] {
  * «Твоя дорога» (дизайн A+): пройденные ступени одной строкой, «ты здесь», следующая ступень с условиями-цифрами и путём, остальные — строкой.
  * Лестница из пяти полосок остаётся в карточке ступени («где я»), дорога отвечает «как подняться». Всё из `roadOf` и `routeTo`.
  */
+/** «Чтобы подняться, нужно три условия»: число словами, пока их не больше четырёх. */
+function needLine(n: number): string {
+  const word = ['', 'одно условие', 'два условия', 'три условия', 'четыре условия'][n];
+  return word ? `Чтобы подняться, нужно ${word}` : 'Чтобы подняться, нужно:';
+}
+
 function roadBlock(v: PositionView): HTMLElement | null {
   const m = roadOf(v);
   if (!m) return null;
@@ -188,6 +220,7 @@ function roadBlock(v: PositionView): HTMLElement | null {
       h('div', { class: 'rd-cond-main' },
         h('div', { class: 'rd-cond-row' }, h('span', { class: 'rd-cond-title' }, c.title), c.value ? h('span', { class: 'rd-cond-val' }, c.value) : null),
         c.ratio !== null && !c.done ? h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.round(c.ratio * 100)}%` })) : null,
+        c.hint && !c.done ? h('span', { class: 'rd-cond-hint' }, c.hint) : null,
       ),
     );
   const path = pathParts(v);
@@ -206,7 +239,7 @@ function roadBlock(v: PositionView): HTMLElement | null {
         node(String(m.next.level), 'next'),
         h('div', { class: 'rd-card' },
           h('div', { class: 'rd-name' }, m.next.name),
-          h('div', { class: 'rd-sub' }, 'Чтобы подняться, нужно:'),
+          h('div', { class: 'rd-sub' }, needLine(m.next.conds.length)),
           h('div', { class: 'rd-conds' }, ...m.next.conds.map(cond)),
           path.length ? h('div', { class: 'rd-path stack tight' }, ...path) : null,
         ),
@@ -251,26 +284,25 @@ const INDICATOR_HINTS: Readonly<Record<string, string>> = {
   F4: 'Сколько удастся откладывать в будущем по прогнозу.',
 };
 
-function directionsBlock(v: PositionView): HTMLElement {
-  return h(
-    'div',
-    { class: 'stack', 'data-tour': 'dirs' },
-    rows(
-      ...v.directions.map((d) =>
-        h('details', { class: 'fold row-fold', 'data-key': `position:${d.id}` },
-          h('summary', null, h('span', { class: 'rf-title' }, d.name), h('span', { class: 'rf-val' }, d.score === null ? 'мало данных' : `${scoreWord(d.score)} · ${Math.round(d.score)}${d.reliable ? '' : ' · данных мало'}`),
-            // полоска с чертой порога 60 (форма Г, D166)
-            d.score === null ? null : h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, d.score))}%` }), h('span', { class: 'dtick' }))),
-          h('p', { class: 'muted' }, d.question),
-          rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : `${scoreWord(i.score)} · ${Math.round(i.score)}`, chevron: false })))),
-      ),
-    ),
-  );
-}
+/** Из чего состоит направление: вопрос, на который оно отвечает, оценка и показатели с пояснениями (лист по нажатию на направление). */
+defineSheet('direction', (id) => {
+  const v = positionNow();
+  const d = v.status === 'ok' ? v.directions.find((x) => x.id === id) : undefined;
+  if (!d) return null;
+  return {
+    title: d.name,
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'muted' }, d.question),
+      d.score === null
+        ? h('p', null, 'Оценить пока нечем: данных мало.')
+        : h('p', null, `${scoreWord(d.score)[0]!.toUpperCase()}${scoreWord(d.score).slice(1)} · ${Math.round(d.score)} из 100${d.reliable ? '' : ' · данных мало'}. Оранжевая черта на полоске — 60: от неё направление считается достаточным.`),
+      rows(...d.indicators.map((i) => row({ title: i.label, sub: INDICATOR_HINTS[i.id], value: i.score === null ? 'пока неизвестно' : `${scoreWord(i.score)} · ${Math.round(i.score)}`, chevron: false })))),
+  };
+});
 
 /** Слабое место и что нужно для следующей ступени — одной карточкой: заголовок крупно, показатель — плашкой (D191). */
-function weakBlock(v: PositionView, hasPath = false): HTMLElement | null {
-  const next = v.next && !hasPath ? v.next : null;
+function weakBlock(v: PositionView): HTMLElement | null {
+  const next = v.next ?? null;
   if (!v.weak && !next && !v.limitsFired.length) return null;
   return h(
     'div',
@@ -412,6 +444,11 @@ function independenceSection(v: PositionView): HTMLElement[] {
   return [rows(row({ title: 'Независимость', sub: 'когда можно не работать', value: `${pct(i.total.central)} пути`, href: sheetHref('independence') }))];
 }
 
+/** Внизу экрана: «Как посчитано» и подсказка «Как читать экран» (раньше — кнопка 36 px в карточке ступени). */
+function footNote(): HTMLElement {
+  return h('div', { class: 'foot-note' }, explainLink('position'), h('button', { class: 'foot-act', type: 'button', onclick: () => void profileTour() }, 'Как читать экран'));
+}
+
 export function renderPosition(): HTMLElement {
   const v = positionNow();
   const root = h('div', { class: 'screen' });
@@ -436,8 +473,8 @@ export function renderPosition(): HTMLElement {
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));
-  root.append(directionsBlock(v));
-  const wk = weakBlock(v, road !== null);
+  // когда есть дорога, слабое место уже сказано подсказкой под условием, а ограничения — условиями; отдельный блок только без дороги (ступени 4–5)
+  const wk = road ? null : weakBlock(v);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));
   const sp = spiralBlock(v);
@@ -445,7 +482,7 @@ export function renderPosition(): HTMLElement {
   if (isSimpleMode(getState().settings)) {
     if (sp) root.append(sp);
     root.append(rows(row({ title: 'Подробнее', sub: 'без дохода, жильё, независимость', href: sheetHref('profile-more') })));
-    root.append(h('div', { class: 'foot-note' }, explainLink('position')));
+    root.append(footNote());
     return root;
   }
   const hb = housingBlock(v);
@@ -459,7 +496,7 @@ export function renderPosition(): HTMLElement {
   } else {
     root.append(...independenceSection(v));
   }
-  root.append(h('div', { class: 'foot-note' }, explainLink('position')));
+  root.append(footNote());
   return root;
 }
 

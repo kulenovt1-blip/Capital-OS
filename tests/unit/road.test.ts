@@ -50,6 +50,16 @@ describe('дорога: условия следующей ступени', () =>
     expect(dirs.done).toBe(v.directions.every((d) => d.score !== null && d.score >= 60));
   });
 
+  it('подсказка под оценкой: что слабее всего — берётся из уже посчитанного; когда условие выполнено — подсказки нет', () => {
+    const v = positionViewOf(build(aliya()), TODAY);
+    const score = roadOf(v)!.next.conds.find((c) => c.kind === 'score')!;
+    if (v.g! < 75 && v.weak) expect(score.hint).toBe(`Слабее всего: ${v.weak.directionName}${v.weak.indicator ? ` · ${v.weak.indicator.label}` : ''}`);
+    else expect(score.hint).toBeUndefined();
+    const done = roadOf({ ...v, g: 80 })!.next.conds.find((c) => c.kind === 'score')!;
+    expect(done.done).toBe(true);
+    expect(done.hint).toBeUndefined();
+  });
+
   it('ступень 4 и выше — дороги нет (дальше блок «Независимость»)', () => {
     expect(roadOf(positionViewOf(build(olzhas()), TODAY))).toBeNull();
   });
