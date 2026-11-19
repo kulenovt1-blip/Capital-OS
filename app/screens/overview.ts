@@ -14,7 +14,6 @@ import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId,
 import { registerExplain } from '../explain';
 import { defineSheet, go, refresh, sheetHref } from '../main';
 import { isSimpleMode } from '../../engine/index';
-import { simpleHint } from '../modehint';
 import { openCapabilities } from '../whatsnew';
 import { iconBox } from '../tiles';
 import { autoTour, spendTour } from '../tours';
@@ -130,7 +129,7 @@ function arrivedCard(): HTMLElement | null {
   );
 }
 
-function heroBlock(o: Overview): HTMLElement {
+export function heroBlock(o: Overview): HTMLElement {
   const sp = o.spend;
   // К4 аудита UX: при нехватке «Можно тратить −1,96 млн» звучит абсурдно и пугает без выхода — говорим прямо и даём шаг
   if (sp.canSpend < 0) {
@@ -153,7 +152,7 @@ function heroBlock(o: Overview): HTMLElement {
 }
 
 /** Истории меньше 3 полных месяцев — числа приблизительные (шаг 4 аудита, D105). */
-function historyNote(o: Overview): HTMLElement | null {
+export function historyNote(o: Overview): HTMLElement | null {
   const n = o.baseline.months.length;
   // меньше месяцев, чем просил человек в настройках, — значит, данных мало (а не настройка «считать по 2 мес.»)
   if (n >= 3 || n >= getState().settings.baselineMonths) return null;
@@ -162,7 +161,7 @@ function historyNote(o: Overview): HTMLElement | null {
 }
 
 /** Данные из MoneyManager давно не обновлялись — числа «сейчас» могут не совпадать с реальностью (D180). */
-function freshnessNote(): HTMLElement | null {
+export function freshnessNote(): HTMLElement | null {
   const st = getState();
   const f = dataFreshness(st.importedAt, today());
   if (f.level === 'none' || f.level === 'fresh') return null;
@@ -172,9 +171,24 @@ function freshnessNote(): HTMLElement | null {
     : `Данные загружены ${fmtDay(st.importedAt!)}, ${ago} назад. Если с тех пор были траты, загрузи свежий бэкап ›`);
 }
 
+const cushionNode = (o: Overview) => flattenTree(o.goalTree).find((x) => x.goal.role === 'safety' && x.goal.parentId === undefined && x.goal.status === 'active');
+
+/**
+ * Сколько нужно закрепить за подушкой, если деньги на неё уже есть, но не закреплены (К6 аудита UX); иначе null.
+ * Те же условия, что у строки подушки на «Обзоре», — для шага «Сегодня» в простом режиме (D7).
+ */
+export function cushionPinGap(o: Overview): Money | null {
+  const n = cushionNode(o);
+  const status = cushionStatus(n);
+  if (!n || status === 'none' || status === 'unknown' || status === 'ready') return null;
+  if (o.spend.onHand < n.goal.targetMin) return null;
+  if ((getState().settings.sanityAnswered ?? []).includes('cushion_ignores_money')) return null;
+  return n.remainingMin;
+}
+
 /** Подушка — одной строкой: готова или сколько осталось (D96). */
 function cushionRow(o: Overview): HTMLElement | null {
-  const n = flattenTree(o.goalTree).find((x) => x.goal.role === 'safety' && x.goal.parentId === undefined && x.goal.status === 'active');
+  const n = cushionNode(o);
   const status = cushionStatus(n);
   // К4 (D157): строка говорит о цели, а не о деньгах — «Подушки нет» при запасе на полгода была неправдой; при запасе ≥ 3 мес. цель не навязывается
   if (!n || status === 'none') return (reserveCtx()?.coverMonths ?? 0) >= 3 ? null : rows(row({ title: 'Цель «Подушка» не создана', sub: 'запас на случай, если доход пропадёт', href: '#/goals~cushion' }));
@@ -201,6 +215,15 @@ function roadStepText(c: RoadCond, target: string): string {
   if (c.kind === 'score') return `Поднять общую оценку до ${target}`;
   if (c.kind === 'directions') return 'Подтянуть слабое направление';
   return c.title;
+}
+
+/** Ближайший шаг дороги одной фразой для «Сегодня»; null — дороги нет (ступень 4 и выше, данных мало) или все условия выполнены. */
+export function roadStepNow(): string | null {
+  const v = positionNow();
+  if (v.status !== 'ok' || v.level === null) return null;
+  const m = roadOf(v);
+  const first = m?.next.conds.find((c) => !c.done);
+  return first ? roadStepText(first, first.value.split(' из ')[1] ?? '') : null;
 }
 
 /**
@@ -294,7 +317,7 @@ function firstRunCard(): HTMLElement | null {
 }
 
 /** Всё, что ждёт ответа, — одной сворачиваемой строкой «Нужно решение · N» (этап 2): вопросы не вклиниваются в экран. */
-function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { done: number; total: number }): HTMLElement | null {
+export function decisionRow(items: ReturnType<typeof attentionItems>, progressNow?: { done: number; total: number }): HTMLElement | null {
   const income = newIncomeLine();
   const n = items.length + (income ? 1 : 0);
   if (!n) return null;
@@ -329,8 +352,7 @@ export function renderOverview(): HTMLElement {
       ? `из них ${fmt(groups[0]!.amount)} снять можно с ${fmtDay(groups[0]!.date)}`
       : `пока не снять: ${groups.slice(0, 2).map((g) => `${fmt(g.amount)} до ${fmtDay(g.date)}`).join(', ')}${groups.length > 2 ? ` и ещё ${groups.length - 2}` : ''}`
     : null;
-  const simple = isSimpleMode(getState().settings);
-  // платежи на 30 дней: в полном режиме отдельной строкой, в простом — внутри «Подробнее» (D186)
+  // платежи на 30 дней — отдельной строкой; в простом режиме платёж на экране «Сегодня» (D7)
   const paymentsRow = o.upcoming30.length
     ? h(
         'details',
@@ -348,12 +370,10 @@ export function renderOverview(): HTMLElement {
   const details = h(
     'details',
     { class: 'fold', 'data-key': 'overview:details', 'data-tour': 'details', open: getState().settings.showDetails ? true : undefined },
-    h('summary', null, simple ? 'Подробнее: платежи, капитал, счета' : 'Подробнее: капитал, долги, все счета'),
+    h('summary', null, 'Подробнее: капитал, долги, все счета'),
     h(
       'div',
       { class: 'stack' },
-      simple ? paymentsRow : null,
-      simple && lockedLine ? h('p', { class: 'muted' }, `Всего на счетах: ${lockedLine}`) : null,
       h(
         'div',
         { class: 'cells' },
@@ -388,14 +408,13 @@ export function renderOverview(): HTMLElement {
     h(
       'div',
       { class: 'cells', 'data-tour': 'cells' },
-      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), !simple && lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
+      h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'В копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
     roadCard(),
     cushionRow(o),
-    simple ? null : paymentsRow,
+    paymentsRow,
     decisions,
     details,
-    simpleHint('платежи, капитал и счета — в «Подробнее»'),
   );
 }

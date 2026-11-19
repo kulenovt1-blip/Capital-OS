@@ -1,5 +1,5 @@
 /**
- * Каркас PWA (D76): маршруты по hash, нижняя панель из 5 пунктов, шапка с датой и доверием к цифрам,
+ * Каркас PWA (D76): маршруты по hash, нижняя панель из 5 пунктов (в простом режиме 4, D196), шапка с датой и доверием к цифрам,
  * подэкраны (sheet) поверх экрана — тоже в адресе, поэтому работает кнопка «назад» телефона.
  *
  * Адрес: #/<экран>[/<раздел>][~<подэкран>[/<аргумент>]]. Старые адреса (#/settings/income, #/classes…) ведут на новые места.
@@ -7,21 +7,28 @@
 import { initInstall } from './install';
 import './styles.css';
 import { h, clear, hideToast, type Child } from './dom';
-import { getHealth, loadState, subscribe, today } from './store';
+import { getHealth, getState, loadState, subscribe, today } from './store';
 import { recoveryScreen, storageBanner } from './recovery';
 import { trust } from './ctx';
 import { accuracyNow, accuracyPanel, meter } from './accuracy-ui';
 import { initTheme } from './theme';
+import { isSimpleMode } from '../engine/index';
 
 export type NavId = 'overview' | 'goals' | 'position' | 'forecast' | 'more';
 
 export interface Route {
   path: string;
   title: string;
+  /** Название в простом режиме (D7): «Обзор» там называется «Сегодня», «Профиль» — «Дорога». */
+  simpleTitle?: string;
   /** Какой пункт нижней панели подсвечен. */
   nav: NavId;
   /** Подэкран «Ещё»: в шапке «‹ Назад» к родителю. */
   parent?: string;
+  /** Родитель в простом режиме: «Прогноз» там не на нижней панели, а внутри «Ещё». */
+  simpleParent?: string;
+  /** Что стоит в шапке справа вместо значка доверия; null — значок доверия. Только в простом режиме. */
+  chip?: () => HTMLElement | null;
   /** Весь экран без нижней панели (мастер). */
   lock?: boolean;
   render: (rerender: () => void, section?: string) => HTMLElement;
@@ -156,12 +163,27 @@ function icon(id: NavId): SVGSVGElement {
   return svg;
 }
 
+/** Простой режим (D7): четыре вкладки. «Прогноз» уходит в «Ещё», «Профиль» называется «Дорога». */
+const NAV_SIMPLE: [NavId, string][] = [
+  ['overview', 'Сегодня'],
+  ['goals', 'Цели'],
+  ['position', 'Дорога'],
+  ['more', 'Ещё'],
+];
+
+const simpleNow = (): boolean => isSimpleMode(getState().settings);
+const titleOf = (r: Route): string => (simpleNow() && r.simpleTitle ? r.simpleTitle : r.title);
+const parentOf = (r: Route): string | undefined => (simpleNow() && r.simpleParent ? r.simpleParent : r.parent);
+
 function nav(active: NavId): HTMLElement {
+  const simple = simpleNow();
+  // «Прогноз» не на панели — его экран подсвечивает «Ещё», откуда он открывается
+  const on = simple && active === 'forecast' ? 'more' : active;
   return h(
     'nav',
-    { class: 'bn', 'aria-label': 'Разделы' },
+    { class: `bn${simple ? ' four' : ''}`, 'aria-label': 'Разделы' },
     h('div', { class: 'brand' }, 'Capital OS'),
-    NAV.map(([id, label]) => h('a', { href: `#/${id}`, class: id === active ? 'on' : '', 'aria-current': id === active ? 'page' : undefined }, h('span', { class: 'ic' }, icon(id)), h('span', null, label))),
+    (simple ? NAV_SIMPLE : NAV).map(([id, label]) => h('a', { href: `#/${id}`, class: id === on ? 'on' : '', 'aria-current': id === on ? 'page' : undefined }, h('span', { class: 'ic' }, icon(id)), h('span', null, label))),
   );
 }
 
@@ -177,6 +199,13 @@ function dateLine(): string {
  * Значок доверия к цифрам в шапке каждого экрана: серый / жёлтый / красный; нажатие — причины со ссылками (D80).
  * «Точность расчётов» живёт здесь же (аудит UX): это свойство всех цифр, а не одного экрана. Ошибки сверки важнее точности.
  */
+/** Значку доверия есть что сказать (жёлтый или красный): такой значок ничем не заменяется, даже в простом режиме. */
+export function trustNeedsAttention(): boolean {
+  const t = trust();
+  const a = accuracyNow();
+  return t.level === 'bad' || t.level === 'warn' || (a.level === 'low' || a.level === 'mid');
+}
+
 export function trustChip(): HTMLElement {
   const t = trust();
   const a = accuracyNow();
@@ -224,19 +253,22 @@ function noteScreen(): void {
 }
 
 function header(r: Route): HTMLElement {
-  const parent = r.parent ? routes.find((x) => x.path === r.parent) : undefined;
+  const parentPath = parentOf(r);
+  const parent = parentPath ? routes.find((x) => x.path === parentPath) : undefined;
   const prev = trail.length > 1 ? trail[trail.length - 2]! : null;
   const prevRoute = prev ? routes.find((x) => x.path === prev.slice(2).split('/')[0]) : undefined;
   const back = parent
     ? prev
-      ? h('button', { class: 'back', type: 'button', onclick: () => history.back() }, '‹ ', prevRoute?.title ?? 'Назад')
-      : h('a', { class: 'back', href: `#/${parent.path}` }, '‹ ', parent.title)
+      ? h('button', { class: 'back', type: 'button', onclick: () => history.back() }, '‹ ', prevRoute ? titleOf(prevRoute) : 'Назад')
+      : h('a', { class: 'back', href: `#/${parent.path}` }, '‹ ', titleOf(parent))
     : null;
+  const quiet = r.path === 'start' || r.path === 'setup';
+  const chip = quiet ? null : (simpleNow() ? r.chip?.() : null) ?? trustChip();
   return h(
     'header',
     { class: `top${parent ? ' sub-top' : ''}` },
     back ?? h('div', { class: 'date' }, dateLine()),
-    h('div', { class: 'ttl-row' }, h('h1', { tabindex: '-1', id: 'screen-title' }, r.title), r.path === 'start' || r.path === 'setup' ? null : trustChip()),
+    h('div', { class: 'ttl-row' }, h('h1', { tabindex: '-1', id: 'screen-title' }, titleOf(r)), chip),
   );
 }
 
@@ -306,7 +338,7 @@ function render(): void {
     window.scrollTo(0, scrollY);
     if (sh && prevSheet) sh.scrollTop = sheetScroll;
   }
-  document.title = `${sh ? (sh.getAttribute('aria-label') ?? '') + ' · ' : ''}${r.title} · Capital OS`;
+  document.title = `${sh ? (sh.getAttribute('aria-label') ?? '') + ' · ' : ''}${titleOf(r)} · Capital OS`;
 }
 
 /** Прокрутить к блоку раздела и подсветить его (переход по ссылке «#/экран/раздел»). */

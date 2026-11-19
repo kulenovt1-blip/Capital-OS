@@ -90,6 +90,7 @@ main { padding: 0 16px 16px; }
 }
 .bn a svg { width: 22px; height: 22px; }
 .bn a.on { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+.bn.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bn a .dot-badge { position: absolute; transform: translate(12px, -10px); width: 9px; height: 9px; border-radius: 50%; background: var(--warn); }
 .bn a .ic { position: relative; display: flex; }
 
@@ -857,3 +858,20 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .rs-bar .dbar { position: relative; display: block; flex: 1; height: 10px; border-radius: 5px; background: var(--surface-sunken); }
 .rs-bar .dfill { display: block; height: 10px; border-radius: 5px; background: var(--primary); }
 .rs-val { font-size: calc(14px * var(--fz)); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ===== «Сегодня» простого режима (дизайн A+, D7) ===== */
+.step-chip { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 10px; border: 1px solid var(--line-strong); border-radius: 22px; background: var(--surface); color: var(--ink); font-size: calc(15px * var(--fz)); font-weight: 800; text-decoration: none; white-space: nowrap; }
+.sc-bars { display: flex; align-items: flex-end; gap: 2px; height: 20px; }
+.sc-bars span { width: 4px; border-radius: 1px; background: var(--line-strong); }
+.sc-bars span.on { background: var(--primary); }
+.today-step { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.today-step .ts-k { font-size: calc(13px * var(--fz)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
+.today-step .ts-t { font-size: calc(20px * var(--fz)); font-weight: 800; line-height: 1.25; }
+.today-step .btn { min-height: 56px; font-size: calc(18px * var(--fz)); }
+.today .act-card { text-decoration: none; color: inherit; }
+.today .act-card .ac-main strong { font-size: calc(19px * var(--fz)); white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.today-cover { margin-top: 1px; font-size: calc(14px * var(--fz)); font-weight: 700; }
+.today-cover.ok { color: var(--good); }
+.today-cover.short { color: var(--bad); }
+.today-full { align-self: center; min-height: 48px; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-size: calc(15px * var(--fz)); font-weight: 700; cursor: pointer; }
+.today .act-card .chev { flex: none; color: var(--muted); font-size: calc(22px * var(--fz)); }

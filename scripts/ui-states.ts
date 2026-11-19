@@ -90,6 +90,11 @@ export const STATES: Record<string, () => AppState> = {
   empty: () => emptyState(),
   imported: () => imported('synthetic.mmbackup'),
   configured,
+  // простой режим с данными: «Сегодня» и четыре вкладки (D7)
+  simple: () => {
+    const st = configured();
+    return { ...st, settings: { ...st.settings, uiMode: 'simple' as const } };
+  },
   broken,
   ...POSITION_STATES,
 };

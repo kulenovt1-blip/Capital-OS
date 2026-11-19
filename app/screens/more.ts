@@ -61,6 +61,8 @@ export function renderMore(): HTMLElement {
       tile({ icon: 'save', title: 'Сохранить копию', sub: st.lastBackupAt ? `копия ${fmtDay(st.lastBackupAt)}` : 'ещё нет', href: '#/backup', tour: 'save', warn: bakRem.show }),
       o.hasData ? tile({ icon: 'calendar', title: 'Итоги месяцев', href: '#/months' }) : null,
     ),
+    // «Прогноз» в простом режиме не на нижней панели (D7), а здесь
+    isSimpleMode(st.settings) && o.hasData ? h('div', { class: 'stack' }, sub('Дальше'), rows(row({ title: 'Прогноз', sub: 'что будет с деньгами через месяцы', href: '#/forecast' }))) : null,
     h(
       'div',
       { class: 'stack' },
@@ -114,7 +116,7 @@ export function renderPrefs(): HTMLElement {
     rows(
       row({
         title: 'Простой режим',
-        sub: 'на экранах только главное, остальное — в «Подробнее»',
+        sub: 'четыре вкладки, на «Сегодня» три блока; остальное — в полном режиме',
         value: toggle(simple, (v) => void act((s) => ({ ...s, settings: { ...s.settings, uiMode: v ? 'simple' : 'full' } }), v ? 'Простой режим включён' : 'Полный режим включён'), 'Простой режим'),
         chevron: false,
       }),
