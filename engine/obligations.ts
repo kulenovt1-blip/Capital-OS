@@ -160,7 +160,7 @@ export interface ObligationStatus {
   /** Ближайший неоплаченный платёж (с учётом досрочных погашений). */
   nextDue: ScheduleEntry | null;
   /** Неоплаченные будущие платежи, урезанные так, чтобы их сумма = remainingNow (для рассрочек). */
-  effectiveUpcoming: ScheduleEntry[];
+  effectiveUpcoming: (ScheduleEntry & { overdue?: true })[];
   explanation: Explanation;
 }
 
@@ -240,7 +240,7 @@ export function obligationStatus(o: Obligation, data: Pick<ImportedData, 'operat
 
   // Будущие неоплаченные платежи; для рассрочек их сумма урезается до остатка
   const unpaid = entries.filter((e) => e.status !== 'paid' && e.date > o.remainingAsOf);
-  const effectiveUpcoming: ScheduleEntry[] = [];
+  const effectiveUpcoming: (ScheduleEntry & { overdue?: true })[] = [];
   if (o.kind === 'recurring') {
     for (const e of unpaid) if (e.date >= today) effectiveUpcoming.push({ date: e.date, amount: e.amount });
   } else {
@@ -250,7 +250,7 @@ export function obligationStatus(o: Obligation, data: Pick<ImportedData, 'operat
       const a = min(e.amount, left);
       left = sub(left, a);
       // просроченные переносятся на сегодня: деньги всё равно нужны
-      effectiveUpcoming.push({ date: e.date < today ? today : e.date, amount: a });
+      effectiveUpcoming.push(e.date < today ? { date: today, amount: a, overdue: true } : { date: e.date, amount: a });
     }
     if (left > 0) {
       const last = o.schedule[o.schedule.length - 1];
@@ -273,6 +273,8 @@ export interface UpcomingPayment {
   owner: 'self' | 'family';
   date: IsoDate;
   amount: Money;
+  /** Платёж просрочен и перенесён на сегодня (деньги нужны сейчас), но это не очередной платёж по графику (D213). */
+  overdue?: true;
 }
 
 /** Неоплаченные платежи всех обязательств в интервале [from, to], по дате. */
@@ -280,7 +282,7 @@ export function upcomingPayments(statuses: ObligationStatus[], from: IsoDate, to
   const out: UpcomingPayment[] = [];
   for (const s of statuses) {
     for (const e of s.effectiveUpcoming) {
-      if (e.date >= from && e.date <= to) out.push({ obligationId: s.obligation.id, title: s.obligation.title, owner: s.obligation.owner, date: e.date, amount: e.amount });
+      if (e.date >= from && e.date <= to) out.push({ obligationId: s.obligation.id, title: s.obligation.title, owner: s.obligation.owner, date: e.date, amount: e.amount, ...(e.overdue ? { overdue: true as const } : {}) });
     }
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.obligationId < b.obligationId ? -1 : 1));

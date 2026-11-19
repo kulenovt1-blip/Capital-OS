@@ -22,14 +22,15 @@
  *  5. V3 вычисляется по формуле спецификации, но на входе — платежи по графику = фактические платежи по рассрочкам (как в пробе, спец. 8.6),
  *     поэтому на данных он пока всегда «не применим»; смысл появится, когда будут браться плановые платежи графика (T19).
  */
-import type { Money } from '../money';
+import { mulDiv, sum, type Money } from '../money';
+import { upcomingPayments } from '../obligations';
 import type { AppState } from '../state';
 import { buildOverview } from '../overview';
-import { assetChoiceOf } from './inputs';
+import { assetChoiceOf, essentialMarkupMissing } from './inputs';
 import { buildSimInput } from '../plan';
 import { simulate, DEFAULT_SCENARIOS, assembleIncomeStreams, grow } from '../simulate';
 import { EXTRA_INCOME_ID } from '../hidden';
-import { monthsBetween, type IsoDate } from '../date';
+import { addDays, monthsBetween, type IsoDate } from '../date';
 import { buildPositionSeries, SERIES_LOOKBACK, type PositionSeries } from './series';
 import { incomeSources } from './sources';
 import type { IncomeStatus } from './settings';
@@ -224,6 +225,8 @@ export interface IndicatorInputs {
   troughNet: number;
   /** Норма сбережений как есть (медиана 3 последних месяцев; < 0 — тратится больше, чем приходит); null — истории меньше 3 месяцев. */
   savingRate: number | null;
+  /** Нет отметки «обязательно» (или необходимых расходов нет вовсе): запас по необходимому не определён, N1 (слот запаса), F1 и F2 — «нет данных» (спец. §5, D212). */
+  essentialUnknown?: boolean;
 }
 /** Источник дохода для ограничителей и интервалов (тенге). */
 export interface ForecastSource { status: IncomeStatus; monthly: number; volume: number; endsWithin6m: boolean }
@@ -239,6 +242,10 @@ export interface IndicatorOptions {
   v1CapMonths?: number;
   /** D209: доход для N3 не выше суммы действующих сегодня строк расписания; для сверки с пробой (в ней среднее за 6 мес.) — `false`. По умолчанию включено. */
   incomeFromSchedule?: boolean;
+  /** D212: без отметки «обязательно» N1, F1, F2 — «нет данных» (по спецификации). Для сверки с пробой, где в этом случае нули, — `false`. По умолчанию включено. */
+  essentialUnknown?: boolean;
+  /** D213: просроченные платежи в «платеже в месяц» не считаются. Для сверки с пробой, где они считались, — `true`. По умолчанию выключено. */
+  overdueAsMonthly?: boolean;
 }
 
 const T = (m: Money | number): number => m / 100;
@@ -281,9 +288,12 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const o = buildOverview(state, today);
   const H = series.histMonths;
 
-  const needEssential = T(o.baseline.median) + T(o.spend.obligationsMonthly);
-  const needLifestyle = T(o.spend.usualMonthly) + T(o.spend.obligationsMonthly);
-  const obligationsMonthly = T(o.spend.obligationsMonthly);
+  // D213: платёж в месяц — по графику; просроченные платежи (перенесены на сегодня) — разовая задолженность, постоянной нагрузкой не считаются
+  const obligationsMonthly = options.overdueAsMonthly === true ? T(mulDiv(sum(upcomingPayments(o.obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3)) : T(o.spend.obligationsMonthly);
+  const needEssential = T(o.baseline.median) + obligationsMonthly;
+  // D212: отметки «обязательно» нет (необходимый месяц — одни платежи по долгам или пустой) — запас по необходимому не определён, а не равен нулю и не «лучше, чем есть»
+  const essentialUnknown = options.essentialUnknown !== false && (needEssential <= 0 || essentialMarkupMissing(o));
+  const needLifestyle = T(o.spend.usualMonthly) + obligationsMonthly;
   const liquid = T(series.liquidNow);
   const netLiquid = T(series.netLiquid);
   const net = T(o.capital.net);
@@ -309,7 +319,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
 
   const values: Indicators = {};
   // I. Здесь и сейчас
-  values.N1 = n1Score(netLiquid, needEssential, needLifestyle);
+  values.N1 = essentialUnknown ? null : n1Score(netLiquid, needEssential, needLifestyle);
   const savingRate = H >= MIN_HISTORY_N2 ? medianOf(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))) : null;
   values.N2 = savingRate === null ? null : normalize(savingRate, SCALES.saving);
   values.N3 = debtLoadScore(obligationsMonthly, debtTotal, incomeMonthly, secured);
@@ -336,8 +346,8 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const facts = incomeSources(input, today).map((s) => ({ status: s.status, monthly: T(s.monthly), volume: T(s.volume), endsWithin6m: s.endsWithin6m }));
   const sources = facts;
   // расписания доходов нет (ни строк, ни событий «начало дохода») — обеспеченность, опасность потери и будущая норма сбережений неизвестны, а не нули (спец. 5.1)
-  values.F1 = scheduleKnown ? reserveScore(troughNet, needEssential) : null;
-  values.F2 = scheduleKnown ? reliabilityScore(sources, needEssential) : null;
+  values.F1 = scheduleKnown && !essentialUnknown ? reserveScore(troughNet, needEssential) : null;
+  values.F2 = scheduleKnown && !essentialUnknown ? reliabilityScore(sources, needEssential) : null;
   values.F3 = scheduleKnown ? exposureScore(sources) : null;
   values.F4 = scheduleKnown ? normalize(forecastSavingRate(mean(m12.map((m) => T(m.income))), mean(m12.map((m) => T(m.expenses) + T(m.obligations)))), SCALES.saving) : null;
 
@@ -345,10 +355,11 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
     values,
     inputs: {
       needEssential, needLifestyle, liquid, netLiquid, net, debtTotal, secured, obligationsMonthly, incomeMonthly, manualIncomeMonthly,
-      reserveEssentialMonths: needEssential > 0 ? netLiquid / needEssential : 0,
+      reserveEssentialMonths: needEssential > 0 && !essentialUnknown ? netLiquid / needEssential : 0,
       reserveLifestyleMonths: needLifestyle > 0 ? netLiquid / needLifestyle : 0,
       troughNet,
       savingRate,
+      ...(essentialUnknown ? { essentialUnknown } : {}),
     },
     forecast: { hasGap: base.gaps.length > 0, sources: facts },
   };

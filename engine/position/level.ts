@@ -169,14 +169,14 @@ export interface PositionLevel {
 /**
  * Уровень по рассчитанным показателям (ориентир: середины интервалов не нужны — берутся известные показатели).
  * null — оценить нечем: нет данных или ни одного оценённого направления.
- * Если расписания доходов нет (F2 неизвестен), «разрыв в прогнозе» и «обрыв дохода» проверить нельзя и они не применяются.
+ * Если расписания доходов нет (F3 неизвестен; F2 бывает неизвестен и без отметки «обязательно», D212), «разрыв в прогнозе» и «обрыв дохода» проверить нельзя и они не применяются.
  */
 export function levelFromIndicators(report: IndicatorsReport): PositionLevel | null {
   if (!report.inputs || !report.forecast) return null;
   const directions = Object.fromEntries(DIRECTIONS.map((d) => [d, directionScore(report.values, d)])) as Record<Direction, DirectionScore>;
   const scores = DIRECTIONS.map((d) => directions[d].score).filter((x): x is number => x !== null);
   const base = limitStates(report.inputs, report.forecast);
-  const states = report.values.F2 === null ? withoutForecast(base) : base;
+  const states = report.values.F3 === null ? withoutForecast(base) : base;
   const agg = aggregateG(scores, states, 'point');
   if (!agg) return null;
   const result = levelOf({
@@ -185,7 +185,7 @@ export function levelFromIndicators(report: IndicatorsReport): PositionLevel | n
     reliable: Object.fromEntries(DIRECTIONS.map((d) => [d, isDirectionSufficient(directions[d])])) as Record<Direction, boolean>,
     fired: agg.fired,
     // без необходимых расходов запас в месяцах не определён: условия по запасу не проверяются (С1, D158)
-    ...(report.inputs.needEssential > 0 ? { facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate } } : {}),
+    ...(report.inputs.needEssential > 0 && !report.inputs.essentialUnknown ? { facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate } } : {}),
   });
   return { directions, g: agg.g, fired: agg.fired, result };
 }

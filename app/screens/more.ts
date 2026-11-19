@@ -15,7 +15,7 @@ import { modeTour } from '../tours';
 import { pickBackup } from './import';
 import { tile, tiles } from '../tiles';
 
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.8.0';
 declare const __BUILD__: { sha: string; date: string } | undefined;
 /** «сборка a1b2c3d · 11.11» — по хэшу видно, какая версия открыта; в разработке — «разработка». */
 export const buildLabel = (): string => (typeof __BUILD__ === 'undefined' ? 'разработка' : `сборка ${__BUILD__.sha} · ${__BUILD__.date.slice(8, 10)}.${__BUILD__.date.slice(5, 7)}`);

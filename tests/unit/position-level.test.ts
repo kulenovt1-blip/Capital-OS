@@ -171,7 +171,7 @@ const LEVELS = fixtureJson<{
   named: Record<string, { N: number; V: number; F: number; G: number; level: number; margin: number }>;
   shares: Record<'random' | 'dynamic' | 'stress', { size: number; counts: number[] }>;
 }>('position/levels-reference.json');
-const OLD_V1 = { v1CapMonths: Infinity, incomeFromSchedule: false }; // как в пробе (D209)
+const OLD_V1 = { v1CapMonths: Infinity, incomeFromSchedule: false, overdueAsMonthly: true }; // как в пробе (D209)
 const probeLevel = (state: ReturnType<typeof build>) => levelFromIndicators(computeIndicators(state, TODAY, undefined, OLD_V1))!;
 
 describe('именные профили равны пробе (спец. 13.1, 12.2)', () => {

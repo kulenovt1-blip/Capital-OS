@@ -219,7 +219,7 @@ export function independenceInputOf(state: AppState, today: IsoDate, pre: Precom
   if (isPreliminary(confidenceOf(state, today))) missing.push('confidence');
 
   // ограничители проверяются по условиям (а не по срезу G): независимость не должна зависеть от того, куда упал G
-  const states = rep.values.F2 === null ? withoutForecast(limitStates(inputs, rep.forecast!)) : limitStates(inputs, rep.forecast!);
+  const states = rep.values.F3 === null ? withoutForecast(limitStates(inputs, rep.forecast!)) : limitStates(inputs, rep.forecast!);
   const limitsFired = LIMIT_IDS.filter((id) => states[id] === 'yes');
 
   return {

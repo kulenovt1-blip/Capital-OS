@@ -46,7 +46,7 @@ const pool: Row[] = [];
   for (const { name, state } of states) {
     const series = buildPositionSeries(state, TODAY);
     const report = computeIndicators(state, TODAY, series, { incomeFromSchedule: false }); // эффект D209 — в n3-income-run-rate.test.ts
-    const probe = computeIndicators(state, TODAY, series, { v1CapMonths: Infinity, incomeFromSchedule: false });
+    const probe = computeIndicators(state, TODAY, series, { v1CapMonths: Infinity, incomeFromSchedule: false, overdueAsMonthly: true });
     pool.push({ name, state, report, probe, level: byScore(levelFromIndicators(report)!), probeLevel: byScore(levelFromIndicators(probe)!) });
   }
 }

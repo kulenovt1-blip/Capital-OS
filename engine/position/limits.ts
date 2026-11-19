@@ -33,7 +33,7 @@ export function limitStates(inputs: IndicatorInputs, forecast: ForecastFacts): L
   const survival = deficitAfter > 0 ? inputs.netLiquid / deficitAfter : NO_DEFICIT_MONTHS;
   return {
     // нет необходимых расходов (не отмечено «обязательно» или трат нет вовсе) — запас в месяцах не определён, а не равен нулю (С1, D158)
-    cover1: inputs.needEssential <= 0 ? 'unknown' : inputs.reserveEssentialMonths < 1 ? 'yes' : 'no',
+    cover1: inputs.needEssential <= 0 || inputs.essentialUnknown ? 'unknown' : inputs.reserveEssentialMonths < 1 ? 'yes' : 'no',
     gap: forecast.hasGap ? 'yes' : 'no',
     cliff: cliffShare >= CLIFF_INCOME_SHARE && survival < CLIFF_SURVIVAL_MONTHS ? 'yes' : 'no',
   };
