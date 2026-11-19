@@ -25,7 +25,7 @@ import {
   withAssetChoice,
   withPositionInput,
 } from '../../engine/position/inputs';
-import { independenceOfState } from '../../engine/position/independence';
+import { positionViewOf } from '../../engine/position/view';
 import { buildPositionSeries } from '../../engine/position/series';
 import { incomeSourcesOf } from '../../engine/position/sources';
 import { tenge } from '../../engine/money';
@@ -226,12 +226,10 @@ describe('вводы влияют на расчёт ровно так, как о
     return { ...s, manualAccounts: [...s.manualAccounts, withAssetChoice(acc({ id: 'big', title: 'Крупный актив', balance: tenge(40_000_000), balanceDate: TODAY }), kind)] };
   };
 
-  it('«жильё / заблокировано» выводит актив из капитала для независимости, «деньги» — оставляет', () => {
-    const noAsset = independenceOfState(base(), TODAY).capital;
-    const money = independenceOfState(withManual('money'), TODAY).capital;
-    const locked = independenceOfState(withManual('locked'), TODAY).capital;
-    expect(money - noAsset).toBeCloseTo(40_000_000, 0);
-    expect(locked).toBeCloseTo(noAsset, 6);
+  it('«жильё / заблокировано» выводит актив из запаса (ступень 5 — деньги на год обычной жизни), «деньги» — оставляет (D216 вместо независимости)', () => {
+    const life = (st: ReturnType<typeof base>) => positionViewOf(st, TODAY).money.reserveLifestyleMonths;
+    expect(life(withManual('money'))).toBeGreaterThan(life(base()));
+    expect(life(withManual('locked'))).toBeCloseTo(life(base()), 6);
   });
 
   it('вид актива не меняет ряды положения (капитал нетто на 7 дат): жильё остаётся в капитале (вариант А, D138)', () => {
@@ -240,31 +238,11 @@ describe('вводы влияют на расчёт ровно так, как о
     expect(b.netNow).toBe(a.netNow);
   });
 
-  it('происхождение дохода «не с накоплений» + статус «постоянный» даёт независимые поступления; «работа» — нет', () => {
-    const s = base();
-    const item = inc({ id: 'rent', title: 'Аренда квартиры', amount: tenge(300_000), dayOfMonth: 5, indexed: true });
-    const mk = (origin: 'labor' | 'from_assets' | 'independent') => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, setIncomeOrigin(item, origin)] } });
-    expect(independenceOfState(mk('independent'), TODAY).p).toBeGreaterThan(0);
-    expect(independenceOfState(mk('from_assets'), TODAY).p).toBe(independenceOfState(mk('labor'), TODAY).p);
-  });
-
-  it('ручной статус «ожидаемый» не пускает доход в независимые поступления; статус отражается в источниках', () => {
+  it('ручной статус дохода отражается в источниках (независимые поступления удалены вместе с независимостью, D216)', () => {
     const s = base();
     const item = setIncomeOrigin(inc({ id: 'rent', title: 'Аренда', amount: tenge(300_000), dayOfMonth: 5, indexed: true }), 'independent');
     const mk = (status: 'auto' | 'X') => ({ ...s, settings: { ...s.settings, incomeSchedule: [...s.settings.incomeSchedule, setIncomeStatus(item, status)] } });
-    const auto = mk('auto');
-    const x = mk('X');
-    expect(incomeSourcesOf(auto, TODAY).find((i) => i.id === 'rent')!.status).toBe('P');
-    expect(incomeSourcesOf(x, TODAY).find((i) => i.id === 'rent')!.status).toBe('X');
-    expect(independenceOfState(x, TODAY).p).toBeLessThan(independenceOfState(auto, TODAY).p);
-  });
-
-  it('возраст меняет только горизонт независимости: 90 − возраст в пределах 30–60', () => {
-    const s = base();
-    const at = (age: number | null) => independenceOfState({ ...s, settings: { ...s.settings, position: withPositionInput(undefined, { age, desiredMonthly: null }) } }, TODAY).horizon;
-    expect(at(null)).toBe(50);
-    expect(at(25)).toBe(60);
-    expect(at(55)).toBe(35);
-    expect(at(70)).toBe(30);
+    expect(incomeSourcesOf(mk('auto'), TODAY).find((i) => i.id === 'rent')!.status).toBe('P');
+    expect(incomeSourcesOf(mk('X'), TODAY).find((i) => i.id === 'rent')!.status).toBe('X');
   });
 });

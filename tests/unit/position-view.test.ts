@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { emptyState } from '../../engine/state';
-import { INDEPENDENCE_TEXTS, borderOf, heldText, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
+import { borderOf, heldText, positionViewOf, l4Warnings, DIRECTION_NAMES, INDICATOR_LABELS, type PositionView } from '../../engine/position/view';
 import { levelFromIndicators } from '../../engine/position/level';
 import { computeIndicators } from '../../engine/position/indicators';
 import { applyProbeOpts, build, randomSpec, SPECS2, independenceProfiles, namedProfiles, probeProfiles, TODAY } from '../support/position-profiles';
@@ -107,7 +107,6 @@ describe('уровень совпадает с движком', () => {
       const p = { name: np.name, state: applyProbeOpts(np.state, np.opts) };
       const v = view(p.state);
       const base = levelFromIndicators(computeIndicators(p.state, TODAY));
-      if (v.basis === 'independence') continue;
       expect(v.level, p.name).toBe(base ? base.result.level : null);
       expect(v.g, p.name).toBe(base ? base.g : null);
     }
@@ -120,36 +119,37 @@ describe('уровень совпадает с движком', () => {
     expect(v.level!).toBeLessThanOrEqual(2);
   });
 
-  it('запас до следующего уровня: следующий уровень на единицу выше, нехватка очков положительна; у L4 и выше «следующего» нет', () => {
+  it('следующий уровень на единицу выше, и что нужно — названо; у ступени 5 «следующего» нет (D216)', () => {
     for (const np of namedProfiles()) {
       const v = view(applyProbeOpts(np.state, np.opts));
       if (v.next) {
         expect(v.next.level).toBe(v.level! + 1);
         expect(v.next.needs.length).toBeGreaterThan(0);
       }
-      if (v.level !== null && v.level >= 4) expect(v.next).toBeNull();
+      if (v.level === 5) expect(v.next).toBeNull();
     }
   });
 });
 
-describe('независимость и L5', () => {
+describe('ступень 5 «Могу не смотреть на цены» (D216 вместо независимости)', () => {
   const fi = Object.fromEntries(independenceProfiles().map((p) => [p.name, view(p.state)])) as Record<string, PositionView>;
-  it('уровни профилей независимости: FI2, FI3, FI8 — L5; FI1 — L4; FI4–FI7 — L3', () => {
-    expect(['FI1', 'FI2', 'FI3', 'FI4', 'FI5', 'FI6', 'FI7', 'FI8'].map((n) => fi[n]!.level)).toEqual([4, 5, 5, 3, 3, 3, 3, 5]);
+  it('денег на 25 лет обычной жизни — ступень 5 (FI1–FI6, FI8); FI7 (12 лет, тают) — нет', () => {
+    expect(['FI1', 'FI2', 'FI3', 'FI4', 'FI5', 'FI6', 'FI7', 'FI8'].map((n) => fi[n]!.level === 5)).toEqual([true, true, true, true, true, true, false, true]);
   });
-  it('при L5 основание — независимость, есть пометка для живущих на капитал; центральная и консервативная оценки рядом', () => {
+  it('ступень 5 — верхняя: «следующего» нет, лесенка из пяти ступеней, название из движка', () => {
     const v = fi.FI8!;
-    expect(v.basis).toBe('independence');
-    expect(v.independenceNote).toBe(INDEPENDENCE_TEXTS.l5Note);
-    expect(v.independence.c.central).toBeGreaterThan(v.independence.c.conservative);
-    expect(v.independence.total.central).toBeGreaterThanOrEqual(1.25);
+    expect(v.next).toBeNull();
+    expect(v.ladder.map((l) => l.level)).toEqual([1, 2, 3, 4, 5]);
+    expect(v.levelName).toBe('Могу не смотреть на цены');
   });
-  it('предупреждение «L4, но…» только при L4', () => {
-    for (const [n, v] of Object.entries(fi)) if (v.level !== 4) expect(v.l4Warnings, n).toEqual([]);
-  });
-  it('в текстах независимости нет слов «безопасно», «гарантированно», «обеспечено»', () => {
-    for (const t of Object.values(INDEPENDENCE_TEXTS)) expect(t).not.toMatch(/безопасн|гарантир|обеспечен/i);
-  });
+  it('на ступени 4 «что нужно» — только факты ступени 5, без очков', () => {
+    for (let i = 1; i <= 200; i++) {
+      const v = view(build(randomSpec(i)));
+      if (v.level !== 4 || !v.next) continue;
+      expect(v.next.level).toBe(5);
+      expect(v.next.needs.some((x) => /оценк|очк/.test(x))).toBe(false);
+    }
+  }, 60_000);
 });
 
 describe('две строки капитала (D138)', () => {

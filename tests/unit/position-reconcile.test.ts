@@ -26,7 +26,8 @@ import type { AppState } from '../../engine/state';
 import { applyProbeOpts, build, namedProfiles, randomSpec, randomSpecDyn, stressCase, TODAY } from '../support/position-profiles';
 
 /** Сверка с пробой — по уровню из очков: условия-факты D151 появились позже и здесь не проверяются (см. position-level-facts.test.ts). */
-const byScore = (l: PositionLevel): PositionLevel => ({ ...l, result: { ...l.result, level: l.result.held?.byScore ?? l.result.level } });
+// ступень 5 (D216) — ступень 4 по очкам плюс факты; проба знала только 1–4
+const byScore = (l: PositionLevel): PositionLevel => ({ ...l, result: { ...l.result, level: Math.min(4, l.result.held?.byScore ?? l.result.level) as 1 | 2 | 3 | 4 } });
 
 interface Row {
   name: string;

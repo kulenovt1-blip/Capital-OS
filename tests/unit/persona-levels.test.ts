@@ -42,9 +42,17 @@ describe('демо-персонажи: ступени через настоящ�
     for (const d of v.directions) expect(d.score ?? 0).toBeGreaterThanOrEqual(60);
   });
 
-  test('Дантал: независимость подтверждена', () => {
+  test('Олжас: план к ступени 5 — не хватает денег на год обычной жизни и доли обязательного до половины дохода (D219)', () => {
+    const v = positionViewOf(personaState('olzhas'), PERSONA_TODAY);
+    expect(v.level).toBe(4);
+    expect(v.l5!.lifeReserve.ok).toBe(false);
+    expect(v.l5!.essentialShare.ok).toBe(false);
+  });
+
+  test('Дантал: ступень 5 по фактам — денег на годы обычной жизни, обязательное меньше половины дохода, откладывает (D216, D219)', () => {
     const v = positionViewOf(personaState('dantal'), PERSONA_TODAY);
-    expect(v.independence.status).toBe('confirmed');
+    expect(v.l5!.ok).toBe(true);
+    expect(v.l5!.essentialShare.have!).toBeLessThan(0.5);
   });
 });
 

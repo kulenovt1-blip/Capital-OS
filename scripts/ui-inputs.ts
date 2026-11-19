@@ -2,8 +2,7 @@
  * Проверка вводов «Положения» в настоящем браузере (T16): bun scripts/ui-inputs.ts
  * Нужен запущенный сервер: PORT=5199 bun scripts/dev-server.ts &
  *
- *  A. «О тебе»: неверные значения не сохраняются и показывают ошибку; верные сохраняются, переживают перезагрузку
- *     и появляются в личном сценарии «При желаемых расходах»; очищенные поля убирают сценарий.
+ *  A. (удалено: «О тебе» и личный сценарий убраны вместе с независимостью, D216)
  *  B. Ручной актив «жильё / заблокировано»: растёт «Всего капитал», появляется строка «Доступно в течение месяца»,
  *     один раз задаётся вопрос про кредит; «Нет» его закрывает; при повторном сохранении вопрос не возвращается.
  *  B5. Жильё со сроком «Сразу» не входит в «потратить», но входит в «Всего капитал» (D149).
@@ -62,51 +61,7 @@ const stateOnDisk = () =>
 await page.goto(URL);
 await put(page, serializeState(STATES.configured(), TODAY));
 
-// ── A. «О тебе» ──
-{
-  await open('#/prefs~you');
-  const age = page.locator('#you-form input[name=age]');
-  const desired = page.locator('#you-form input[name=desired]');
-  await age.fill('5');
-  await submit('you-form');
-  // возраст вне 14–100 останавливает сам браузер (min/max у поля): окно остаётся, ничего не сохраняется
-  const blocked = await page.locator('#you-form').evaluate((f) => !f.checkValidity());
-  check('A1. возраст 5 — форма не отправляется, окно не закрылось', blocked && (await page.locator('#you-form').count()) === 1);
-  const disk1 = await stateOnDisk();
-  check('A1. возраст 5 не сохранён', disk1.settings?.position?.age === undefined);
-
-  await age.fill('');
-  await desired.fill('0');
-  await submit('you-form');
-  const err2 = await page.locator('.error-box').first().textContent().catch(() => '');
-  check('A2. нулевые траты — ошибка «сумма больше нуля»', /больше нуля/.test(err2 ?? ''), err2 ?? '');
-  check('A2. ноль не сохранён', (await stateOnDisk()).settings?.position?.desiredMonthly === 30000000, JSON.stringify((await stateOnDisk()).settings?.position));
-  await desired.fill('abc');
-  check('A2. буквы в поле суммы не вводятся', (await desired.inputValue()) === '', await desired.inputValue());
-
-  await age.fill('35');
-  await desired.fill('250000');
-  check('A3. сумма разбивается на разряды по мере ввода', (await desired.inputValue()).replace(/ /g, ' ') === '250 000', await desired.inputValue());
-  await submit('you-form');
-  check('A3. после сохранения окно закрыто', (await page.locator('#you-form').count()) === 0);
-  const disk2 = await stateOnDisk();
-  check('A3. возраст и желаемые траты на диске', disk2.settings?.position?.age === 35 && disk2.settings?.position?.desiredMonthly > 0, JSON.stringify(disk2.settings?.position));
-  const prefs = await (async () => (await open('#/prefs'), await body()))();
-  check('A3. в настройках строка «О тебе» показывает 35 лет и сумму', /35 лет/.test(prefs) && /250/.test(prefs));
-  await open('#/position');
-  const pos = (await body()).replace(/ /g, ' ');
-  check('A3. после перезагрузки на «Положении» личный сценарий с 250 000', /при желаемых расходах \(гипотеза\)/i.test(pos) && pos.includes('250 000'));
-
-  await open('#/prefs~you');
-  await page.locator('#you-form input[name=age]').fill('');
-  await page.locator('#you-form input[name=desired]').fill('');
-  await submit('you-form');
-  await open('#/position');
-  const pos2 = await body();
-  check('A4. очищенные поля убирают личный сценарий', !/при желаемых расходах/i.test(pos2));
-  const disk3 = await stateOnDisk();
-  check('A4. на диске нет пустых настроек положения', disk3.settings?.position === undefined, JSON.stringify(disk3.settings?.position));
-}
+// ── A. «О тебе» убран вместе с независимостью (D216) ──
 
 // ── B. жильё: заблокировано на срок, вопрос про кредит ──
 const readSpendable = async () => {

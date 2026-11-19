@@ -49,10 +49,11 @@ describe('туры по персонажам', () => {
     expect(personaTourSteps('serik', v)[0]!.text).toBe(v.held!);
   });
 
-  it('Олжас и Дантал: «слабое место» у Олжаса есть, у Дантала — ступень 5 и подтверждённая независимость', () => {
-    expect(view('olzhas').weak).not.toBeNull();
+  it('Олжас — ступень 4 с планом к 5; Дантал — ступень 5, плана нет', () => {
+    expect(view('olzhas').level).toBe(4);
+    expect(view('olzhas').next?.level).toBe(5);
     const d = view('dantal');
     expect(d.level).toBe(5);
-    expect(d.independence.status).toBe('confirmed');
+    expect(d.next).toBeNull();
   });
 });

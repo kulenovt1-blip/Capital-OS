@@ -45,6 +45,8 @@ export interface Spec {
   incomes: Income[];
   expenses: Expense[];
   debts: Debt[];
+  /** Сколько оставлять на карте в конце месяца (остальное — в копилку); по умолчанию 20 тыс. Богатому персонажу — больше (D219). */
+  cardBuffer?: number;
 }
 
 export function build(spec: Spec): AppState {
@@ -55,8 +57,9 @@ export function build(spec: Spec): AppState {
   const ops: Operation[] = [];
   const first = spec.from;
   if (spec.opening > 0) ops.push(inc(`${first}-01`, 'save', spec.opening, null));
-  ops.push(inc(`${first}-01`, 'card', 20_000, null));
-  let card = 20_000;
+  const buf = spec.cardBuffer ?? 20_000;
+  ops.push(inc(`${first}-01`, 'card', buf, null));
+  let card = buf;
   for (const m of monthsRange(first, '2026-10')) {
     for (const i of spec.incomes) {
       const a = typeof i.amount === 'function' ? i.amount(m) : i.amount;
@@ -68,10 +71,10 @@ export function build(spec: Spec): AppState {
       if (a > 0) (ops.push(exp(`${m}-${String(e.day).padStart(2, '0')}`, 'card', a, `c_${e.id}`)), (card -= a));
     }
     // в конце месяца карта возвращается к ~20 тыс.: лишнее — в копилку, нехватка — из копилки
-    const d = card - 20_000;
+    const d = card - buf;
     if (d > 0) ops.push(trf(`${m}-26`, 'card', 'save', d));
     else if (d < 0) ops.push(trf(`${m}-26`, 'save', 'card', -d));
-    card = 20_000;
+    card = buf;
   }
   const data = dataset({ accounts: [acc('card', 'Карта'), acc('save', 'Заначка')], categories: cats, operations: ops });
   const s = emptyState();

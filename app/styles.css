@@ -442,7 +442,9 @@ body.lock #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 /* длинная метка справа не сжимает название в столбик */
 .row .main { min-width: 45%; }
 .row > .val { flex-shrink: 1; max-width: 55%; }
-.row > .val .tag, .row > .val .chip { display: inline-block; max-width: 100%; white-space: normal; text-align: right; line-height: 1.25; height: auto; }
+.row > .val .tag { display: inline-block; max-width: 100%; white-space: normal; text-align: right; line-height: 1.25; height: auto; }
+/* «Убрать» и другие действия-чипы в строке: текст по центру по вертикали (раньше inline-block с min-height прижимал его к верху) */
+.row > .val .chip { display: inline-flex; align-items: center; justify-content: center; max-width: 100%; white-space: normal; text-align: center; line-height: 1.2; min-height: 36px; padding: 6px 14px; }
 .row > .val .tag { padding-block: 3px; }
 /* «Цели» (D85) */
 .goals-sum { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -810,8 +812,16 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .rd-path { padding-top: 10px; border-top: 1px solid var(--divider); }
 .rd-cond .dbar { position: relative; display: block; height: 8px; border-radius: 4px; background: var(--surface-sunken); }
 .rd-cond .dfill { display: block; height: 8px; border-radius: 4px; background: var(--primary); }
+/* «План» (D217): общая оценка — шкала над условиями, а не галочка; черта — сколько нужно для следующей ступени */
+.rd-score { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 12px; margin-top: 6px; border-top: 1px solid var(--divider); }
+.rd-score.ok .rd-cond-val { color: var(--good); }
+.rd-score .dbar { position: relative; display: block; height: 8px; border-radius: 4px; background: var(--surface-sunken); }
+.rd-score .dfill { display: block; height: 8px; border-radius: 4px; background: var(--primary); }
+.rd-score .dtick { position: absolute; top: -3px; width: 2px; height: 14px; margin-left: -1px; background: var(--threshold); }
+.rd-card > .btn { margin-top: 10px; }
+.rd-card > .okline { margin-top: 8px; }
 
-/* «Дорога» на «Обзоре» (A+) */
+/* «План» на «Обзоре» (A+, D217) */
 .rs { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--surface); color: inherit; text-decoration: none; }
 .rs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .rs-k { font-size: calc(13px * var(--fz)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }

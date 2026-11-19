@@ -141,9 +141,11 @@ export interface SpendView {
   /** Из них — траты категорий, которые приложение не узнало: среднее в месяц (D104). */
   uncheckedMonthly: Money;
   usualPerDay: Money;
-  /** Все учитываемые счета, включая вклады с датой. */
+  /** Все учитываемые счета, включая вклады с датой; имущество (жильё, машина) — нет (D218). */
   onHand: Money;
   inSavings: Money;
+  /** Имущество: жильё, машина, закрытые активы — капитал, но не деньги (D218); на «Обзоре» отдельной строкой. */
+  property: Money;
   /** Деньги, которые сейчас снять нельзя: счёт и дата. */
   locked: { accountId: string; title: string; balance: Money; availableFrom: IsoDate }[];
   /** Платежи по долгам и рассрочкам в месяц (среднее за 3 месяца вперёд). */
@@ -342,10 +344,13 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   let spendNow = ZERO;
   let onHand = ZERO;
   let inSavings = ZERO;
+  let property = ZERO;
   const locked: SpendView['locked'] = [];
   const guessedSavings: string[] = [];
   for (const p of capital.accounts) {
     if (p.excluded) continue;
+    // имущество — не деньги: ни в «Всего на счетах», ни в копилки, ни в «снять нельзя до даты» (D218; раньше квартира с датой «2035» считалась копилкой)
+    if (p.nonInvestable) { property = add(property, p.balance); continue; }
     const g = accountKindGuess(p, state.settings.accounts, state.manualAccounts);
     const k = g.kind;
     kinds[p.accountId] = k;
@@ -367,7 +372,7 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
     kinds, guessedSavings, spendNow, setAsideOnSpend, canSpend, usualUntilIncome, days,
     perDay: canSpend > 0 ? mulDiv(canSpend, 1, days) : ZERO,
     usualMonthly, uncheckedMonthly: unchecked, usualPerDay: mulDiv(usualMonthly, 12, 365),
-    onHand, inSavings, locked, obligationsMonthly, regularMedian,
+    onHand, inSavings, property, locked, obligationsMonthly, regularMedian,
   };
   return {
     spend,

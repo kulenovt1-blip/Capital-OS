@@ -205,7 +205,8 @@ let rawBefore = '';
   o1.state.settings.position = { age: 35, desiredMonthly: 25_000_000 };
   o1.state.manualAccounts.push({ id: 'man-f', title: 'Квартира', balance: 3_000_000_000, balanceDate: TODAY, liquidity: { kind: 'locked_until', date: '2030-01-01' }, comment: '', assetKind: 'non_investable' });
   const t1 = await load(o1);
-  check('F1: личный сценарий на экране после загрузки', desiredBlock(t1));
+  // D216: личного сценария больше нет — старые настройки читаются, но на экран не выводятся
+  check('F1: старые настройки «О тебе» не выводят сценарий, экран открылся', /Финансовый профиль/.test(t1) && !desiredBlock(t1));
   await page.reload();
   await page.waitForTimeout(400);
   const disk = JSON.parse(await idbGet(page, 'state')).state;

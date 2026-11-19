@@ -45,9 +45,9 @@
     {
      "icon": "",
      "id": "c_home",
-     "label": "Коммунальные и связь",
+     "label": "Коммунальные, связь, садик",
      "removed": false,
-     "title": "Коммунальные и связь",
+     "title": "Коммунальные, связь, садик",
      "type": "expense"
     },
     {
@@ -85,7 +85,7 @@
    "operations": [
     {
      "accountId": "save",
-     "amount": 900000000,
+     "amount": 300000000,
      "categoryId": null,
      "comment": "",
      "date": "2025-09-01",
@@ -95,7 +95,7 @@
     },
     {
      "accountId": "card",
-     "amount": 2000000,
+     "amount": 10000000,
      "categoryId": null,
      "comment": "",
      "date": "2025-09-01",
@@ -105,7 +105,7 @@
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2025-09-01",
@@ -115,7 +115,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2025-09-03",
@@ -135,7 +135,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2025-09-12",
@@ -145,7 +145,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2025-09-20",
@@ -157,15 +157,15 @@
      "comment": "",
      "date": "2025-09-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00279",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2025-10-01",
@@ -175,7 +175,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2025-10-03",
@@ -195,7 +195,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2025-10-12",
@@ -205,7 +205,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2025-10-20",
@@ -217,15 +217,15 @@
      "comment": "",
      "date": "2025-10-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00285",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2025-11-01",
@@ -235,7 +235,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2025-11-03",
@@ -255,7 +255,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2025-11-12",
@@ -265,7 +265,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2025-11-20",
@@ -277,15 +277,15 @@
      "comment": "",
      "date": "2025-11-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00291",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2025-12-01",
@@ -295,7 +295,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2025-12-03",
@@ -315,7 +315,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2025-12-12",
@@ -325,7 +325,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2025-12-20",
@@ -337,15 +337,15 @@
      "comment": "",
      "date": "2025-12-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00297",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-01-01",
@@ -355,7 +355,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-01-03",
@@ -375,7 +375,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-01-12",
@@ -385,7 +385,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-01-20",
@@ -397,15 +397,15 @@
      "comment": "",
      "date": "2026-01-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00303",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-02-01",
@@ -415,7 +415,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-02-03",
@@ -435,7 +435,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-02-12",
@@ -445,7 +445,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-02-20",
@@ -457,15 +457,15 @@
      "comment": "",
      "date": "2026-02-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00309",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-03-01",
@@ -475,7 +475,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-03-03",
@@ -495,7 +495,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-03-12",
@@ -505,7 +505,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-03-20",
@@ -517,15 +517,15 @@
      "comment": "",
      "date": "2026-03-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00315",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-04-01",
@@ -535,7 +535,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-04-03",
@@ -555,7 +555,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-04-12",
@@ -565,7 +565,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-04-20",
@@ -577,15 +577,15 @@
      "comment": "",
      "date": "2026-04-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00321",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-05-01",
@@ -595,7 +595,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-05-03",
@@ -615,7 +615,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-05-12",
@@ -625,7 +625,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-05-20",
@@ -637,15 +637,15 @@
      "comment": "",
      "date": "2026-05-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00327",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-06-01",
@@ -655,7 +655,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-06-03",
@@ -675,7 +675,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-06-12",
@@ -685,7 +685,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-06-20",
@@ -697,15 +697,15 @@
      "comment": "",
      "date": "2026-06-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00333",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-07-01",
@@ -715,7 +715,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-07-03",
@@ -745,7 +745,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-07-12",
@@ -755,7 +755,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-07-20",
@@ -767,15 +767,15 @@
      "comment": "",
      "date": "2026-07-26",
      "fromAccountId": "save",
-     "fromAmount": 14000000,
+     "fromAmount": 38000000,
      "id": "op-00340",
      "kind": "transfer",
      "toAccountId": "card",
-     "toAmount": 14000000
+     "toAmount": 38000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-08-01",
@@ -785,7 +785,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-08-03",
@@ -805,7 +805,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-08-12",
@@ -815,7 +815,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-08-20",
@@ -827,15 +827,15 @@
      "comment": "",
      "date": "2026-08-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00346",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-09-01",
@@ -845,7 +845,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-09-03",
@@ -865,7 +865,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-09-12",
@@ -875,7 +875,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-09-20",
@@ -887,15 +887,15 @@
      "comment": "",
      "date": "2026-09-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00352",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     },
     {
      "accountId": "card",
-     "amount": 9000000,
+     "amount": 26000000,
      "categoryId": "c_home",
      "comment": "",
      "date": "2026-10-01",
@@ -905,7 +905,7 @@
     },
     {
      "accountId": "card",
-     "amount": 22000000,
+     "amount": 24000000,
      "categoryId": "c_food",
      "comment": "",
      "date": "2026-10-03",
@@ -925,7 +925,7 @@
     },
     {
      "accountId": "card",
-     "amount": 25000000,
+     "amount": 33000000,
      "categoryId": "c_car",
      "comment": "",
      "date": "2026-10-12",
@@ -935,7 +935,7 @@
     },
     {
      "accountId": "card",
-     "amount": 18000000,
+     "amount": 15000000,
      "categoryId": "c_fun",
      "comment": "",
      "date": "2026-10-20",
@@ -947,23 +947,49 @@
      "comment": "",
      "date": "2026-10-26",
      "fromAccountId": "card",
-     "fromAmount": 76000000,
+     "fromAmount": 52000000,
      "id": "op-00358",
      "kind": "transfer",
      "toAccountId": "save",
-     "toAmount": 76000000
+     "toAmount": 52000000
     }
    ],
    "reportedBalances": {
-    "card": 2000000,
-    "save": 1874000000
+    "card": 10000000,
+    "save": 938000000
    },
    "tags": [],
    "warnings": []
   },
   "importedAt": "2026-11-04",
   "lastBackupAt": null,
-  "manualAccounts": [],
+  "manualAccounts": [
+   {
+    "assetKind": "non_investable",
+    "balance": 3200000000,
+    "balanceDate": "2026-11-04",
+    "comment": "введено вручную",
+    "id": "flat",
+    "liquidity": {
+     "date": "2035-01-01",
+     "kind": "locked_until"
+    },
+    "title": "Квартира"
+   },
+   {
+    "assetKind": "non_investable",
+    "balance": 1400000000,
+    "balanceDate": "2026-11-04",
+    "comment": "введено вручную",
+    "id": "car-asset",
+    "liquidity": {
+     "date": "2035-01-01",
+     "kind": "locked_until"
+    },
+    "loanId": "car",
+    "title": "Машина"
+   }
+  ],
   "manualMatches": {},
   "obligations": [
    {
@@ -973,120 +999,124 @@
     "interestRateBp": 0,
     "kind": "installment",
     "owner": "self",
-    "remaining": 700000000,
+    "remaining": 950000000,
     "remainingAsOf": "2026-11-04",
     "schedule": [
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2026-11-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2026-12-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-01-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-02-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-03-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-04-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-05-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-06-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-07-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-08-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-09-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-10-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-11-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2027-12-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-01-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-02-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-03-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-04-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-05-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-06-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-07-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-08-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-09-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-10-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-11-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2028-12-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2029-01-12"
      },
      {
-      "amount": 25000000,
+      "amount": 33000000,
       "date": "2029-02-12"
+     },
+     {
+      "amount": 26000000,
+      "date": "2029-03-12"
      }
     ],
     "title": "Автокредит"
@@ -1178,7 +1208,7 @@
      },
      {
       "categoryId": "c_home",
-      "categoryTitle": "Коммунальные и связь",
+      "categoryTitle": "Коммунальные, связь, садик",
       "class": "E_base",
       "opKind": "expense"
      },

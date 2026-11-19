@@ -2,7 +2,7 @@
  * «Требует внимания» (D82): шаги настройки и предупреждения движка — одной короткой строкой со ссылкой.
  * Строка про сверку — первая и красная. Повторы (шаг и его предупреждение) схлопываются в одну строку.
  */
-import { setAsideReminders, unassignedSavings, type Notice } from '../engine/index';
+import { PROPERTY_TITLE_RE, setAsideReminders, unassignedSavings, type Notice } from '../engine/index';
 import { ov, steps } from './ctx';
 import { getState } from './store';
 import { fmt, fmtDay, fmtExact, nWord } from './ui';
@@ -60,6 +60,13 @@ export function attentionItems(): AttentionItem[] {
   // отмечен перевод на копилку, а в свежем бэкапе его нет (D96, D105)
   for (const r of setAsideReminders(getState(), o)) {
     out.push({ title: `Нет перевода ${fmt(r.amount)} на копилку`, href: '#/accounts' });
+  }
+  // D218: счёт MoneyManager с названием «Квартира», «Машина»… — скорее имущество, а не деньги; пока не отмечен, он раздувает запас и «на счетах»
+  const accSet = getState().settings.accounts;
+  for (const p of o.capital.accounts) {
+    if (p.excluded || p.nonInvestable || p.source !== 'moneymanager' || !PROPERTY_TITLE_RE.test(p.title) || p.balance <= 0) continue;
+    if (accSet.find((a) => a.accountId === p.accountId)?.reviewedProperty) continue;
+    out.push({ title: `«${p.title}» — это имущество, а не деньги?`, href: `#/accounts~account/${p.accountId}` });
   }
   const free = unassignedSavings(o);
   if (free > 0 && o.goals.some((g) => g.status === 'active')) out.push({ title: `В копилках ${fmt(free)} не распределены по целям`, href: '#/goals~distribute' });

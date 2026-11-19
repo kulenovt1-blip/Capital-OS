@@ -39,11 +39,12 @@ describe('находка 8: округление против порога в т
     expect(l4Warnings(inputs(10, 10), 0.5).some((x) => x.id === 'blocked')).toBe(false);
   });
   const aliya = () => mk('Алия', 3_500_000, 800_000, [['food', 'E_base', 130_000], ['rent', 'E_base', 60_000], ['fun', 'E_fun', 90_000], ['mort', 'E_installment_own', 230_000]], { remaining: 22_000_000, payment: 230_000 });
-  it('«Дорога»: G = 74,91 при пороге 75 — «74 из 75», не «75 из 75»', () => {
+  it('«План»: G = 74,91 при пороге 75 — «74 из 100», не «75» (D217: шкала из 100, порог отдельно)', () => {
     const v = positionViewOf(build(aliya()), TODAY);
     expect(v.level).toBe(3);
-    const score = roadOf({ ...v, g: 74.91 })!.next.conds.find((c) => c.kind === 'score')!;
-    expect(score.value).toBe('74 из 75');
+    const score = roadOf({ ...v, g: 74.91 })!.next.score!;
+    expect(score.have).toBe(74);
+    expect(score.need).toBe(75);
     expect(score.done).toBe(false);
   });
 });

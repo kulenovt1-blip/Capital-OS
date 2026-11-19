@@ -15,7 +15,7 @@ import { closeSheet, defineSheet, openSheet, refresh, sheetHref } from '../main'
 import { explainLink, registerExplain } from '../explain';
 import { forecastNow, ov, positionNow, verdicts } from '../ctx';
 import { roadOf } from '../road';
-import { setRouteTarget } from './forecast-simple';
+import { setRouteTarget } from './plan-how';
 import { isSimpleMode } from '../../engine/index';
 import { simpleHint } from '../modehint';
 import { iconBox, tile, tiles } from '../tiles';
@@ -443,9 +443,9 @@ function ring(ratio: number, size: number, label: string): SVGSVGElement {
 }
 
 /**
- * «На твоей дороге» (D4, дизайн A+): шаг дороги — довести запас до цели следующей ступени — отдельно от своих целей.
- * Это не цель в списке (деньги за ней не закрепляются и порядок не двигается), а путь из «Из А в Б»: сколько осталось и к какому месяцу.
- * Нет дороги (ступень 4 и выше, данных мало) или запас уже есть — карточки нет. Ничего не считает: `roadOf` и `routeTo`.
+ * «Шаг плана» (D4, дизайн A+; D217 — «План» вместо «Дороги»): довести запас до цели следующей ступени — отдельно от своих целей.
+ * Это не цель в списке (деньги за ней не закрепляются и порядок не двигается), а путь из «Как дойти»: сколько осталось и к какому месяцу.
+ * Нет плана к запасу (ступень 4 и выше, данных мало) или запас уже есть — карточки нет. Ничего не считает: `roadOf` и `routeTo`.
  */
 function roadStepCard(): HTMLElement | null {
   const v = positionNow();
@@ -460,10 +460,10 @@ function roadStepCard(): HTMLElement | null {
   return h(
     'section',
     { class: 'stack tight', 'data-tour': 'road-step' },
-    sub('На твоей дороге'),
+    sub('Шаг плана'),
     h(
       'a',
-      { class: 'road-step', href: sheetHref('a-to-b'), onclick: () => setRouteTarget(target), 'aria-label': `Шаг к ступени ${m.next.level}: запас на ${target} месяцев. Посчитать путь` },
+      { class: 'road-step', href: sheetHref('road-how'), onclick: () => setRouteTarget(target), 'aria-label': `Шаг к ступени ${m.next.level}: запас на ${target} месяцев. Как дойти` },
       ring(c.ratio, 68, `${Math.round(c.ratio * 100)}%`),
       h('span', { class: 'rst-main' },
         h('span', { class: 'rst-k' }, `Шаг к ступени ${m.next.level}`),

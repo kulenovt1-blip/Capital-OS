@@ -1,7 +1,8 @@
 /**
  * Пять демо-персонажей «Примерь на себя» (docs/personas-spec: claude/personas-spec.md): синтетические бэкапы, прошедшие через настоящий движок.
  * Все цифры выдуманы, типичны для Казахстана в целом; реальные данные в репозиторий не попадают.
- * Ступени (целевые): Берик 1, Серик 2, Алия 3 (у границы 4), Олжас 4, Дантал 5. Проверяет `persona-levels.test.ts`.
+ * Ступени (целевые): Берик 1, Серик 2, Алия 3 (у границы 4), Олжас 4, Дантал 5 «Могу не смотреть на цены» (D216). Проверяет `persona-levels.test.ts`,
+ * здравый смысл экранов — `persona-sanity.test.ts` (D219).
  */
 import type { AppState } from '../../engine/state';
 import { tenge } from '../../engine/money';
@@ -59,27 +60,36 @@ function aliya(): AppState {
 }
 
 function olzhas(): AppState {
-  return build({
-    name: 'Олжас', from: '2025-09', opening: 9_000_000,
+  // D219: ступень 4, а не 5 — крупные обязательные платежи (автокредит) берут больше половины дохода, и денег на год обычной жизни пока нет.
+  // Квартира и машина — имущество (раньше их не было, и капитал выходил в минус из-за автокредита)
+  const st = build({
+    name: 'Олжас', from: '2025-09', opening: 3_000_000, cardBuffer: 100_000,
     incomes: [{ id: 'job', title: 'Зарплата', cls: 'I_work', day: 5, amount: 1_500_000, kind: 'work', sched: 1_500_000 }],
     expenses: [
-      ex('food', 'Еда', 'E_base', 220_000, 3), ex('home', 'Коммунальные и связь', 'E_base', 90_000, 1), ex('fun', 'Развлечения', 'E_fun', 180_000, 20),
-      ex('car', 'Автокредит', 'E_installment_own', 250_000, 12),
+      ex('food', 'Еда', 'E_base', 240_000, 3), ex('home', 'Коммунальные, связь, садик', 'E_base', 260_000, 1), ex('fun', 'Развлечения', 'E_fun', 150_000, 20),
+      ex('car', 'Автокредит', 'E_installment_own', 330_000, 12),
       ex('trip', 'Отпуск', 'E_other', (m) => (m === '2026-07' ? 900_000 : 0), 9),
     ],
-    debts: [{ id: 'car', title: 'Автокредит', remaining: 7_000_000, payment: 250_000, firstDate: '2026-11-12' }],
+    debts: [{ id: 'car', title: 'Автокредит', remaining: 9_500_000, payment: 330_000, firstDate: '2026-11-12' }],
   });
+  const car = { ...property('Машина', 14_000_000, 'car'), id: 'car-asset' } as ManualAccount;
+  const flat = { ...property('Квартира', 32_000_000, ''), id: 'flat' } as ManualAccount;
+  delete (flat as { loanId?: string }).loanId;
+  return applyProbeOpts(st, { manual: [flat, car] });
 }
 
+/**
+ * Дантал (D219): живёт на проценты. Раньше доход 400 тыс. в месяц при 600 млн капитала (меньше 1 % годовых) и минус каждый месяц — так не бывает.
+ * Теперь: вклады 250 млн под ≈ 13,5 % годовых → ≈ 2,8 млн процентов в месяц; ценные бумаги 100 млн; тратит ≈ 1,2 млн, на карте держит 1,5 млн.
+ */
 function dantal(): AppState {
-  // вклады — на счёте-копилке, ценные бумаги — ручным активом; доход пассивный (проценты и аренда)
   const st = build({
-    name: 'Дантал', from: '2025-09', opening: 150_000_000,
-    incomes: [{ id: 'int', title: 'Проценты и аренда', cls: 'I_interest', day: 5, amount: 400_000, kind: 'stable', sched: 400_000 }],
-    expenses: [ex('food', 'Еда', 'E_base', 150_000, 3), ex('home', 'Коммунальные и связь', 'E_base', 150_000, 1), ex('fun', 'Жизнь и путешествия', 'E_fun', 200_000, 20)],
+    name: 'Дантал', from: '2025-09', opening: 250_000_000, cardBuffer: 1_500_000,
+    incomes: [{ id: 'int', title: 'Проценты по вкладам', cls: 'I_interest', day: 5, amount: 2_800_000, kind: 'stable', sched: 2_800_000 }],
+    expenses: [ex('food', 'Еда', 'E_base', 250_000, 3), ex('home', 'Дом, коммунальные и связь', 'E_base', 250_000, 1), ex('fun', 'Жизнь и путешествия', 'E_fun', 700_000, 20)],
     debts: [],
   });
-  const withSec = applyProbeOpts(st, { manual: [securities('Ценные бумаги', 450_000_000)] });
+  const withSec = applyProbeOpts(st, { manual: [securities('Ценные бумаги', 100_000_000)] });
   return { ...withSec, settings: { ...withSec.settings, incomeSchedule: withSec.settings.incomeSchedule.map((i) => ({ ...i, passive: true as const })) } };
 }
 

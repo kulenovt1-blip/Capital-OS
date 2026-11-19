@@ -1,24 +1,19 @@
-/** T17 (D148): ряд, показатели и обзор считаются один раз на экран; числа те же, что при отдельном расчёте. */
+/** T17 (D148): ряд, показатели и обзор считаются один раз на экран. Независимость и личный сценарий удалены (D216) — экран не должен от них зависеть. */
 import { describe, it, expect } from 'vitest';
-import { independenceProfiles, namedProfiles, TODAY } from '../support/position-profiles';
+import { namedProfiles, TODAY } from '../support/position-profiles';
 import { positionViewOf } from '../../engine/position/view';
-import { desiredScenarioOf, independenceOfState } from '../../engine/position/independence';
 import { tenge } from '../../engine/money';
 
 const withDesired = (s: ReturnType<typeof namedProfiles>[number]['state']) => ({ ...s, settings: { ...s.settings, position: { age: 40, desiredMonthly: tenge(500_000) } } });
 
-describe('экран и отдельные расчёты дают одно и то же', () => {
-  for (const p of [...namedProfiles().slice(0, 6), ...independenceProfiles().slice(0, 4)]) {
-    it(`${p.name}: независимость и личный сценарий`, () => {
-      const st = withDesired(p.state);
-      const v = positionViewOf(st, TODAY);
-      expect(v.independence).toEqual(independenceOfState(st, TODAY));
-      expect(v.desired).toEqual(desiredScenarioOf(st, TODAY));
+describe('старые настройки «О тебе» из бэкапа ничего не меняют', () => {
+  for (const p of namedProfiles().slice(0, 6)) {
+    it(`${p.name}: экран с возрастом и желаемыми тратами — тот же`, () => {
+      expect(positionViewOf(withDesired(p.state), TODAY)).toEqual(positionViewOf(p.state, TODAY));
     });
   }
-  it('без данных экран не падает и сценария нет', () => {
+  it('без данных экран не падает', () => {
     const v = positionViewOf({ ...namedProfiles()[0]!.state, imported: undefined } as never, TODAY);
     expect(v.status).toBe('no_data');
-    expect(v.desired).toBeNull();
   });
 });

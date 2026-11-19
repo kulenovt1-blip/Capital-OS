@@ -4,7 +4,7 @@
  * пояснение — одна серая строка там, где оно реально помогает, остальное — в ⓘ.
  */
 import {
-  DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_PATTERN_LABELS, accountsNeedingReview, classRegistry, createIncomeKind, deleteIncomeKind,
+  DEFAULT_CLASSIFICATION, INCOME_KIND_HINTS, INCOME_PATTERN_LABELS, PROPERTY_TITLE_RE, accountsNeedingReview, classRegistry, createIncomeKind, deleteIncomeKind,
   emptyState, incomeKindDefaults, incomeKindPreview, incomeKindRegistry, kindBehavior, makeInstallment, makeRecurring, reviseObligation, OBLIGATION_TITLE_MAX, parseState, remainingFromLastDate, remainingFromTerm,
   serializeState, suggestionToObligation, tenge, updateIncomeKind, validateAdjustment, validateClassification, validateIncomeItem, validateObligation,
   type AccountSettings, type AppState, type CategoryRule, type IncomeKind, type IncomeKindDef, type IncomePattern, type InstallmentSuggestion, type Liquidity, type ManualAccount,
@@ -106,7 +106,7 @@ export function renderAccounts(section?: string): HTMLElement {
   const line = (p: (typeof counted)[number]) =>
     row({
       title: p.title,
-      sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.nonInvestable ? 'жильё / заблокировано — не деньги' : p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
+      sub: [o.spend.guessedSavings.includes(p.accountId) ? 'копилка по названию — проверь' : '', p.nonInvestable ? 'имущество — не деньги' : p.availableFrom > today() ? `снять можно с ${fmtDate(p.availableFrom)}` : '', p.source === 'savings_flow' ? 'оценка' : '', p.source === 'manual' ? 'ручной' : ''].filter(Boolean).join(' · ') || undefined,
       value: fmt(p.balance),
       href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId),
       mark: bad.has(p.accountId),
@@ -122,8 +122,8 @@ export function renderAccounts(section?: string): HTMLElement {
     sub(`Копилки · ${fmt(total(savings) as never)}`),
     savings.length ? rows(savings.map(line)) : h('p', { class: 'muted' }, 'Копилок нет. Открой счёт и включи «Копилка».'),
   );
-  // жильё и закрытые активы — отдельно: это не деньги на жизнь, в «Для трат» им не место
-  if (locked.length) root.append(sub(`Жильё и закрытые активы · ${fmt(total(locked) as never)}`), rows(locked.map(line)));
+  // имущество — отдельно: это не деньги на жизнь, в «Для трат» и копилках ему не место (D218)
+  if (locked.length) root.append(sub(`Имущество · ${fmt(total(locked) as never)}`), h('p', { class: 'one-line' }, 'Входит в капитал, но не в деньги, копилки и запас.'), rows(locked.map(line)));
   if (excluded.length) root.append(sub('Не учитываются'), rows(excluded.map((p) => row({ title: p.title, sub: 'технический счёт', value: h('span', { class: 'muted' }, fmt(p.balance)), href: p.source === 'manual' ? sheetHref('manual', p.accountId) : sheetHref('account', p.accountId) }))));
   const hasSavings = o.capital.accounts.some((p) => p.source === 'savings_flow') || st.settings.savingsFlows.mode !== 'estimate';
   // актив, которого нет в MoneyManager, добавляется отсюда, на виду (D138): жильё, машина, вклад в другом банке, деньги у родителей
@@ -169,7 +169,24 @@ defineSheet('account', (id) => {
       o.spend.guessedSavings.includes(id)
         ? h('div', { class: 'card stack' }, h('div', null, 'Приложение отметило этот счёт копилкой по названию. Это так?'), h('button', { class: 'btn primary wide', type: 'button', onclick: () => void patchAccount(id, (a) => ({ ...a, kind: 'savings' }), `«${p.title}» — копилка`) }, 'Да, это копилка'))
         : null,
-      rows(
+      // D218: название похоже на имущество — спросить один раз
+      p.source === 'moneymanager' && !p.excluded && !s.property && !s.reviewedProperty && PROPERTY_TITLE_RE.test(p.title)
+        ? h('div', { class: 'card stack' },
+            h('div', null, 'Название похоже на имущество — квартиру, машину или участок. Если это не деньги, а вещь, приложение не будет считать её запасом и копилкой.'),
+            h('div', { class: 'btn-row' },
+              h('button', { class: 'btn primary', type: 'button', onclick: () => void patchAccount(id, (a) => ({ ...a, property: true }), `«${p.title}» — имущество: не входит в деньги и запас`) }, 'Да, это имущество'),
+              h('button', { class: 'btn', type: 'button', onclick: () => void patchAccount(id, (a) => ({ ...a, reviewedProperty: true }), `«${p.title}» — деньги`) }, 'Нет, это деньги')))
+        : null,
+      // D218: квартиру или машину, которую ведут счётом в MoneyManager, можно отметить имуществом — тогда это не деньги
+      p.source === 'moneymanager' && !p.excluded
+        ? rows(row({
+            title: 'Это имущество',
+            sub: s.property ? 'квартира, машина и т. п.: входит в капитал, но не в деньги, копилки и запас' : 'включи, если это квартира, машина или участок, а не деньги',
+            value: toggle(!!s.property, (v) => void patchAccount(id, (a) => { if (v) return { ...a, property: true }; const { property: _p, ...rest } = a; return rest; }, v ? `«${p.title}» — имущество: не входит в деньги и запас` : `«${p.title}» — снова деньги`), 'Это имущество'),
+            chevron: false,
+          }))
+        : null,
+      p.nonInvestable ? null : rows(
         row({
           title: 'Копилка',
           sub: kind === 'savings' ? 'не входит в «Свободно после обычных трат»' : 'сейчас — для трат: входит в «Свободно после обычных трат»',
@@ -178,7 +195,7 @@ defineSheet('account', (id) => {
         }),
       ),
       // ставка по копилке (D119): проценты в прогнозе; пусто — не считать
-      kind === 'savings' && !p.excluded && p.source === 'moneymanager'
+      !p.nonInvestable && kind === 'savings' && !p.excluded && p.source === 'moneymanager'
         ? (() => {
             const inp = h('input', { type: 'text', inputmode: 'decimal', placeholder: 'нет', value: s.rateBp ? String(s.rateBp / 100).replace('.', ',') : '', 'aria-label': 'Ставка, % годовых' }) as HTMLInputElement;
             inp.addEventListener('change', () => {
@@ -189,7 +206,7 @@ defineSheet('account', (id) => {
             return field('Ставка, % годовых — для прогноза', inp);
           })()
         : null,
-      kind === 'savings' && !p.excluded ? [sub('Снять можно', info('liquid')), liquidityPicker(s.liquidity, (l) => void patchAccount(id, (a) => ({ ...a, liquidity: l }), `«${p.title}»: снять ${liqLabel(l)}`))] : null,
+      !p.nonInvestable && kind === 'savings' && !p.excluded ? [sub('Снять можно', info('liquid')), liquidityPicker(s.liquidity, (l) => void patchAccount(id, (a) => ({ ...a, liquidity: l }), `«${p.title}»: снять ${liqLabel(l)}`))] : null,
       rows(
         row({
           title: 'Не учитывать совсем',
@@ -1041,41 +1058,8 @@ defineSheet('manual', (id) => {
   return { title: m ? m.title : 'Новый актив', body: h('div', { class: 'stack' }, form, remove), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'manual-form' }, m ? 'Сохранить' : 'Добавить')) };
 });
 
-/** «О тебе» (T13): возраст и желаемые траты. Оба поля необязательны; пусто = как раньше. */
-defineSheet('you', () => {
-  const st = getState();
-  const cur = st.settings.position;
-  const err = h('div');
-  const form = h(
-    'form',
-    { class: 'stack', id: 'you-form' },
-    sub('Зачем это', info('aboutYou')),
-    field('Сколько тебе лет', h('input', { name: 'age', type: 'number', min: 14, max: 100, step: 1, inputmode: 'numeric', value: cur?.age ?? '', placeholder: 'можно не указывать' }), 'Нужно только затем, чтобы понять, на сколько лет должен хватить капитал. Не скажешь — считаю на 50 лет.'),
-    field('Хочу тратить в месяц, ₸', moneyInput('desired', cur?.desiredMonthly), 'Только для личного расчёта «а если бы я тратил столько». На твой уровень это не влияет.'),
-    err,
-  );
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const ageStr = readStr(form, 'age').trim();
-    const desStr = readStr(form, 'desired').trim();
-    const errs: string[] = [];
-    const age = ageStr === '' ? null : Number(ageStr);
-    const desired = desStr === '' ? null : readMoney(form, 'desired');
-    if (age !== null && !Number.isFinite(age)) errs.push('Возраст — число');
-    if (desStr !== '' && desired === null) errs.push('Желаемые траты: введи сумму в тенге');
-    if (!errs.length) errs.push(...positionInputErrors({ age, desiredMonthly: desired }));
-    err.replaceChildren(errorsBox(errs) ?? '');
-    if (errs.length) return;
-    const next = withPositionInput(cur, { age, desiredMonthly: desired });
-    closeSheet();
-    await act((s) => {
-      const { position: _old, ...rest } = s.settings;
-      void _old;
-      return { ...s, settings: next ? { ...rest, position: next } : rest };
-    }, 'Сохранено');
-  });
-  return { title: 'О тебе', body: h('div', { class: 'stack' }, form), bar: stickyBar(null, h('button', { class: 'btn primary', type: 'submit', form: 'you-form' }, 'Сохранить')) };
-});
+// «О тебе» (возраст и желаемые траты, T13) убран вместе с независимостью (D216): эти числа нужны были только ей. В бэкапе поля читаются, как раньше.
+
 
 function adjustments(st: AppState): HTMLElement {
   const accs = [...(st.imported?.accounts ?? []).filter((a) => !a.removed), ...st.manualAccounts.map((m) => ({ id: m.id, title: m.title }))];
