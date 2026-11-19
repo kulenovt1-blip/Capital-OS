@@ -52,8 +52,8 @@ function aliya(): AppState {
   const st = build({
     name: 'Алия', from: '2025-09', opening: 1_100_000,
     incomes: [{ id: 'job', title: 'Зарплата', cls: 'I_work', day: 5, amount: 800_000, kind: 'work', sched: 800_000 }],
-    expenses: [ex('food', 'Еда', 'E_base', 130_000, 3), ex('home', 'Коммунальные и связь', 'E_base', 60_000, 1), ex('fun', 'Рестораны и развлечения', 'E_fun', 90_000, 20), ex('mort', 'Ипотека', 'E_installment_own', 230_000, 10)],
-    debts: [{ id: 'mort', title: 'Ипотека', remaining: 22_000_000, payment: 230_000, firstDate: '2026-11-10' }],
+    expenses: [ex('food', 'Еда', 'E_base', 130_000, 3), ex('home', 'Коммунальные и связь', 'E_base', 60_000, 1), ex('fun', 'Рестораны и развлечения', 'E_fun', 105_000, 20), ex('mort', 'Ипотека', 'E_installment_own', 255_000, 10)],
+    debts: [{ id: 'mort', title: 'Ипотека', remaining: 23_500_000, payment: 255_000, firstDate: '2026-11-10' }],
   });
   return applyProbeOpts(st, { manual: [property('Квартира', PROP, 'mort')] });
 }

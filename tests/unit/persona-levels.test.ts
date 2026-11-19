@@ -29,6 +29,13 @@ describe('демо-персонажи: ступени через настоящ�
     expect(v.g ?? 100).toBeLessThan(75);
   });
 
+  test('Алия: ипотека привязана к жилью, «Долговая нагрузка» не ноль (D202)', () => {
+    const v = positionViewOf(personaState('aliya'), PERSONA_TODAY);
+    const n3 = v.directions.find((d) => d.id === 'N')?.indicators.find((i) => i.id === 'N3')?.score ?? 0;
+    expect(n3).toBeGreaterThan(20);
+    expect(n3).toBeLessThan(50);
+  });
+
   test('Олжас: запас не меньше 6 мес. и все направления не ниже 60', () => {
     const v = positionViewOf(personaState('olzhas'), PERSONA_TODAY);
     expect(v.money.reserveEssentialMonths).toBeGreaterThanOrEqual(6);

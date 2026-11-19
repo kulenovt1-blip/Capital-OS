@@ -25,6 +25,7 @@
 import type { Money } from '../money';
 import type { AppState } from '../state';
 import { buildOverview } from '../overview';
+import { assetChoiceOf } from './inputs';
 import { buildSimInput } from '../plan';
 import { simulate, DEFAULT_SCENARIOS } from '../simulate';
 import type { IsoDate } from '../date';
@@ -84,8 +85,10 @@ export const SCALES = {
   saving: [[0, 0], [0.1, 40], [0.2, 70], [0.35, 100]],
   /** N3: платежи по долгам ÷ доход. */
   debtPayments: [[0, 100], [0.15, 75], [0.3, 40], [0.45, 0]],
-  /** N3: остаток долга в годах дохода. */
+  /** N3: остаток долга без залога в годах дохода. */
   debtStock: [[0, 100], [0.5, 60], [1, 30], [2, 0]],
+  /** N3 (D202): долг под залог привязанного жилья — доля долга в стоимости жилья (1 и больше — жильё стоит меньше долга). Рабочая гипотеза, пересматривается в T19. */
+  mortgageLtv: [[0.5, 100], [0.8, 60], [1, 20], [1.2, 0]],
   /** N4: капитал нетто в месяцах образа жизни. */
   capital: [[0, 0], [6, 25], [12, 40], [36, 60], [120, 80], [300, 100]],
   /** V1: рост капитала за месяц в долях знаменателя (капитал 6 мес. назад, не ниже 3 месяцев образа жизни). */
@@ -134,13 +137,20 @@ export const reserveScore = (money: number, need: number): number => normalize(n
 export const n1Score = (liquid: number, needEssential: number, needLifestyle: number): number => (reserveScore(liquid, needEssential) + reserveScore(liquid, needLifestyle)) / 2;
 /** N2 / F4. */
 export const savingScore = (rate: number): number => normalize(rate, SCALES.saving);
+/** Долг под залог привязанного жилья (D202): сумма долга и стоимость жилья в тенге. */
+export interface SecuredDebt { debt: number; value: number }
 /**
- * N3: меньшая из двух оценок — доля платежей в доходе и остаток долга в годах дохода.
+ * N3: меньшая из оценок — доля платежей в доходе, остаток долга БЕЗ залога в годах дохода и (если есть жильё с привязанной ипотекой) доля долга в стоимости жилья.
+ * Долг под залог не считается «годами дохода»: обычная ипотека больше двух годовых доходов, но она обеспечена жильём (D202).
+ * Часть долга сверх стоимости жилья залогом не покрыта и идёт в «годы дохода».
  * Нет дохода (D171): есть платежи или долг — 0 («отлично» было бы неправдой: долг без дохода опаснее всего); ни платежей, ни долга — 100.
  */
-export const debtLoadScore = (obligationsMonthly: number, debtTotal: number, incomeMonthly: number): number => {
+export const debtLoadScore = (obligationsMonthly: number, debtTotal: number, incomeMonthly: number, secured: SecuredDebt | null = null): number => {
   if (!(incomeMonthly > 0)) return obligationsMonthly > 0 || debtTotal > 0 ? 0 : 100;
-  return Math.min(normalize(obligationsMonthly / incomeMonthly, SCALES.debtPayments), normalize(debtTotal / (incomeMonthly * 12), SCALES.debtStock));
+  const covered = secured && secured.debt > 0 && secured.value > 0 ? Math.min(secured.debt, secured.value) : 0;
+  const parts = [normalize(obligationsMonthly / incomeMonthly, SCALES.debtPayments), normalize((debtTotal - covered) / (incomeMonthly * 12), SCALES.debtStock)];
+  if (covered > 0 && secured) parts.push(normalize(secured.debt / secured.value, SCALES.mortgageLtv));
+  return Math.min(...parts);
 };
 /** N4. */
 export const capitalScore = (net: number, needLifestyle: number): number => normalize(needLifestyle > 0 ? net / needLifestyle : 0, SCALES.capital);
@@ -200,6 +210,8 @@ export interface IndicatorInputs {
   netLiquid: number;
   net: number;
   debtTotal: number;
+  /** Долг под залог привязанного жилья и стоимость этого жилья; null — привязки нет. */
+  secured: SecuredDebt | null;
   obligationsMonthly: number;
   /** Средний доход за последние ≤6 месяцев плюс ручной пассивный доход. */
   incomeMonthly: number;
@@ -235,6 +247,18 @@ export function emptyIndicators(): Indicators {
   return out;
 }
 
+/** Привязанное к жилью обязательство: долг и стоимость жилья в тенге. null — нет жилья с привязанным кредитом. */
+export function securedDebtOf(state: AppState, o: { obligations: readonly { obligation: { id: string }; remainingNow: Money }[] }): SecuredDebt | null {
+  let debt = 0, value = 0;
+  for (const a of state.manualAccounts) {
+    if (assetChoiceOf(a) !== 'locked' || !a.loanId) continue;
+    const ob = o.obligations.find((x) => x.obligation.id === a.loanId);
+    if (!ob) continue;
+    debt += T(ob.remainingNow); value += T(a.balance);
+  }
+  return debt > 0 && value > 0 ? { debt, value } : null;
+}
+
 export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today), options: IndicatorOptions = {}): IndicatorsReport {
   if (!series.hasData) return { values: emptyIndicators(), inputs: null, forecast: null };
   const o = buildOverview(state, today);
@@ -247,6 +271,8 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const netLiquid = T(series.netLiquid);
   const net = T(o.capital.net);
   const debtTotal = T(o.capital.liabilities.total);
+  // жильё с привязанной ипотекой (D202): только заблокированные активы, у которых указан кредит и он есть в обязательствах
+  const secured = securedDebtOf(state, o);
   const payablesNow = T(o.capital.liabilities.payablesFromOps);
 
   const inc = toT(series.income);
@@ -260,7 +286,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   values.N1 = n1Score(netLiquid, needEssential, needLifestyle);
   const savingRate = H >= MIN_HISTORY_N2 ? medianOf(inc.slice(-3).map((x, i) => monthRate(x, free.slice(-3)[i]!))) : null;
   values.N2 = savingRate === null ? null : normalize(savingRate, SCALES.saving);
-  values.N3 = debtLoadScore(obligationsMonthly, debtTotal, incomeMonthly);
+  values.N3 = debtLoadScore(obligationsMonthly, debtTotal, incomeMonthly, secured);
   values.N4 = capitalScore(net, needLifestyle);
   // II. Вектор
   if (H >= MIN_HISTORY_VECTOR) {
@@ -294,7 +320,7 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   return {
     values,
     inputs: {
-      needEssential, needLifestyle, liquid, netLiquid, net, debtTotal, obligationsMonthly, incomeMonthly, manualIncomeMonthly,
+      needEssential, needLifestyle, liquid, netLiquid, net, debtTotal, secured, obligationsMonthly, incomeMonthly, manualIncomeMonthly,
       reserveEssentialMonths: needEssential > 0 ? netLiquid / needEssential : 0,
       reserveLifestyleMonths: needLifestyle > 0 ? netLiquid / needLifestyle : 0,
       troughNet,
