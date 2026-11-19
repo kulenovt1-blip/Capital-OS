@@ -1,5 +1,5 @@
 /**
- * «Сегодня» — главный экран простого режима (дизайн A+, D7): три блока — сколько можно потратить, один следующий шаг,
+ * «Сегодня» — главный экран простого режима (дизайн A+, D7): три блока — главное число (то же, что на «Обзоре»), один следующий шаг,
  * ближайший платёж — и ссылка «Включить полный режим». Если есть вопросы и предупреждения — одна свёрнутая строка «Нужно решение». Ничего не считает заново: числа те же, что на «Обзоре» полного режима.
  * Предупреждения о старых данных и о малой истории остаются: без них число читалось бы точнее, чем оно есть.
  */
@@ -8,12 +8,12 @@ import { h } from '../dom';
 import { act, getState, today } from '../store';
 import { ov, positionNow, progress } from '../ctx';
 import { attentionItems } from '../attention';
-import { fmtShort, hero, info } from '../ui';
+import { fmtShort } from '../ui';
 import { sheetHref, trustNeedsAttention } from '../main';
 import { iconBox } from '../tiles';
 import { autoTour, spendTour } from '../tours';
 import { cushionPinGap, decisionRow, freshnessNote, heroBlock, historyNote, roadStepNow } from './overview';
-import { dayMonth, paymentCover, todayLine, todayStep } from '../today';
+import { dayMonth, paymentCover, todayStep } from '../today';
 
 const tagged = (el: HTMLElement, t: string): HTMLElement => (el.setAttribute('data-tour', t), el);
 
@@ -41,12 +41,9 @@ export function renderToday(): HTMLElement {
   // первый раз с данными — подсказка «сколько можно тратить» поверх экрана (D193)
   autoTour('overview', '#/overview', spendTour);
 
-  const line = todayLine(sp.canSpend, { date: o.nextIncome.date, scheduled: o.nextIncome.source === 'schedule' });
-  // при нехватке — прежний блок «Не хватает…» с выходом (D182): бодрая фраза над минусом была бы неправдой
-  const main =
-    line === null
-      ? tagged(heroBlock(o), 'hero')
-      : tagged(hero(h('span', null, 'Сегодня можно потратить сверх обычного', info('free')), fmtShort(sp.perDay), line, { extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') }), 'hero');
+  // то же главное число, что на «Обзоре» полного режима (решение владельца 19.11): «Свободно до даты» и «≈ N в день»;
+  // при нехватке там же блок «Не хватает…» с выходом (D182)
+  const main = tagged(heroBlock(o), 'hero');
 
   const arrived = arrivedIncomes(st, today(), o);
   const pin = cushionPinGap(o);

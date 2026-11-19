@@ -1,26 +1,14 @@
 /**
- * «Сегодня» простого режима (дизайн A+, D7, app/today.ts): фраза под числом, один следующий шаг, пометка у платежа.
- * Тексты не должны обещать больше, чем знает движок: «с запасом» — только при остатке, «деньги есть» — только до дохода.
+ *  «Сегодня» простого режима (дизайн A+, D7, app/today.ts): один следующий шаг, пометка у платежа.
+ * Тексты не должны обещать больше, чем знает движок: «деньги есть» — только про платёж до дохода.
  */
 import { describe, it, expect } from 'vitest';
-import { dayMonth, paymentCover, todayLine, todayStep, type TodayStepInput } from '../../app/today';
+import { dayMonth, paymentCover, todayStep, type TodayStepInput } from '../../app/today';
 
 const none: TodayStepInput = { firstRunDone: true, arrived: null, cushionPin: null, road: null };
 
-describe('сегодня: фраза под главным числом', () => {
-  it('с остатком — «с запасом», до даты дохода', () => {
-    expect(todayLine(330_000, { date: '2026-12-05', scheduled: true })).toBe('Если так и дальше, денег хватит до 5 декабря с запасом');
-  });
-  it('ровно ноль — без запаса, а не «с запасом»', () => {
-    expect(todayLine(0, { date: '2026-12-05', scheduled: true })).toBe('Денег хватит до 5 декабря, но без запаса');
-  });
-  it('нехватка — фразы нет: экран показывает блок «Не хватает…»', () => {
-    expect(todayLine(-1, { date: '2026-12-05', scheduled: true })).toBeNull();
-  });
-  it('доход не задан в расписании — «на 30 дней», а не выдуманная дата', () => {
-    expect(todayLine(10, { date: '2026-12-18', scheduled: false })).toBe('Если так и дальше, денег хватит на 30 дней с запасом');
-  });
-  it('дата — день и месяц словами, без ведущего нуля', () => {
+describe('сегодня: дата словами', () => {
+  it('день и месяц словами, без ведущего нуля', () => {
     expect(dayMonth('2026-03-01')).toBe('1 марта');
     expect(dayMonth('2026-12-31')).toBe('31 декабря');
   });
