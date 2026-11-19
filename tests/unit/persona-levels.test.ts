@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { positionViewOf } from '../../engine/position/view';
 import { PERSONAS, PERSONA_TODAY, personaState } from '../support/personas';
 
