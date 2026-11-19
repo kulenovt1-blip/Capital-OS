@@ -230,7 +230,7 @@ export function computeCapital(inp: CapitalInput): CapitalReport {
       }
     }
     const balance = add(raw, adjByAcc.get(a.id) ?? ZERO);
-    push({ accountId: a.id, title: a.title, source: 'moneymanager', balance, excluded, liquidity: s?.liquidity ?? { kind: 'instant' } });
+    push({ accountId: a.id, title: a.title, source: 'moneymanager', balance, excluded, liquidity: s?.liquidity ?? { kind: 'instant' }, ...(s?.property ? { nonInvestable: true } : {}) });
   }
 
   const sf: SavingsFlowsSetting = inp.savingsFlows ?? { mode: 'estimate' };

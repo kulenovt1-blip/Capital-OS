@@ -34,7 +34,7 @@ addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', simplePar
 addRoute({ path: 'forecast-more', title: 'Хуже или лучше', nav: 'forecast', parent: 'forecast', render: (r) => renderForecast(r) });
 addRoute({ path: 'start', title: 'Настроим за минуту', nav: 'overview', lock: true, render: (r, sec) => renderStart(r, sec) });
 addRoute({ path: 'baskets', title: 'Раскладка трат', nav: 'more', parent: 'data', render: (r) => renderBaskets(r) });
-addRoute({ path: 'position', title: 'Финансовый профиль', simpleTitle: 'Дорога', nav: 'position', render: () => renderPosition() });
+addRoute({ path: 'position', title: 'Финансовый профиль', simpleTitle: 'План', nav: 'position', render: () => renderPosition() });
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'months', title: 'Итоги месяцев', nav: 'more', parent: 'more', render: () => renderMonths() });

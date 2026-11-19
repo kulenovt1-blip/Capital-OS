@@ -1,5 +1,5 @@
 /**
- * «Как выполнить» (D3, вариант 3): `roadHowOf` только раскладывает то, что считают `routeTo`, `savingOptions` и `positionViewOf`.
+ * «Как дойти» (D3 → D217): `roadHowOf` только раскладывает то, что считают `routeTo`, `savingOptions` и `positionViewOf`.
  * Проверка — на тех же синтетических персонажах, что в примерах приложения.
  */
 import { describe, it, expect } from 'vitest';
@@ -14,7 +14,7 @@ const howOf = (id: 'berik' | 'serik' | 'aliya' | 'olzhas', target: 3 | 6) => {
   return { v, how: roadHowOf(v, routeTo(st, PERSONA_TODAY, target), savingOptions(st, PERSONA_TODAY)), route: routeTo(st, PERSONA_TODAY, target) };
 };
 
-describe('«Как выполнить»: числа движка, ничего не выдумано', () => {
+describe('«Как дойти»: числа движка, ничего не выдумано', () => {
   it('Серик (запас 2,7 мес. из 3): не хватает ровно столько, сколько считает routeTo; добавки только там, где нужны', () => {
     const { how, route } = howOf('serik', 3);
     expect(route).not.toBeNull();
@@ -26,17 +26,20 @@ describe('«Как выполнить»: числа движка, ничего �
 
   it('траты: не больше трёх, у каждой есть цена урезания', () => {
     const { how } = howOf('serik', 3);
-    expect(how.reserve!.savings.length).toBeLessThanOrEqual(ROAD_HOW_SAVINGS);
-    for (const s of how.reserve!.savings) {
+    expect(how.savings.length).toBeLessThanOrEqual(ROAD_HOW_SAVINGS);
+    for (const s of how.savings) {
       expect(s.cutPerMonth).toBeGreaterThan(0);
       expect(s.cutPerMonth).toBeLessThan(s.monthly);
     }
   });
 
-  it('Берик: расходы больше доходов — добавка не обещана, дефицит назван', () => {
-    const { how, route } = howOf('berik', 3);
+  it('Берик: расходы больше доходов — первый шаг «выйти в плюс» с суммой минуса, траты для урезания есть (D217)', () => {
+    const { how, route, v } = howOf('berik', 3);
     expect(route!.deficitMonthly).toBeGreaterThan(0);
+    expect(how.deficit).not.toBeNull();
+    expect(how.deficit!.monthly).toBe(v.runway.deficit);
     expect(how.reserve!.deficitMonthly).toBe(route!.deficitMonthly);
+    expect(how.savings.length).toBeGreaterThan(0);
   });
 
   it('слабые показатели: ниже 60, по возрастанию, не больше трёх', () => {
@@ -52,5 +55,6 @@ describe('«Как выполнить»: числа движка, ничего �
     const st = personaState('olzhas');
     const v = positionViewOf(st, PERSONA_TODAY);
     expect(roadHowOf(v, null, null).reserve).toBeNull();
+    expect(roadHowOf(v, null, null).deficit).toBeNull();
   });
 });

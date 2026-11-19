@@ -4,7 +4,7 @@
  * Это защита от дрейфа: каждый инвариант проверяется на пуле профилей (именные, независимости, семейства спирали, стресс) и на
  * урезанных состояниях. Ожидаемых «правильных чисел» здесь нет — только свойства, которые обязаны выполняться при любых числах.
  * Что уже проверено в других файлах и здесь не дублируется: «дефицит исключает L4» на 1131 профиле — position-runway.test.ts;
- * возможные значения показателей 0–100 или null — position-indicators.test.ts; частные случаи независимости — position-independence.test.ts.
+ * возможные значения показателей 0–100 или null — position-indicators.test.ts; независимость удалена (D216).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -16,7 +16,6 @@ import { computeIndicators, INDICATOR_WEIGHTS, INDICATOR_IDS, type Indicators } 
 import { levelFromIndicators } from '../../engine/position/level';
 import { computeRunway } from '../../engine/position/runway';
 import { spiralSigns } from '../../engine/position/spiral';
-import { independenceOfState, levelWithIndependence, computeIndependence, type IndependenceInput } from '../../engine/position/independence';
 import { LIMIT_IDS, LIMIT_VALUES, limitStates, withoutForecast, aggregateG } from '../../engine/position/limits';
 import { directionScore } from '../../engine/position/directions';
 import { boundsContext, boundsFor, maskIndicators, MASK_KINDS } from '../../engine/position/unknown';
@@ -34,9 +33,7 @@ function fullReport(state: AppState) {
   const level = levelFromIndicators(indicators);
   const runway = computeRunway(series, indicators.inputs?.needEssential ?? 0);
   const spiral = spiralSigns(series);
-  const independence = independenceOfState(state, TODAY);
-  const final = levelWithIndependence(level, independence);
-  return { series, indicators, level, runway, spiral, independence, final };
+  return { series, indicators, level, runway, spiral };
 }
 
 /** Пути всех нечисловых «чисел» (NaN, ±Infinity) в объекте; null допустим — это «неизвестно». */
@@ -100,7 +97,7 @@ describe('нет NaN и исключений на неполных данных'
       expect(badNumbers(r), name).toEqual([]);
     });
   }
-  it('весь пул профилей: нет NaN и Infinity ни в показателях, ни в уровне, ни в runway, ни в спирали, ни в независимости', () => {
+  it('весь пул профилей: нет NaN и Infinity ни в показателях, ни в уровне, ни в runway, ни в спирали', () => {
     for (const p of POOL) expect(badNumbers(fullReport(p.state)), p.name).toEqual([]);
   }, 120_000);
 });
@@ -137,7 +134,7 @@ describe('будущее событие меняет только «Безопа
 // ───────────── 3. займы не увеличивают запас ─────────────
 
 describe('заёмные деньги не увеличивают запас', () => {
-  it('займ у людей 2 млн: доступные деньги растут на 2 млн, чистая ликвидность и N1 не меняются; K для независимости тоже', () => {
+  it('займ у людей 2 млн: доступные деньги растут на 2 млн, чистая ликвидность и N1 не меняются', () => {
     const plain = build(B);
     const borrowed = build({ ...B, incomes: [...B.incomes, { id: 'borrow', title: 'Займ', cls: 'F_borrowed', day: 12, amount: (m: string) => (m === '2026-10' ? 2_000_000 : 0), kind: 'irregular', sched: 0 }] });
     const noSched: AppState = { ...borrowed, settings: { ...borrowed.settings, incomeSchedule: borrowed.settings.incomeSchedule.filter((i) => i.id !== 'borrow') } };
@@ -146,7 +143,6 @@ describe('заёмные деньги не увеличивают запас', (
     expect(c.series.netLiquid).toBe(a.series.netLiquid);
     expect(c.indicators.values.N1).toBeCloseTo(a.indicators.values.N1!, 9);
     expect(c.indicators.values.F1).toBeCloseTo(a.indicators.values.F1!, 9);
-    expect(c.independence.capital).toBeCloseTo(a.independence.capital, 6);
   });
 });
 
@@ -158,7 +154,7 @@ describe('ограничители и runway', () => {
     expect(Object.keys(LIMIT_VALUES).sort()).toEqual(['cliff', 'cover1', 'gap']);
     expect(LIMIT_VALUES).toEqual({ cover1: 39, gap: 59, cliff: 59 });
   });
-  it('долговая спираль и независимость — не ограничители: на G и список сработавших не влияют', () => {
+  it('долговая спираль — не ограничитель: на G и список сработавших не влияют', () => {
     for (const f of SPIRAL_FAMS) {
       const r = fullReport(spiralCase(2, f).state);
       expect(r.level?.fired.every((id) => (LIMIT_IDS as readonly string[]).includes(id)), f).toBe(true);
@@ -169,16 +165,18 @@ describe('ограничители и runway', () => {
     const imports = src.split('\n').filter((l) => /^import /.test(l)).join('\n');
     for (const m of ['./level', './limits', './directions', './range', './unknown']) expect(imports, m).not.toContain(`'${m}'`);
   });
-  it('модули спирали и независимости не пишут в G: ни `aggregateG`, ни `directionScore` ими не вызываются', () => {
-    for (const f of ['spiral.ts', 'independence.ts']) {
+  it('модуль спирали не пишет в G: ни `aggregateG`, ни `directionScore` им не вызываются', () => {
+    for (const f of ['spiral.ts']) {
       const src = readFileSync(fileURLToPath(new URL(`../../engine/position/${f}`, import.meta.url)), 'utf8');
       expect(src, f).not.toMatch(/aggregateG\(|directionScore\(/);
     }
   });
-  it('дефицит исключает L4: на пуле нет профилей «дефицит и L4»', () => {
+  it('дефицит исключает L4; ступень 5 при дефиците — только когда денег на 25 лет обычной жизни (D216)', () => {
     for (const p of POOL) {
       const r = fullReport(p.state);
-      if (r.runway.status === 'deficit') expect(r.level?.result.level, p.name).not.toBe(4);
+      if (r.runway.status !== 'deficit') continue;
+      expect(r.level?.result.level, p.name).not.toBe(4);
+      if (r.level?.result.level === 5) expect(r.level.result.l5!.capitalOnly, p.name).toBe(true);
     }
   }, 120_000);
 });
@@ -198,8 +196,8 @@ describe('веса показателей', () => {
 
 // ───────────── 6. желаемые расходы ни на что в основном расчёте не влияют ─────────────
 
-describe('желаемые расходы не меняют ни один выход основного расчёта', () => {
-  it('на пуле профилей: показатели, G, уровень, runway, спираль, независимость и итоговый уровень равны с настройкой и без', () => {
+describe('желаемые расходы (старая настройка из бэкапа) не меняют ни один выход расчёта', () => {
+  it('на пуле профилей: показатели, G, уровень, runway и спираль равны с настройкой и без', () => {
     for (const p of POOL) {
       const base = fullReport(p.state);
       for (const desired of [100_000, 900_000, 20_000_000]) {
@@ -270,61 +268,3 @@ describe('диапазон G содержит значение при полны
 
 // ───────────── 10. независимость: свойства на случайных входах ─────────────
 
-describe('независимость: свойства на случайных входах', () => {
-  const gen = (g: { int(a: number, b: number): number; bool(p?: number): boolean; pick<T>(x: readonly T[]): T }): IndependenceInput => ({
-    capital: g.int(0, 2_000_000_000), need: g.int(50_000, 2_000_000),
-    passive: Array.from({ length: g.int(0, 3) }, () => ({ monthly: g.int(0, 1_000_000), indexed: g.bool() })),
-    deficit: g.bool(0.1) ? null : g.bool(0.5) ? 0 : g.int(1, 2_000_000),
-    horizon: g.int(30, 60),
-    limitsFired: g.bool(0.15) ? ['gap'] : [],
-    spiral: g.pick([true, false, null, false, false]),
-    missing: g.bool(0.1) ? ['history'] : [],
-  });
-  it('конечные числа; консервативное не выше центрального; «подтверждено» ⇒ все условия выполнены', () => {
-    forAll(500, (g) => {
-      const i = gen(g);
-      const r = computeIndependence(i);
-      expect(badNumbers(r)).toEqual([]);
-      expect(r.total.conservative).toBeLessThanOrEqual(r.total.central + 1e-12);
-      if (r.status === 'confirmed') {
-        expect(r.total.central).toBeGreaterThanOrEqual(1.25 - 1e-9);
-        expect(r.sustain.ok).toBe(true);
-        expect(r.blockers).toEqual([]);
-        expect(i.limitsFired).toEqual([]);
-        expect(i.spiral).not.toBe(true);
-        expect(i.missing).toEqual([]);
-      }
-      if (r.status === 'not_assessed') expect(r.blockers).toEqual([]);
-    });
-  });
-  it('монотонность: больше капитала или независимых поступлений — C + P не ниже, подтверждённое остаётся подтверждённым', () => {
-    forAll(500, (g) => {
-      const i = gen(g);
-      const a = computeIndependence(i);
-      const moreK = computeIndependence({ ...i, capital: i.capital + g.int(0, 500_000_000) });
-      const moreP = computeIndependence({ ...i, passive: [...i.passive, { monthly: g.int(0, 500_000), indexed: g.bool() }] });
-      expect(moreK.total.central).toBeGreaterThanOrEqual(a.total.central - 1e-12);
-      expect(moreP.total.central).toBeGreaterThanOrEqual(a.total.central - 1e-12);
-      if (a.status === 'confirmed') { expect(moreK.status).toBe('confirmed'); expect(moreP.status).toBe('confirmed'); }
-    });
-  });
-  it('больший дефицит не делает независимость подтверждённой, если при меньшем она не была', () => {
-    forAll(500, (g) => {
-      const i = gen(g);
-      if (i.deficit === null) return;
-      const worse = computeIndependence({ ...i, deficit: i.deficit + g.int(1, 1_000_000) });
-      if (worse.status === 'confirmed') expect(computeIndependence(i).status).toBe('confirmed');
-    });
-  });
-  it('независимость не считает капитал дважды: пассивный доход «с этих же активов» не меняет P и C + P', () => {
-    const fi = independenceProfiles().find((p) => p.name === 'FI3')!.state;
-    const flag = (f: Record<string, unknown>): AppState => ({ ...fi, settings: { ...fi.settings, incomeSchedule: fi.settings.incomeSchedule.map((x) => ({ ...x, ...f })) } });
-    const none = independenceOfState(fi, TODAY);
-    for (const f of [{ passive: true }, { passive: true, fromAssets: true }]) {
-      const r = independenceOfState(flag(f), TODAY);
-      expect(r.p).toBe(none.p);
-      expect(r.total).toEqual(none.total);
-      expect(r.capital).toBe(none.capital);
-    }
-  });
-});

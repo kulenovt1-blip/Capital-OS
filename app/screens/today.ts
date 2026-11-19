@@ -28,7 +28,7 @@ export function stepChip(): HTMLElement | null {
   const lvl = v.level;
   return h(
     'a',
-    { class: 'step-chip', href: '#/position', 'data-tour': 'step-chip', 'aria-label': `Ступень ${lvl} из 5. Открыть дорогу` },
+    { class: 'step-chip', href: '#/position', 'data-tour': 'step-chip', 'aria-label': `Ступень ${lvl} из 5. Открыть план` },
     h('span', { class: 'sc-bars', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= lvl ? 'on' : '', style: `height:${4 + n * 3}px` }))),
     `Ступень ${lvl}`,
   );

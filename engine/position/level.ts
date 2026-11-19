@@ -4,7 +4,11 @@
  * Шкала по `G` (рабочая гипотеза H): L1 — `G` < 20; L2 — 20 ≤ `G` < 40; L3 — 40 ≤ `G`, условия L4 не выполнены.
  * L4 «Безопасность» — одновременно: `G` ≥ 75, каждое направление ≥ 60, не сработал ни один ограничитель, все три направления достоверны.
  * Если всё, кроме достоверности, выполнено, уровень L3 и флаг `l4Unconfirmed` («L4 не подтверждён»).
- * L5 — отдельная ветка независимости (T10), здесь её нет.
+ * L5 «Могу не смотреть на цены» (D216, решение владельца 20.11.2026; заменила ветку независимости «Могу не работать») — сверх L4 два факта-условия:
+ *  деньги на год обычной жизни (запас ≥ 12 месяцев ВСЕХ обычных расходов, не только необходимых) и свобода в каждой зарплате:
+ *  на обязательное уходит не больше половины дохода, откладывается от 10 % дохода, и так — минимум в 5 из 6 последних месяцев.
+ *  Второй путь на L5 — без дохода: денег хватит на 25 лет обычной жизни (300 месяцев) и не сработал ни один ограничитель.
+ *  Прогнозов доходности нет: только деньги, доход и траты.
  *
  * Названия и условия-факты (D151, решение владельца 10.11.2026): название уровня должно быть правдой, поэтому кроме `G` каждый уровень
  * требует конкретного факта. Нет факта — уровень ниже, сколько бы ни было очков:
@@ -21,18 +25,29 @@ import { directionScore, isDirectionSufficient, type DirectionScore } from './di
 import { DIRECTIONS, type Direction, type IndicatorsReport } from './indicators';
 import { aggregateG, limitStates, withoutForecast, type LimitId } from './limits';
 
-export type Level = 1 | 2 | 3 | 4;
-export const LEVEL_NAMES: Readonly<Record<Level, string>> = { 1: 'Не хватает на жизнь', 2: 'От зарплаты до зарплаты', 3: 'Есть подушка', 4: 'Защищён от ударов' };
+export type Level = 1 | 2 | 3 | 4 | 5;
+export const LEVEL_NAMES: Readonly<Record<Level, string>> = { 1: 'Не хватает на жизнь', 2: 'От зарплаты до зарплаты', 3: 'Есть подушка', 4: 'Защищён от ударов', 5: 'Могу не смотреть на цены' };
 /** Что уровень значит для жизни — одна фраза (D151). */
 export const LEVEL_MEANINGS: Readonly<Record<Level, string>> = {
   1: 'Расходы не покрываются доходом, и запаса почти нет',
   2: 'Денег на жизнь хватает, но без дохода проблемы начнутся быстро',
   3: 'Потерю дохода на несколько месяцев переживёшь',
   4: 'Один удар — потеря работы, болезнь, крупная трата — не ломает план',
+  5: 'Год обычной жизни уже оплачен, а из каждой зарплаты остаётся свобода: лишняя покупка ничего не ломает',
 };
 /** Запас (месяцев необходимых расходов), без которого нельзя быть на «Есть подушка» и на «Защищён от ударов» (H). */
 export const L3_RESERVE_MONTHS = 3;
 export const L4_RESERVE_MONTHS = 6;
+/** L5 (D216, H): запас на столько месяцев ВСЕХ обычных расходов. */
+export const L5_LIFE_RESERVE_MONTHS = 12;
+/** L5: необходимое (с платежами по долгам) — не больше этой доли дохода. */
+export const L5_ESSENTIAL_SHARE_MAX = 0.5;
+/** L5: норма сбережений (медиана 3 месяцев) — от этой доли дохода. */
+export const L5_SAVING_RATE_MIN = 0.1;
+/** L5: «Привычка откладывать» (V4, доля из 6 последних месяцев с остатком больше нуля, 0–100) — от 5 из 6. */
+export const L5_HABIT_MIN = 80;
+/** L5 без дохода: денег хватит на столько месяцев обычной жизни (25 лет). */
+export const L5_CAPITAL_ONLY_MONTHS = 300;
 
 /** Факты для условий уровней (D151). */
 export interface LevelFacts {
@@ -40,6 +55,33 @@ export interface LevelFacts {
   reserveMonths: number;
   /** Норма сбережений за 3 месяца; null — неизвестна (истории мало), условие «доход покрывает расходы» тогда не проверяется. */
   savingRate: number | null;
+  /** Запас в месяцах ВСЕХ обычных расходов (D216); нет — условия L5 не проверяются. */
+  lifeReserveMonths?: number;
+  /** Доля необходимого в доходе; null — дохода нет. */
+  essentialShare?: number | null;
+  /** «Привычка откладывать» V4, 0–100; null — истории мало. */
+  habit?: number | null;
+}
+/** Условия L5 по отдельности — для «Плана» на ступени 4 (D216). */
+export interface L5Check {
+  lifeReserve: { have: number; need: number; ok: boolean };
+  essentialShare: { have: number | null; max: number; ok: boolean };
+  savingRate: { have: number | null; min: number; ok: boolean };
+  habit: { have: number | null; min: number; ok: boolean };
+  /** L5 без дохода: денег на 25 лет обычной жизни. */
+  capitalOnly: boolean;
+  ok: boolean;
+}
+/** null — фактов для L5 нет (старые вызовы, необходимые не определены). */
+export function l5CheckOf(f: LevelFacts | undefined, fired: readonly string[]): L5Check | null {
+  if (!f || f.lifeReserveMonths === undefined) return null;
+  const share = f.essentialShare ?? null;
+  const lifeReserve = { have: f.lifeReserveMonths, need: L5_LIFE_RESERVE_MONTHS, ok: f.lifeReserveMonths >= L5_LIFE_RESERVE_MONTHS };
+  const essentialShare = { have: share, max: L5_ESSENTIAL_SHARE_MAX, ok: share !== null && share <= L5_ESSENTIAL_SHARE_MAX };
+  const savingRate = { have: f.savingRate, min: L5_SAVING_RATE_MIN, ok: f.savingRate !== null && f.savingRate >= L5_SAVING_RATE_MIN };
+  const habit = { have: f.habit ?? null, min: L5_HABIT_MIN, ok: (f.habit ?? -1) >= L5_HABIT_MIN };
+  const capitalOnly = f.lifeReserveMonths >= L5_CAPITAL_ONLY_MONTHS && fired.length === 0;
+  return { lifeReserve, essentialShare, savingRate, habit, capitalOnly, ok: lifeReserve.ok && essentialShare.ok && savingRate.ok && habit.ok };
 }
 export type LevelHold = 'deficit' | 'reserve3' | 'reserve6';
 /** Почему уровень ниже, чем по очкам: какой факт не выполнен. */
@@ -117,6 +159,8 @@ export interface LevelResult {
   /** Ступень поднята с 1 до 2, потому что факт для «Не хватает на жизнь» не выполнен (D156); null — не поднята. */
   lifted: LevelLifted | null;
   l4: L4Check;
+  /** Условия L5 (D216); null — фактов нет. */
+  l5: L5Check | null;
 }
 
 export function levelOf(i: LevelInput): LevelResult {
@@ -134,8 +178,12 @@ export function levelOf(i: LevelInput): LevelResult {
   const scoreCandidate = gOk && known.every((d) => scoreOf(d) >= L4_DIRECTION_MIN) && limitsOk;
   const byScore: Level = scoreCandidate && reliableOk ? 4 : (Math.min(levelBandOf(i.g), 3) as Level);
   const gated = gateLevel(byScore, i.facts);
-  const { level, lifted } = gated.held ? { level: gated.level, lifted: null } : liftLevel1(gated.level, i.facts);
+  const lifted0 = gated.held ? { level: gated.level, lifted: null } : liftLevel1(gated.level, i.facts);
   const held = gated.held;
+  const l5 = l5CheckOf(i.facts, i.fired);
+  // L5: сверх L4 — условия-факты; или деньги на 25 лет обычной жизни (тогда очки не важны: удар ничего не ломает)
+  const level: Level = l5 && ((lifted0.level === 4 && l5.ok) || (l5.capitalOnly && lifted0.level >= 2)) ? 5 : lifted0.level;
+  const lifted = lifted0.lifted;
   const reserve6 = !i.facts || i.facts.reserveMonths >= L4_RESERVE_MONTHS;
 
   const margins: BoundaryMargin[] = [
@@ -156,6 +204,7 @@ export function levelOf(i: LevelInput): LevelResult {
     held,
     lifted,
     l4: { gOk, directionsOk, limitsOk, reliableOk, weakest },
+    l5,
   };
 }
 
@@ -185,7 +234,19 @@ export function levelFromIndicators(report: IndicatorsReport): PositionLevel | n
     reliable: Object.fromEntries(DIRECTIONS.map((d) => [d, isDirectionSufficient(directions[d])])) as Record<Direction, boolean>,
     fired: agg.fired,
     // без необходимых расходов запас в месяцах не определён: условия по запасу не проверяются (С1, D158)
-    ...(report.inputs.needEssential > 0 && !report.inputs.essentialUnknown ? { facts: { reserveMonths: report.inputs.reserveEssentialMonths, savingRate: report.inputs.savingRate } } : {}),
+    ...(report.inputs.needEssential > 0 && !report.inputs.essentialUnknown ? { facts: levelFactsOf(report) } : {}),
   });
   return { directions, g: agg.g, fired: agg.fired, result };
+}
+
+/** Факты для условий ступеней из показателей (D151, D216). */
+export function levelFactsOf(report: IndicatorsReport): LevelFacts {
+  const i = report.inputs!;
+  return {
+    reserveMonths: i.reserveEssentialMonths,
+    savingRate: i.savingRate,
+    lifeReserveMonths: i.reserveLifestyleMonths,
+    essentialShare: i.incomeMonthly > 0 ? i.needEssential / i.incomeMonthly : null,
+    habit: (report.values.V4 as number | null | undefined) ?? null,
+  };
 }

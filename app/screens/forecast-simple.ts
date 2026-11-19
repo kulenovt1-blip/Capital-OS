@@ -450,7 +450,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
     // расчёты — плитками со значком (D193); «Если что-то изменится» переехало в «Планирую…»
     const calc = [
       h('div', { 'data-tour': 'calc' }, tiles(
-        tile({ icon: 'shield', title: 'Набрать запас', sub: stg ? `сейчас ${stg.coverMonths.toString().replace('.', ',')} мес.` : undefined, href: sheetHref('a-to-b') }),
+        tile({ icon: 'shield', title: 'Набрать запас', sub: stg ? `сейчас ${stg.coverMonths.toString().replace('.', ',')} мес.` : undefined, href: sheetHref('road-how') }),
         tile({ icon: 'cut', title: 'Где сэкономить', href: sheetHref('save-where') }),
         tile({ icon: 'scale', title: 'Хуже или лучше', sub: 'если доход изменится', href: '#/forecast-more' }),
         tile({ icon: 'drain', title: 'Откуда брать', sub: order.length ? `${order.length} ${order.length === 1 ? 'цель' : 'цели'} по порядку` : 'не выбрано', href: sheetHref('fc-draw', '') }),
@@ -462,7 +462,7 @@ export function renderForecastSimple(_rerender: () => void): HTMLElement {
   }
   if (st.settings.plannedEvents.length) {
     root.append(
-      sub('В плане'),
+      sub('Запланировано'),
       rows(
         st.settings.plannedEvents.map((e) =>
           row({
@@ -695,7 +695,7 @@ defineSheet('save-cat', (catId) => {
       slider,
       out,
       apply,
-      h('p', { class: 'muted' }, 'В план попадёт как «Меньше: …» с первого числа следующего месяца; убрать можно на «Прогнозе» в разделе «В плане».'),
+      h('p', { class: 'muted' }, 'В план попадёт как «Меньше: …» с первого числа следующего месяца; убрать можно на «Прогнозе» в разделе «Запланировано».'),
     ),
   };
 });
@@ -707,93 +707,7 @@ function monthKeyNext(t: string, ahead = 0): string {
 }
 
 
-// ───────────────────────── «Из А в Б» (D123) ─────────────────────────
-
-/** Куда человек хочет выйти (месяцев запаса) и за сколько месяцев — пока открыт экран. */
-let routeTarget: ReserveTarget | null = null;
-let routeDeadline = 6;
-/** «Путь к ступени» на «Профиле» открывает «Из А в Б» сразу с нужной целью запаса. */
-export function setRouteTarget(m: ReserveTarget): void {
-  routeTarget = m;
-}
-
-/** Начало названия события «путь к запасу»: по нему план находится, заменяется и убирается. */
-export const ROUTE_PLAN_PREFIX = 'Набрать ';
-
-defineSheet('a-to-b', () => {
-  const st = getState();
-  const t = today();
-  const stg = reserveCtx();
-  if (!stg) return { title: 'Из А в Б', body: h('p', { class: 'muted' }, 'Чтобы построить путь, нужны загруженные данные и размеченные траты.') };
-  const ups = higherTargets(stg.coverMonths);
-  const here = h(
-    'section',
-    { class: 'card stack tight', 'aria-label': 'Где ты сейчас' },
-    h('div', { class: 'muted' }, 'А — сейчас'),
-    h('strong', null, `Запас на ${stg.coverMonths.toString().replace('.', ',')} мес.`),
-    h('p', null, `Денег хватит без дохода на ${stg.coverMonths.toString().replace('.', ',')} мес.: ${fmt(stg.liquid)} ÷ ${fmt(stg.needMonthly)} в месяц.`),
-    h('a', { class: 'link', href: sheetHref('reserve-info'), style: 'display:flex;align-items:center;min-height:44px' }, 'Как посчитан запас ›'),
-  );
-  if (!ups.length) {
-    return { title: 'Из А в Б', body: h('div', { class: 'stack' }, here, h('div', { class: 'okline' }, 'Запас на год и больше: дальше — не про запас, а про цели. Как делить остаток между ними, решаешь ты.'), h('a', { class: 'btn wide', href: '#/goals' }, 'К целям')) };
-  }
-  const to = (routeTarget !== null && ups.includes(routeTarget) ? routeTarget : stg.next!.months) as ReserveTarget;
-  const r = routeTo(st, t, to)!;
-  const pick = rows(ups.map((m) => row({ title: m === 12 ? 'Запас на год' : `Запас на ${m} ${m === 1 ? 'месяц' : m < 5 ? 'месяца' : 'месяцев'}`, sub: RESERVE_NOTES[m], value: m === to ? h('strong', null, '✓') : undefined, onClick: () => ((routeTarget = m), refresh()), chevron: false })));
-  const toText = to === 12 ? 'запаса на год' : `запаса на ${to} ${to === 1 ? 'месяц' : to < 5 ? 'месяца' : 'месяцев'}`;
-
-  const dl = r.deadlines.find((d) => d.months === routeDeadline) ?? r.deadlines[0];
-  const dm = dl ? dl.month : null;
-  const usual = ov().spend.usualMonthly;
-  // «Добавить в план» раньше ничего не показывало: можно было нажать много раз, а видимого результата не было (замечание владельца).
-  // Теперь план один: повторное нажатие заменяет прежний, лист закрывается, на «Прогнозе» и «Профиле» видно «в плане».
-  const planned = st.settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
-  const fast = dl && dm
-    ? dl.extraMonthly === 0 && !planned
-      ? h('div', { class: 'okline' }, `К ${monthTo(dm)} ты и так успеваешь — откладывать больше не нужно.`)
-      : h(
-          'div',
-          { class: 'card stack tight' },
-          planned ? h('div', { class: 'okline' }, `Уже в плане: «${planned.title}». Прогноз считает с этой добавкой.`) : null,
-          planned ? null : h('strong', null, `Чтобы набрать ${toText} к ${monthTo(dm)}`),
-          planned ? null : h('p', null, `Нужно откладывать сверху ≈ ${fmt(dl.extraMonthly)} в месяц${usual > 0 ? ` (${Math.round((dl.extraMonthly / usual) * 100)} % обычных трат)` : ''}.`),
-          planned ? null : h('p', { class: 'muted' }, 'Меньше тратить или больше получать — для денег это одно и то же. Считается как (нужно − будет к сроку) ÷ месяцев до срока.'),
-          planned
-            ? h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)) } }), 'Убрано из плана').then(() => closeSheet()) }, 'Убрать из плана')
-            : h('button', { class: 'btn wide', type: 'button', onclick: () => void act((x) => ({ ...x, settings: { ...x.settings, plannedEvents: [...x.settings.plannedEvents.filter((e) => !e.title.startsWith(ROUTE_PLAN_PREFIX)), cutEvent(newId('ev'), `${monthKeyNext(t)}-01` as never, dl.extraMonthly, `${ROUTE_PLAN_PREFIX}${toText} к ${monthTo(dm)}`)] } }), `В плане: откладывать на ${fmt(dl.extraMonthly)} в месяц больше — прогноз пересчитан`).then(() => closeSheet()) }, 'Добавить в план'),
-        )
-    : null;
-
-  return {
-    title: 'Из А в Б',
-    body: h(
-      'div',
-      { class: 'stack' },
-      here,
-      sub('Б — какой запас нужен'),
-      pick,
-      sub('Что для этого нужно'),
-      rows(
-        row({ title: 'Необходимое в месяц', sub: 'еда, дорога, связь, быт и платежи по долгам', value: fmt(r.from.needMonthly), chevron: false }),
-        row({ title: `Нужно денег: ${r.to} ${r.to === 1 ? 'месяц' : 'мес.'}`, sub: `${r.to} × ${fmt(r.from.needMonthly)}`, value: fmt(r.target), chevron: false }),
-        row({ title: 'Есть сейчас', sub: 'можно снять сразу', value: fmt(r.from.liquid), chevron: false }),
-        row({ title: h('strong', null, 'Не хватает'), value: h('strong', null, fmt(r.missing)), chevron: false }),
-      ),
-      r.deficitMonthly > 0 ? h('div', { class: 'badline' }, `Сейчас траты больше доходов на ≈ ${fmt(r.deficitMonthly)} в месяц — запас тает. Сначала нужно выйти в плюс: любая добавка ниже сначала закрывает эту дыру.`) : null,
-      h('p', null, r.by ? h('strong', null, `Как сейчас — к ${monthTo(r.by)}.`) : 'Как сейчас — за пять лет прогноза не набирается: при нынешних доходах и тратах запас не вырастет до нужного.'),
-      r.debtFree ? h('p', { class: 'muted' }, `Платежи по долгам кончатся к ${monthTo(r.debtFree.from)}: освободится ≈ ${fmt(r.debtFree.freed)} в месяц — это уже учтено.`) : null,
-      r.steps.length > 1
-        ? h('div', { class: 'stack tight' }, sub('По пути'), rows(r.steps.map((x) => row({ title: `Запас на ${x.months} ${x.months === 1 ? 'месяц' : x.months < 5 ? 'месяца' : 'месяцев'}`, sub: `нужно ${fmt(x.target)}`, value: x.by ? monthWord(x.by) : 'не набирается', chevron: false }))))
-        : null,
-      sub('Хочу быстрее'),
-      seg(ROUTE_DEADLINES.map((n) => [String(n), n === 12 ? 'год' : n === 24 ? '2 года' : `${n} мес`] as const), String(dl?.months ?? routeDeadline), (v) => ((routeDeadline = Number(v)), refresh()), 'За сколько месяцев'),
-      fast,
-      h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('save-where') }, 'Где можно сэкономить'), h('a', { class: 'chip', href: sheetHref('plan', 'job') }, 'Добавить доход')),
-      rows(row({ title: 'Нужно успеть цели к дате?', sub: 'выбери цель и месяц — посчитаю, что изменить', href: sheetHref('to-date') })),
-      h('p', { class: 'muted' }, 'Это прикидка при нынешнем темпе, а не предсказание. Считается по тому, что есть в бэкапе: наличные и долги вне MoneyManager не видны.'),
-    ),
-  };
-});
+// «Из А в Б» (D123) перенесён в «Как дойти» (D217): app/screens/plan-how.ts и лист `road-how` на «Профиле».
 
 /** Запас в месяцах и «почему столько» — арифметика по шагам (D123, D143). */
 defineSheet('reserve-info', () => {
@@ -816,10 +730,10 @@ defineSheet('reserve-info', () => {
       ),
       s.next
         ? h('p', { class: 'muted' }, s.next.text)
-        : h('p', { class: 'muted' }, 'Запас на год и больше — выше цели «Из А в Б» нет.'),
+        : h('p', { class: 'muted' }, 'Запас на год и больше: дальше — не про запас, а про цели.'),
       h('p', { class: 'muted' }, `Отдельно от запаса: остаётся в месяц ${s.surplusMonthly >= 0 ? '+' : '−'}${fmt(Math.abs(s.surplusMonthly) as Money)} (в среднем за ближайшие полгода) — запас ${s.surplusMonthly >= 0 ? 'растёт' : 'тает'}.`),
       s.debtShare !== null && s.debtShare > 0 ? h('p', { class: 'muted' }, `На платежи по долгам и рассрочкам уходит ${Math.round(s.debtShare * 100)} % дохода.`) : null,
-      h('a', { class: 'btn wide', href: sheetHref('a-to-b') }, 'Как набрать больше запаса ›'),
+      h('a', { class: 'btn wide', href: sheetHref('road-how') }, 'Как набрать больше запаса ›'),
       h('p', { class: 'muted' }, 'Не видны наличные и долги вне MoneyManager — если они есть, запас может быть другим.'),
     ),
   };

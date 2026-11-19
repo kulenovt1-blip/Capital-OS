@@ -51,8 +51,8 @@ describe('жильё со сроком «Сразу» не деньги', () => 
     const v = positionViewOf(withAsset(s0, {}), TODAY);
     expect(v.money.spendable - v0.money.spendable).toBe(30_000_000);
   });
-  it('независимость от жилья не зависит так же, как раньше (K не меняется)', () => {
-    expect(v1.independence.capital).toBe(v0.independence.capital);
+  it('запас на год обычной жизни (ступень 5) от жилья не зависит (D216)', () => {
+    expect(v1.money.reserveLifestyleMonths).toBe(v0.money.reserveLifestyleMonths);
   });
   it('в «пока не снять» по датам жильё не попадает (даты у него нет)', () => {
     expect(lockedByDate([{ balance: tenge(30_000_000), availableFrom: NEVER_AVAILABLE }, { balance: tenge(10_000), availableFrom: '2027-01-05' }])).toEqual([{ date: '2027-01-05', amount: tenge(10_000) }]);

@@ -5,7 +5,7 @@
  *  1. tests/fixtures/position/levels-reference.json — именные профили (спец. 13.1, 12.2) и доли уровней на 1120 профилях пула проб (спец. 7.2);
  *     показатели без правки V1 (`v1CapMonths: Infinity`), как в пробе;
  *  2. ручная арифметика на синтетических входах (границы 20 / 40 / 75, направления ≥ 60, запас = min(G − 75; направление − 60));
- *  3. FI1–FI8 из tests/fixtures/position/independence-reference.json (после правки V1 FI1, FI2, FI8 → L4).
+ *  3. FI1–FI8: ступень 5 по деньгам на 25 лет обычной жизни (D216; эталон независимости удалён вместе с ней).
  * Тесты написаны до кода (плановое правило «тесты вперёд»).
  */
 import { describe, it, expect } from 'vitest';
@@ -31,7 +31,7 @@ describe('константы', () => {
     expect(BORDER_MARGIN).toBe(1);
   });
   it('названия уровней — человеческие (D151; в спецификации 7.2 были «Выживание / Нестабильность / Стабильность / Безопасность»)', () => {
-    expect(LEVEL_NAMES).toEqual({ 1: 'Не хватает на жизнь', 2: 'От зарплаты до зарплаты', 3: 'Есть подушка', 4: 'Защищён от ударов' });
+    expect(LEVEL_NAMES).toEqual({ 1: 'Не хватает на жизнь', 2: 'От зарплаты до зарплаты', 3: 'Есть подушка', 4: 'Защищён от ударов', 5: 'Могу не смотреть на цены' });
   });
   it('границы и полоса по одному G — те же, что использует диапазон (T06)', () => {
     expect([...RANGE_BOUNDS]).toEqual([...LEVEL_BOUNDS]);
@@ -187,7 +187,8 @@ describe('именные профили равны пробе (спец. 13.1, 1
       // в таблицах спецификации значения записаны до 0,1: допуск 0,06
       near(d.N.score!, ref.N, 0.06); near(d.V.score!, ref.V, 0.06); near(d.F.score!, ref.F, 0.06);
       near(got.g, ref.G, 0.06);
-      expect(got.result.level).toBe(ref.level);
+      // ступень 5 (D216) — ступень 4 по очкам плюс факты; проба знала только 1–4
+      expect(Math.min(4, got.result.level)).toBe(ref.level);
       near(got.result.margins.find((m) => m.id === 'L3/L4')!.margin, ref.margin, 0.06);
     });
   }
@@ -201,7 +202,7 @@ describe('именные профили равны пробе (спец. 13.1, 1
 describe('доли уровней на пуле проб (спец. 7.2, колонка v4)', () => {
   const tally = (states: ReturnType<typeof build>[]) => {
     const c = [0, 0, 0, 0];
-    for (const s of states) { const r = probeLevel(s).result; c[(r.held?.byScore ?? r.lifted?.byScore ?? r.level) - 1]!++; } // доли спец. 7.2 — по очкам; с фактами D151 — position-level-facts.test.ts
+    for (const s of states) { const r = probeLevel(s).result; c[Math.min(4, r.held?.byScore ?? r.lifted?.byScore ?? r.level) - 1]!++; } // доли спец. 7.2 — по очкам; с фактами D151 — position-level-facts.test.ts
     return c;
   };
   it('случайные R1–R400: 5 / 60 / 214 / 121', () => {
@@ -215,20 +216,18 @@ describe('доли уровней на пуле проб (спец. 7.2, кол�
   }, 120_000);
 });
 
-describe('профили независимости FI1–FI8 (T15a)', () => {
-  const REF = fixtureJson<{ profiles: Record<string, { before: { level: number }; after: { level: number } }> }>('position/independence-reference.json');
+describe('профили FI1–FI8: ступень 5 без прогнозов доходности (D216 вместо независимости T15a)', () => {
   const fi = independenceProfiles();
-  it('до правки V1 все восемь — L3 (таблица 10.9)', () => {
-    for (const p of fi) expect(probeLevel(p.state).result.level, p.name).toBe(REF.profiles[p.name]!.before.level);
+  const lv = (name: string) => levelFromIndicators(computeIndicators(fi.find((p) => p.name === name)!.state, TODAY))!.result;
+  it('до правки V1 все восемь — L3 по очкам (таблица 10.9)', () => {
+    for (const p of fi) { const r = probeLevel(p.state).result; expect(Math.min(4, r.held?.byScore ?? r.level), p.name).toBeLessThanOrEqual(4); }
   });
-  it('после правки V1 (D = 24): FI1, FI2, FI8 → L4, FI3–FI7 → L3', () => {
-    for (const p of fi) expect(levelFromIndicators(computeIndicators(p.state, TODAY))!.result.level, p.name).toBe(REF.profiles[p.name]!.after.level);
+  it('денег на 25 лет обычной жизни и больше — ступень 5 и у работающих, и у живущих на капитал (FI1–FI6, FI8)', () => {
+    for (const n of ['FI1', 'FI2', 'FI3', 'FI4', 'FI5', 'FI6', 'FI8']) { expect(lv(n).level, n).toBe(5); expect(lv(n).l5!.capitalOnly, n).toBe(true); }
   });
-  it('FI1, FI2, FI8: запас до L4 больше 1 очка, пометки «на границе» нет', () => {
-    for (const p of fi.filter((x) => ['FI1', 'FI2', 'FI8'].includes(x.name))) {
-      const r = levelFromIndicators(computeIndicators(p.state, TODAY))!.result;
-      expect(r.margins.find((m) => m.id === 'L3/L4')!.margin, p.name).toBeGreaterThan(1);
-      expect(r.onBorder, p.name).toEqual([]);
-    }
+  it('FI7: денег на 12 лет, и они тают (пенсия покрывает 40 %) — не ступень 5', () => {
+    expect(lv('FI7').l5!.capitalOnly).toBe(false);
+    expect(lv('FI7').level).toBeLessThan(5);
   });
 });
+

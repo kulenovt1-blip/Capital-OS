@@ -8,7 +8,8 @@ import { h } from '../dom';
 import { pickBackup } from './import';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, positionNow, progress, reserveCtx } from '../ctx';
-import { roadOf, type RoadCond } from '../road';
+import { firstStepOf, roadOf } from '../road';
+import { unassignedSavings } from '../../engine/index';
 import { attentionItems } from '../attention';
 import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
@@ -148,7 +149,22 @@ export function heroBlock(o: Overview): HTMLElement {
   const label = o.nextIncome.source === 'schedule' ? h('span', null, `Свободно до ${fmtDay(o.nextIncome.date)}`, info('free')) : h('span', null, 'Свободно на 30 дней', info('free'));
   // D193: одна строка. «После обычных трат» — смысл числа (С8: чтобы лимит не читался как «можно потратить всё»); «обычно уходит» — в «Как посчитано»
   const subline = h('span', null, `после обычных трат · ≈ ${fmtShort(sp.perDay)} в день`);
-  return hero(label, fmtShort(sp.canSpend), subline, { extra: h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›') });
+  const spare = spareSavings(o);
+  // D219: у человека с крупными свободными копилками «свободно 3 562 ₸» без оговорки звучит абсурдно — число про карты до дохода, а копилки тоже его
+  const spareLine = spare > 0 ? h('div', { class: 'subline' }, `ещё ${fmtShort(spare)} в копилках сверх подушки — ни за чем не закреплены`) : null;
+  return hero(label, fmtShort(sp.canSpend), subline, { extra: h('div', { class: 'stack tight' }, spareLine, h('a', { class: 'link', href: sheetHref('explain', 'overview') }, 'Как посчитано ›')) });
+}
+
+/**
+ * Свободное в копилках сверх подушки (D219): не закреплено ни за одной целью и больше суммы подушки (без подушки — трёх обычных месяцев).
+ * 0 — если это меньше одного обычного месяца трат: тогда это и есть подушка, говорить «трать» нельзя.
+ */
+export function spareSavings(o: Overview): Money {
+  const free = unassignedSavings(o);
+  const n = cushionNode(o);
+  const cushion = n ? n.goal.targetMin : ((o.spend.usualMonthly * 3) as Money);
+  const spare = free - cushion;
+  return (spare >= o.spend.usualMonthly && o.spend.usualMonthly > 0 ? spare : 0) as Money;
 }
 
 /** Истории меньше 3 полных месяцев — числа приблизительные (шаг 4 аудита, D105). */
@@ -209,45 +225,43 @@ function cushionRow(o: Overview): HTMLElement | null {
   );
 }
 
-/** Следующий шаг дороги одной фразой: что именно подтянуть, по первому невыполненному условию. */
-function roadStepText(c: RoadCond, target: string): string {
-  if (c.kind === 'reserve') return `Довести запас до ${target.replace('мес.', 'месяцев')}`;
-  if (c.kind === 'score') return `Поднять общую оценку до ${target}`;
-  if (c.kind === 'directions') return 'Подтянуть слабое направление';
-  return c.title;
-}
-
-/** Ближайший шаг дороги одной фразой для «Сегодня»; null — дороги нет (ступень 4 и выше, данных мало) или все условия выполнены. */
+/** Ближайший шаг плана одной фразой для «Сегодня»; null — плана нет (ступень 5, данных мало) или все условия выполнены. */
 export function roadStepNow(): string | null {
   const v = positionNow();
   if (v.status !== 'ok' || v.level === null) return null;
   const m = roadOf(v);
-  const first = m?.next.conds.find((c) => !c.done);
-  return first ? roadStepText(first, first.value.split(' из ')[1] ?? '') : null;
+  return m ? firstStepOf(m)?.text ?? null : null;
 }
 
 /**
- * «Дорога» на «Обзоре» (дизайн A+): пять ступеней в линию, следующая и ближайший шаг с полоской. Нажатие — «Профиль» с полной дорогой.
- * На ступенях 4–5 дороги нет, карточки нет. Ничего не считает: данные из `positionNow` и `roadOf`.
+ * «План» на «Обзоре» (дизайн A+; D217 — раньше «Дорога»): пять ступеней в линию, следующая и ближайший шаг с полоской. Нажатие — «Профиль» с полным планом.
+ * На ступени 5 плана нет — карточка говорит, что это вершина. Ничего не считает: данные из `positionNow` и `roadOf`.
  */
 function roadCard(): HTMLElement | null {
   const v = positionNow();
   if (v.status !== 'ok' || v.level === null) return null;
-  const m = roadOf(v);
-  if (!m) return null;
   const lvl = v.level;
-  const first = m.next.conds.find((c) => !c.done);
-  const target = first ? (first.value.split(' из ')[1] ?? '') : '';
   const nodes = [1, 2, 3, 4, 5].map((n) => h('span', { class: `rs-n ${n < lvl ? 'past' : n === lvl ? 'here' : n === lvl + 1 ? 'next' : 'far'}`, 'aria-hidden': 'true' }, String(n)));
+  const line = h('div', { class: 'rs-line', 'aria-hidden': 'true' }, h('span', { class: 'rs-fill', style: `width:calc((100% - 28px) * ${(lvl - 1) / 4})` }), ...nodes);
+  const m = roadOf(v);
+  if (!m) {
+    if (lvl !== 5) return null;
+    return h('a', { class: 'rs', href: '#/position', 'aria-label': `План: ступень 5 из 5 — ${v.levelName}` },
+      h('div', { class: 'rs-head' }, h('span', { class: 'rs-k' }, 'План'), h('span', { class: 'rs-more' }, 'Профиль ›')),
+      line,
+      h('div', { class: 'rs-next' }, `Верхняя ступень · «${v.levelName}»`),
+      h('div', { class: 'rs-step' }, h('div', { class: 'rs-step-k' }, 'Держать: год обычной жизни в запасе и обязательное до половины дохода')));
+  }
+  const first = firstStepOf(m);
   return h(
     'a',
-    { class: `rs${lvl === 1 ? ' tone-warm' : ''}`, href: '#/position', 'aria-label': `Дорога: сейчас ступень ${lvl}, следующая — ${m.next.name}` },
-    h('div', { class: 'rs-head' }, h('span', { class: 'rs-k' }, 'Дорога'), h('span', { class: 'rs-more' }, 'Вся дорога ›')),
-    h('div', { class: 'rs-line', 'aria-hidden': 'true' }, h('span', { class: 'rs-fill', style: `width:calc((100% - 28px) * ${(lvl - 1) / 4})` }), ...nodes),
+    { class: `rs${lvl === 1 ? ' tone-warm' : ''}`, href: '#/position', 'aria-label': `План: сейчас ступень ${lvl}, следующая — ${m.next.name}` },
+    h('div', { class: 'rs-head' }, h('span', { class: 'rs-k' }, 'План'), h('span', { class: 'rs-more' }, 'Весь план ›')),
+    line,
     h('div', { class: 'rs-next' }, `Следующая: ступень ${m.next.level} · «${m.next.name}»`),
     first
       ? h('div', { class: 'rs-step' },
-          h('div', { class: 'rs-step-k' }, `Шаг: ${roadStepText(first, target)}`),
+          h('div', { class: 'rs-step-k' }, `Шаг: ${first.text}`),
           first.ratio !== null ? h('div', { class: 'rs-bar' }, h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.round(first.ratio * 100)}%` })), h('span', { class: 'rs-val' }, first.value)) : first.value ? h('div', { class: 'rs-val' }, first.value) : null)
       : null,
   );
@@ -411,6 +425,8 @@ export function renderOverview(): HTMLElement {
       h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'В копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
+    // D218: квартира и машина — не деньги: отдельной строкой, чтобы «на счетах» не раздувалось на миллионы
+    sp.property > 0 ? rows(row({ title: 'Имущество', sub: 'жильё, машина — в капитале, но не в деньгах', value: fmtShort(sp.property), href: '#/accounts' })) : null,
     roadCard(),
     cushionRow(o),
     paymentsRow,

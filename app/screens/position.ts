@@ -1,10 +1,10 @@
 /**
- * «Положение» (T11): уровень, три направления, слабое место, деньги, запас, независимость.
+ * «Положение» (T11): уровень, три направления, план к следующей ступени, деньги, запас.
  * Экран ничего не считает: всё берётся из `positionViewOf` (engine/position/view.ts) и рисуется в порядке важности для телефона.
  * Слова без внутренних терминов; коды показателей (N1, V2…) на экране не показываются.
  */
-import { roadOf, roadHowOf, type RoadCond } from '../road';
-import { DESIRED_LABEL, INDEPENDENCE_TEXTS, SAVING_CUT_PCT, savingOptions, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
+import { leftText, roadOf, roadHowOf, type RoadCond } from '../road';
+import { SAVING_CUT_PCT, savingOptions, routeTo, type ReserveTarget, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { act, getDemo, getState, today } from '../store';
@@ -12,7 +12,7 @@ import { isSimpleMode } from '../../engine/index';
 import { WEAK_NONE_FROM, shownScore } from '../../engine/position/view';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
-import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
+import { reserveRouteParts, setRouteTarget, ROUTE_PLAN_PREFIX } from './plan-how';
 import { defineSheet, sheetHref } from '../main';
 import { currencyRatesBlock } from './settings';
 import { autoTour, personaTour, profileTour } from '../tours';
@@ -32,13 +32,14 @@ function months(m: number | null): string {
   return m >= 600 ? 'больше 50 лет' : `${Math.round(m)} мес.`;
 }
 
+
 // ───────────────────────── «Как посчитано» ─────────────────────────
 
 function explanation(v: PositionView): Explanation {
   if (v.status === 'needs_rate') return [step('position.needs_rate', 'Есть счёт не в тенге без курса: уровень не оценивается', { level: 'warn' })];
   if (v.status === 'no_data') return [step('position.no_data', 'В бэкапе нет операций, профиль оценить нечем', { level: 'warn' })];
   const out: Explanation = [];
-  out.push(step('position.rule', 'Как получается ступень: общая оценка из трёх направлений (слабое тянет вниз) плюс факты — запас от 3 месяцев для «Есть подушка», от 6 месяцев и все направления от 60 для «Защищён от ударов»', { detail: true }));
+  out.push(step('position.rule', 'Как получается ступень: общая оценка из трёх направлений (слабое тянет вниз) плюс факты — запас от 3 месяцев для «Есть подушка», от 6 месяцев и все направления от 60 для «Защищён от ударов»; для «Могу не смотреть на цены» — деньги на год обычной жизни, на обязательное до половины дохода и откладывать от 10 % дохода в 5 из 6 месяцев', { detail: true }));
   out.push(step('position.level', `Ступень: ${v.level === null ? 'не определена' : `«${v.levelName}» (ступень ${v.level} из 5)`}${v.g !== null ? `, общая оценка ${nf(v.g)} из 100` : ''}`));
   for (const d of v.directions) {
     out.push(step(`position.dir.${d.id}`, `${d.name}: ${d.score === null ? 'оценить нечем' : `${nf(d.score)} из 100`}${d.reliable ? '' : ' (данных мало)'}`));
@@ -65,13 +66,14 @@ function trustLine(v: PositionView): HTMLElement | null {
   return null;
 }
 
-/** Что ещё сказать про ступень — в отдельном листе, а не стеной текста под ней (D191). */
+/** «Почему ты здесь» — в листе «Ступени», фактами, а не правилом чужой ступени (D217: «на каждом направлении от 60» раньше показывалось на всех ступенях). */
 function levelMore(v: PositionView): HTMLElement[] {
-  const isL5 = v.basis === 'independence';
   const out: HTMLElement[] = [];
-  if (!isL5 && v.g !== null && (!v.range || v.range.showPoint)) out.push(h('p', null, `Общая оценка ${shownScore(v.g)} из 100. Чтобы быть на этой ступени, на каждом направлении нужно не меньше 60.`));
-  if (v.level === 4) out.push(h('p', null, 'Это крепкая опора для большинства людей. Дальше — копить на свои цели; «Могу не работать» — далёкий горизонт, а не обязательный шаг.'));
-  if (isL5) out.push(h('p', null, 'Капитал и независимый доход покрывают расходы и ещё четверть сверху на непредвиденное.'));
+  if (v.levelMeaning) out.push(h('p', null, h('strong', null, 'Почему ты здесь. '), `${meaningOf(v)}.`));
+  if (v.held) out.push(h('p', { class: 'muted' }, `${v.held}.`));
+  if (v.g !== null && (!v.range || v.range.showPoint) && v.level !== null && v.level < 5) out.push(h('p', { class: 'muted' }, `Общая оценка — ${shownScore(v.g)} из 100. Она собирается из трёх направлений и растёт сама, когда меняются деньги; что нужно для следующей ступени — в «Плане».`));
+  if (v.level === 4) out.push(h('p', null, `Это крепкая опора. Следующая ступень — «${LEVEL_NAMES[5]}»: деньги на год обычной жизни и свобода в каждой зарплате.`));
+  if (v.level === 5) out.push(h('p', null, 'Это верхняя ступень. Главное теперь — не растерять: чтобы обязательное не росло быстрее дохода и запас не таял.'));
   if (v.range && v.rangeLevels) {
     out.push(
       h('p', { class: 'muted' },
@@ -170,9 +172,9 @@ function mainNowBlock(v: PositionView): HTMLElement | null {
     { class: 'pos-now', 'aria-label': 'Главное сейчас' },
     h('div', { class: 'pn-k' }, 'Главное сейчас'),
     h('div', { class: 'pn-t' }, `Расходы больше доходов на ${approx(r.deficit)} в месяц`),
-    h('div', { class: 'pn-s' }, r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'денег при этом хватит больше чем на 50 лет' : `денег при этом хватит на ${months(r.months)}`),
+    h('div', { class: 'pn-s' }, leftText(r.months)),
     flowBars(v),
-    h('a', { class: 'btn wide', href: '#/forecast~save-where' }, 'Что можно сделать'),
+    h('a', { class: 'btn wide', href: sheetHref('road-how') }, 'Что можно сделать'),
   );
 }
 
@@ -200,52 +202,22 @@ function firstStepBlock(v: PositionView): HTMLElement | null {
   return h('div', { class: 'stack' }, sub('Сейчас важнее всего'), rows(row({ title, sub: subText, href: '#/debts', cls: 'warn' })));
 }
 
-/**
- * «Путь к ступени»: вместо «5 очков общей оценки» — сколько денег в запас, к какому сроку и что ускорит (аудит UX, этап 3).
- * Всё считает движок «Из А в Б» (`routeTo`); экран только показывает. null — если ступень не упирается в запас.
- */
+/** Цель запаса для следующей ступени: 3 месяца к «Есть подушка», 6 — к «Защищён от ударов». null — следующая ступень не про запас на необходимое. */
 function pathTarget(v: PositionView): ReserveTarget | null {
   if (v.level === null || v.level > 3 || !v.next) return null;
   return v.level <= 2 ? 3 : 6;
 }
-/** Что внутри «Пути к ступени»: сколько отложить, к какому сроку и кнопка «Посчитать путь» (или «План принят»). Пусто — ступень не упирается в запас. */
-function pathParts(v: PositionView): (HTMLElement | null)[] {
-  const target = pathTarget(v);
-  const rs = reserveCtx();
-  if (target === null || !rs || rs.coverMonths >= target || !v.next) return [];
-  const r = routeTo(getState(), today(), target);
-  if (!r || r.missing <= 0) return [];
-  const fast = r.deadlines.find((d) => d.months === 12 && d.extraMonthly > 0) ?? r.deadlines.find((d) => d.extraMonthly > 0);
-  const pace = r.deficitMonthly > 0
-    ? `Сейчас расходы больше доходов на ≈ ${fmtShort(r.deficitMonthly)} в месяц — сначала нужно выйти в плюс.`
-    : r.by ? `Нынешним темпом — к ${monthTo(r.by)}.` : 'Нынешним темпом за пять лет не получается: расходы почти равны доходам.';
-  const open = (): void => setRouteTarget(target);
-  const planned = getState().settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
-  if (planned) {
-    return [
-      h('strong', null, 'План принят'),
-      h('p', null, `В прогнозе: «${planned.title}». ${pace}`),
-      h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посмотреть или убрать'),
-    ];
-  }
-  return [
-    h('strong', null, `Нужно отложить в запас ещё ${approx(r.missing / 100)}`),
-    h('p', null, pace),
-    fast && r.deficitMonthly <= 0 ? h('p', { class: 'muted' }, `Быстрее: откладывать сверху ≈ ${fmtShort(fast.extraMonthly)} в месяц — к ${monthTo(fast.month)}.`) : null,
-    h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посчитать путь'),
-  ];
-}
 
-/**
- * «Твоя дорога» (дизайн A+): пройденные ступени одной строкой, «ты здесь», следующая ступень с условиями-цифрами и путём, остальные — строкой.
- * Лестница из пяти полосок остаётся в карточке ступени («где я»), дорога отвечает «как подняться». Всё из `roadOf` и `routeTo`.
- */
 /** «Чтобы подняться, нужно три условия»: число словами, пока их не больше четырёх. */
 function needLine(n: number): string {
-  const word = ['', 'одно условие', 'два условия', 'три условия', 'четыре условия'][n];
+  const word = ['', 'одно условие', 'два условия', 'три условия', 'четыре условия', 'пять условий'][n];
   return word ? `Чтобы подняться, нужно ${word}` : 'Чтобы подняться, нужно:';
 }
 
+/**
+ * «План» (D217; раньше «Твоя дорога»): пройденные ступени строкой, «ты здесь», следующая ступень. Над условиями — шкала общей оценки
+ * (не галочка: её нельзя «выполнить»), ниже — условия-факты с цифрами и одна кнопка «Как дойти». Всё из `roadOf`.
+ */
 function roadBlock(v: PositionView): HTMLElement | null {
   const m = roadOf(v);
   if (!m) return null;
@@ -259,11 +231,20 @@ function roadBlock(v: PositionView): HTMLElement | null {
         c.hint && !c.done ? h('span', { class: 'rd-cond-hint' }, c.hint) : null,
       ),
     );
-  const path = pathParts(v);
+  const sc = m.next.score;
+  const gauge = sc
+    ? h('div', { class: `rd-score${sc.done ? ' ok' : ''}` },
+        h('div', { class: 'rd-cond-row' }, h('span', { class: 'rd-cond-title' }, 'Общая оценка'), h('span', { class: 'rd-cond-val' }, sc.done ? `${sc.have} из 100 · хватает` : `${sc.have} из 100 · нужно ${sc.need}`)),
+        h('span', { class: 'dbar rd-score-bar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.max(0, Math.min(100, sc.have))}%` }), h('span', { class: 'dtick', style: `left:${sc.need}%` })),
+        sc.hint ? h('span', { class: 'rd-cond-hint' }, sc.hint) : null)
+    : null;
+  const planned = getState().settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
+  const target = pathTarget(v);
+  const open = (): void => setRouteTarget(target);
   return h(
     'section',
-    { class: 'pos-road', 'aria-label': 'Твоя дорога', 'data-tour': 'path' },
-    h('div', { class: 'pr-k' }, 'Твоя дорога'),
+    { class: 'pos-road', 'aria-label': 'План', 'data-tour': 'path' },
+    h('div', { class: 'pr-k' }, 'План'),
     h(
       'ol',
       { class: 'road' },
@@ -275,10 +256,11 @@ function roadBlock(v: PositionView): HTMLElement | null {
         node(String(m.next.level), 'next'),
         h('div', { class: 'rd-card' },
           h('div', { class: 'rd-name' }, m.next.name),
-          h('div', { class: 'rd-sub' }, needLine(m.next.conds.length)),
-          h('div', { class: 'rd-conds' }, ...m.next.conds.map(cond)),
-          path.length ? h('div', { class: 'rd-path stack tight' }, ...path) : null,
-          h('a', { class: 'link', href: sheetHref('road-how'), style: 'display:flex;align-items:center;min-height:44px' }, 'Как выполнить ›'),
+          m.next.conds.length ? h('div', { class: 'rd-sub' }, needLine(m.next.conds.length)) : null,
+          gauge,
+          m.next.conds.length ? h('div', { class: 'rd-conds' }, ...m.next.conds.map(cond)) : null,
+          planned ? h('div', { class: 'okline' }, `В плане: «${planned.title}»`) : null,
+          h('a', { class: 'btn wide', href: sheetHref('road-how'), onclick: open }, 'Как дойти'),
         ),
       ),
       m.rest.length ? h('li', { class: 'rd far' }, node(String(m.rest[0]!.level), 'far'), h('div', { class: 'rd-body muted' }, `Дальше: ${m.rest.map((x) => x.name).join(' → ')}`)) : null,
@@ -330,54 +312,67 @@ export function scoreWord(score: number): string {
 const termWord = (n: number): string => (n === 12 ? 'год' : n === 24 ? '2 года' : `${n} мес.`);
 
 /**
- * «Как выполнить» (D3, вариант 3): под условия дороги — реальные числа из движка. Запас: сколько не хватает, добавка к сроку, когда кончатся платежи, на чём можно сэкономить.
- * Оценка и направления: самые слабые показатели со ссылкой на объяснение. Всё из `roadHowOf` (`routeTo`, `savingOptions`, `PositionView`); ничего не выдумано.
+ * «Как дойти» (D217): одна страница вместо «Посчитать путь» и «Как выполнить» (они дублировали друг друга, а «Из А в Б» был отдельным листом).
+ * Шаги по порядку: сначала выйти в плюс (пока минус, запас тает), потом запас, для ступени 5 — доля обязательного и сколько откладывать,
+ * в конце — что тянет оценку вниз. Числа из `roadHowOf` (`routeTo`, `savingOptions`, `PositionView`) и `reserveRouteParts`; ничего не выдумано.
+ * Тот же лист открывается как `a-to-b` (старые ссылки «Набрать запас»).
  */
-defineSheet('road-how', () => {
+function howSheet(): { title: string; body: HTMLElement } {
   const v = positionNow();
-  if (v.status !== 'ok') return null;
-  const target = pathTarget(v);
   const st = getState();
   const t = today();
+  if (v.status !== 'ok') return { title: 'Как дойти', body: h('div', { class: 'stack' }, ...reserveRouteParts(null, false)) };
+  const target = pathTarget(v);
   const how = roadHowOf(v, target === null ? null : routeTo(st, t, target), savingOptions(st, t));
-  const r = how.reserve;
+  const m = roadOf(v);
   const parts: (HTMLElement | null)[] = [];
-  if (r) {
-    const pace = r.deficitMonthly > 0 ? null : r.by ? `Нынешним темпом — к ${monthTo(r.by)}.` : 'Нынешним темпом за пять лет не получается: расходы почти равны доходам.';
+  let n = 0;
+  const stepHead = (title: string): HTMLElement => sub(`Шаг ${++n}. ${title}`);
+  if (m) parts.push(h('p', { class: 'muted' }, `Ты на ступени ${m.current.level} «${m.current.name}». Следующая — «${m.next.name}». Шаги по порядку: следующий имеет смысл, когда сделан предыдущий.`));
+  if (how.deficit) {
     parts.push(
-      sub('Запас на жизнь'),
+      stepHead('Выйти в плюс'),
       h('div', { class: 'card stack tight' },
-        h('strong', null, `Не хватает ${approx(r.missing / 100)} до запаса на ${r.target} мес.`),
-        r.deficitMonthly > 0 ? h('div', { class: 'badline' }, `Сейчас расходы больше доходов на ≈ ${fmtShort(r.deficitMonthly)} в месяц — запас тает. Сначала нужно выйти в плюс: любая добавка к накоплению начнёт работать только после этого.`) : null,
-        pace ? h('p', null, pace) : null,
-        r.debtFree ? h('p', { class: 'muted' }, `Платежи по долгам кончатся к ${monthTo(r.debtFree.from)}: освободится ≈ ${fmtShort(r.debtFree.freed)} в месяц — это уже учтено в сроке.`) : null,
-      ),
+        h('strong', null, `Сейчас расходы больше доходов на ≈ ${fmtShort(Math.round(how.deficit.monthly * 100) as never)} в месяц`),
+        h('p', null, 'Пока так, деньги тают и откладывать бесполезно: любая добавка уходит на дыру. Закрыть её можно двумя путями — меньше тратить или больше получать. Ниже — где траты крупнее всего.'),
+        v.spiral.spiral ? h('p', { class: 'muted' }, 'Если для этого берёшь новые долги — начни с того, чтобы не брать следующий: «Долги» покажут, какой платёж закрыть первым.') : null),
     );
-    if (r.deficitMonthly <= 0 && r.deadlines.length) {
-      parts.push(
-        sub('Хочу быстрее'),
-        rows(r.deadlines.map((d) => row({ title: `За ${termWord(d.months)}`, sub: `к ${monthTo(d.month)}`, value: `+${fmtShort(d.extraMonthly)} в мес.`, chevron: false }))),
-        h('p', { class: 'muted' }, 'Сколько нужно откладывать сверху нынешнего. Меньше тратить или больше получать — для запаса одно и то же.'),
-      );
-    }
-    if (r.savings.length) {
-      parts.push(
-        sub('На чём можно сэкономить'),
-        rows(r.savings.map((x) => row({ title: x.title, sub: `уходит ${fmtShort(x.monthly)} в месяц; на ${SAVING_CUT_PCT} % меньше — ещё +${fmtShort(x.cutPerMonth)} в месяц`, href: sheetHref('save-cat', x.categoryId) }))),
-        h('a', { class: 'link', href: sheetHref('save-where'), style: 'display:flex;align-items:center;min-height:44px' }, 'Все траты ›'),
-      );
-    }
-    if (target !== null) parts.push(h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: () => setRouteTarget(target) }, 'Посчитать путь'));
   }
-  if (how.weak.length) {
+  if (how.savings.length) {
+    parts.push(
+      sub(how.deficit ? 'Где траты крупнее всего' : 'На чём можно сэкономить'),
+      rows(how.savings.map((x) => row({ title: x.title, sub: `уходит ${fmtShort(x.monthly)} в месяц; на ${SAVING_CUT_PCT} % меньше — ещё +${fmtShort(x.cutPerMonth)} в месяц`, href: sheetHref('save-cat', x.categoryId) }))),
+      h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('save-where') }, 'Все траты'), h('a', { class: 'chip', href: sheetHref('plan', 'job') }, 'Добавить доход'), v.spiral.spiral ? h('a', { class: 'chip', href: '#/debts' }, 'Долги') : null),
+    );
+  }
+  if (target !== null && v.money.reserveEssentialMonths < target) {
+    parts.push(stepHead(`Запас на ${target} месяцев`), ...reserveRouteParts(target, how.deficit !== null));
+  }
+  if (v.level === 4 && v.l5) {
+    const c = v.l5;
+    const need = v.flow ? v.flow.spending : 0;
+    if (!c.lifeReserve.ok) parts.push(stepHead('Деньги на год обычной жизни'), h('div', { class: 'card stack tight' },
+      h('strong', null, `Сейчас — на ${(Math.floor(c.lifeReserve.have * 10) / 10).toString().replace('.', ',')} мес. обычной жизни, нужно ${c.lifeReserve.need}`),
+      need > 0 ? h('p', null, `Не хватает ${approx((c.lifeReserve.need - c.lifeReserve.have) * need)}. Считается со всеми обычными тратами — ${approx(need)} в месяц, — а не только с необходимыми.`) : null));
+    if (!c.essentialShare.ok && c.essentialShare.have !== null) parts.push(stepHead('Обязательное — до половины дохода'), h('div', { class: 'card stack tight' },
+      h('strong', null, `Сейчас на обязательное уходит ${pct(c.essentialShare.have)} дохода`),
+      h('p', null, 'Еда, жильё, связь, дорога и платежи по долгам. Снизить долю можно ростом дохода или меньшими обязательными тратами; когда кончится кредит, доля упадёт сама.')));
+    if (!c.savingRate.ok || !c.habit.ok) parts.push(stepHead('Откладывать каждый месяц'), h('div', { class: 'card stack tight' },
+      h('strong', null, c.savingRate.have === null ? 'Истории пока мало, чтобы проверить' : `Сейчас остаётся ${pct(Math.max(0, c.savingRate.have))} дохода, нужно от ${pct(c.savingRate.min)}`),
+      h('p', null, 'И так — хотя бы в 5 из 6 последних месяцев. Проще всего — отложить в копилку сразу в день дохода.')));
+  }
+  if (how.weak.length && v.level !== null && v.level < 4) {
     parts.push(
       sub('Что тянет оценку вниз'),
       rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(shownScore(w.score)), href: sheetHref('direction', w.direction) }))),
     );
   }
-  if (!parts.length) parts.push(h('div', { class: 'okline' }, 'Условия, которые зависят от денег и оценки, выполнены.'));
-  return { title: 'Как выполнить', body: h('div', { class: 'stack' }, ...parts) };
-});
+  if (!m && v.level === 5) parts.push(h('div', { class: 'okline' }, 'Это верхняя ступень. Следи, чтобы обязательное не росло быстрее дохода и запас не таял.'));
+  if (n === 0 && !how.weak.length && v.level !== 5) parts.push(h('div', { class: 'okline' }, 'Условия, которые зависят от денег, выполнены. Остаётся общая оценка — она растёт сама, когда деньги копятся месяц за месяцем.'));
+  return { title: 'Как дойти', body: h('div', { class: 'stack' }, ...parts) };
+}
+defineSheet('road-how', () => howSheet());
+defineSheet('a-to-b', () => howSheet());
 
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
 const INDICATOR_HINTS: Readonly<Record<string, string>> = {
@@ -413,12 +408,11 @@ defineSheet('direction', (id) => {
 
 /** Слабое место и что нужно для следующей ступени — одной карточкой: заголовок крупно, показатель — плашкой (D191). */
 function weakBlock(v: PositionView): HTMLElement | null {
-  // ступень 5 (независимость подтверждена): копить уже не обязательно, низкая «Динамика» — не упрёк (D203)
+  // ступень 5 — верхняя (D216): говорим, что держит её, а не «слабое место»
   if (v.level === 5) {
     return h('div', { class: 'pos-focus', 'data-tour': 'weak' },
-      h('div', { class: 'pf-k' }, 'Откладывать уже не обязательно'),
-      h('p', { class: 'muted' }, 'Капитал сам покрывает жизнь. Поэтому низкие «Привычка откладывать» и «Динамика» здесь не тревога. Следи за тем, чтобы расходы не росли быстрее, чем доход от капитала.'),
-      v.limitsFired.map((l) => h('div', { class: 'pf-limit' }, `Сдерживает: ${l.text}`)));
+      h('div', { class: 'pf-k' }, 'Верхняя ступень'),
+      h('p', { class: 'muted' }, 'Держится на двух вещах: деньгах на год обычной жизни и свободе в каждой зарплате. Если обязательное начнёт расти быстрее дохода, ступень это покажет.'));
   }
   const next = v.next ?? null;
   // D210: оценено, но слабого места нет (лучший из действуемых показателей слабого направления от WEAK_NONE_FROM) — говорим об этом, а не называем хорошее слабым
@@ -478,93 +472,38 @@ function housingBlock(v: PositionView): HTMLElement | null {
 function runwayBlock(v: PositionView): HTMLElement | null {
   const r = v.runway;
   if (r.status === 'no_data') return h('div', { class: 'stack' }, sub('Если доход пропадёт'), h('p', { class: 'muted' }, 'Нужно хотя бы три полных месяца истории, чтобы это посчитать.'));
-  // С7 (D164): под этим заголовком — ответ на сам вопрос: на сколько месяцев хватит денег без дохода (запас из условий ступени)
-  // то же самое уже сказано строкой «Запас» выше — второй раз не повторяем
+  // С7 (D164): то же уже сказано строкой «Запас» выше — второй раз не повторяем
   if (r.status === 'no_deficit') return null;
+  // на ступени 1 это уже сказано в «Главное сейчас» с кнопкой
+  if (v.level === 1) return null;
+  // D217: не диагноз, а что делать — сколько нужно убрать в месяц и куда нажать (раньше «А если…» со списком сценариев без действия)
+  const spend = v.flow?.spending ?? 0;
+  const cutPct = spend > 0 ? Math.ceil((r.deficit / spend) * 100) : null;
   return h(
     'div',
     { class: 'stack' },
     sub('Если ничего не менять', info('runway')),
-    rows(row({ title: `Расходы больше доходов: на ${money(r.deficit)} в месяц`, sub: r.months === null ? 'на сколько хватит денег, определить нельзя' : r.months >= 600 ? 'при этом денег хватит более чем на 50 лет' : `при этом денег хватит на ${months(r.months)}`, chevron: false, cls: 'warn' })),
-    r.scenarios.length
-      ? h('details', { class: 'fold', 'data-key': 'position:runway' }, h('summary', null, 'А если…'), rows(...r.scenarios.map((s) => row({ title: s.name, value: months(s.months), chevron: false }))))
-      : null,
+    rows(row({ title: `Расходы больше доходов на ${money(r.deficit)} в месяц`, sub: leftText(r.months), chevron: false, cls: 'warn' })),
+    h('p', null, cutPct !== null && cutPct <= 100 ? `Чтобы выйти в ноль, нужно тратить на ${cutPct} % меньше или получать на ${approx(r.deficit)} в месяц больше.` : `Чтобы выйти в ноль, нужно получать на ${approx(r.deficit)} в месяц больше.`),
+    h('a', { class: 'btn wide', href: sheetHref('road-how') }, 'Что можно сделать'),
   );
 }
 
 function spiralBlock(v: PositionView): HTMLElement | null {
   const items: HTMLElement[] = [];
-  if (v.spiral.spiral) items.push(row({ title: 'Признаки долговой спирали', sub: 'похоже, ты берёшь в долг, чтобы платить по долгам или жить; такие признаки найдены в двух из трёх проверок', chevron: false, cls: 'warn' }));
-  if (v.overdue > 0) items.push(row({ title: `Есть просроченные платежи: ${v.overdue}`, sub: 'платёж по графику есть, а в операциях его нет', href: '#/debts', cls: 'warn' }));
+  // D217: без «двух из трёх проверок» — что видно и куда нажать
+  if (v.spiral.spiral) items.push(row({ title: 'Долги растут быстрее, чем гасятся', sub: 'Похоже, новые займы уходят на старые платежи или на жизнь. Первый шаг — не брать следующий и выбрать один платёж, который закрыть первым.', href: '#/debts', cls: 'warn' }));
+  if (v.overdue > 0) items.push(row({ title: `Есть просроченные платежи: ${v.overdue}`, sub: 'платёж по графику есть, а в операциях его нет — отметь, какие уже оплачены', href: '#/debts', cls: 'warn' }));
   return items.length ? rows(...items) : null;
-}
-
-function independenceBlock(v: PositionView): HTMLElement | null {
-  const i = v.independence;
-  if (i.status === 'not_assessed') return v.independenceLine ? h('div', { class: 'stack' }, sub('Независимость', info('independence')), h('p', { class: 'muted' }, v.independenceLine)) : null;
-  const col = (title: string, c: number, total: number) => h('div', { class: 'pos-col' }, h('div', { class: 'k' }, title), h('div', { class: 'v' }, pct(total)), h('div', { class: 'muted' }, `капитал: ${pct(c)}`));
-  return h(
-    'div',
-    { class: 'stack' },
-    sub('Независимость', info('independence')),
-    h('div', { class: 'card stack' },
-      h('p', { class: 'muted' }, 'Какую часть расходов покрывает капитал и независимый доход. Чтобы можно было не работать, нужно 125 %: расходы и ещё четверть на непредвиденное.'),
-      h('div', { class: 'pos-cols' }, col(INDEPENDENCE_TEXTS.centralLabel, i.c.central, i.total.central), col(INDEPENDENCE_TEXTS.conservativeLabel, i.c.conservative, i.total.conservative)),
-      i.p > 0 ? h('p', { class: 'muted' }, `Независимые поступления (пенсия, аренда и т. п.) покрывают ${pct(i.p)} расходов`) : null,
-      i.status === 'not_confirmed' && i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Чтобы можно было не работать, нужно ${approx(i.requiredCapital)} (обычный прогноз)`) : null,
-      v.independenceNote ? h('p', { class: 'muted' }, v.independenceNote.replace(/\b([NVF][1-4])\b/g, (c) => INDICATOR_LABELS[c as keyof typeof INDICATOR_LABELS]?.toLowerCase() ?? c)) : null,
-      h('small', { class: 'hint' }, `${INDEPENDENCE_TEXTS.scenarioNote}. ${INDEPENDENCE_TEXTS.assumptions.replace(/^./, (c) => c.toUpperCase())}`)),
-  );
-}
-
-function desiredBlock(v: PositionView): HTMLElement | null {
-  const d = v.desired;
-  if (!d) return null;
-  const i = d.independence;
-  const col = (title: string, tot: number, sub2: string) => h('div', { class: 'pos-col' }, h('div', { class: 'k' }, title), h('div', { class: 'v' }, pct(tot)), h('div', { class: 'muted' }, sub2));
-  const level = i.status === 'not_assessed'
-    ? 'при таких расходах независимость оценить нечем: данных не хватает'
-    : d.hypotheticalLevel === 5 ? `при таких расходах получилось бы «${L5_NAME}»` : `при таких расходах «${L5_NAME}» не получилось бы`;
-  return h(
-    'div',
-    { class: 'stack' },
-    sub(`При желаемых расходах (${DESIRED_LABEL})`, info('desiredScenario')),
-    h('div', { class: 'card stack' },
-      h('p', { class: 'muted' }, `А если бы ты тратил ${money(d.desired)} в месяц, а не ${money(d.current)}. Капитал и доходы те же. Это гипотеза: основная ступень от неё не меняется.`),
-      h('div', { class: 'pos-cols' },
-        col('Сейчас', v.independence.total.central, `при ${money(d.current)} в месяц`),
-        col(`Гипотеза`, i.total.central, `при ${money(d.desired)} в месяц`)),
-      h('p', { class: 'muted' }, `Цифры — по обычному прогнозу; по осторожному — ${pct(i.total.conservative)}. Нужно 125 %.`),
-      i.requiredCapital > 0 ? h('p', { class: 'muted' }, `Нужно ${approx(d.requiredCapital.desired)} (сейчас для ${money(d.current)} в месяц — ${approx(d.requiredCapital.current)}).`) : h('p', { class: 'muted' }, 'Порог достигается уже за счёт независимых поступлений.'),
-      h('p', { class: 'muted' }, `Запас денег при таких тратах — ${mo(d.reserveMonths)}`),
-      h('p', null, level.replace(/^./, (c) => c.toUpperCase()) + '.'),
-      h('small', { class: 'hint' }, INDEPENDENCE_TEXTS.scenarioNote)),
-  );
 }
 
 defineSheet('profile-more', () => {
   const v = positionNow();
   if (v.status !== 'ok') return null;
-  const parts = [housingBlock(v), runwayBlock(v), ...(v.money.total < 0 && v.independence.status !== 'not_assessed' ? [h('p', { class: 'muted' }, 'Независимость сейчас не считается: сначала долги.')] : [independenceBlock(v), desiredBlock(v)])].filter((x): x is HTMLElement => x !== null);
+  const parts = [housingBlock(v), runwayBlock(v)].filter((x): x is HTMLElement => x !== null);
+  if (!parts.length) parts.push(h('p', { class: 'muted' }, 'Жилья и закрытых активов нет, расходы не больше доходов — добавить нечего.'));
   return { title: 'Подробнее о профиле', body: h('div', { class: 'stack' }, ...parts) };
 });
-
-/** Независимость нужна единицам: на экране — одна строка, подробности — по нажатию; целиком только когда она рядом (≥ 20 %) или достигнута. */
-const INDEPENDENCE_INLINE_FROM = 0.2;
-defineSheet('independence', () => {
-  const v = positionNow();
-  if (v.status !== 'ok') return null;
-  const ind = independenceBlock(v);
-  const ds = desiredBlock(v);
-  return { title: 'Могу не работать', body: h('div', { class: 'stack' }, ind, ds) };
-});
-function independenceSection(v: PositionView): HTMLElement[] {
-  const i = v.independence;
-  // человек сам задал «желаемые траты» — сценарий показываем сразу, он за ним и пришёл
-  const near = v.level === 5 || v.desired !== null || (i.status !== 'not_assessed' && i.total.central >= INDEPENDENCE_INLINE_FROM);
-  if (i.status === 'not_assessed' || near) return [independenceBlock(v), desiredBlock(v)].filter((x): x is HTMLElement => x !== null);
-  return [rows(row({ title: 'Независимость', sub: 'когда можно не работать', value: `${pct(i.total.central)} пути`, href: sheetHref('independence') }))];
-}
 
 /** Внизу экрана: «Как посчитано» и подсказка «Как читать экран» (раньше — кнопка 36 px в карточке ступени). */
 function footNote(): HTMLElement {
@@ -602,7 +541,7 @@ export function renderPosition(): HTMLElement {
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));
-  // когда есть дорога, слабое место уже сказано подсказкой под условием, а ограничения — условиями; отдельный блок только без дороги (ступени 4–5)
+  // когда есть план, слабое место уже сказано подсказкой под оценкой, а ограничения — условиями; отдельный блок только без плана (ступень 5)
   const wk = road ? null : weakBlock(v);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));
@@ -610,7 +549,7 @@ export function renderPosition(): HTMLElement {
   // простой режим (D185): жильё, «если доход пропадёт» и независимость — за одной строкой «Подробнее»; тревожные признаки (спираль, просрочки) остаются на виду
   if (isSimpleMode(getState().settings)) {
     if (sp) root.append(sp);
-    root.append(rows(row({ title: 'Подробнее', sub: 'без дохода, жильё, независимость', href: sheetHref('profile-more') })));
+    root.append(rows(row({ title: 'Подробнее', sub: 'имущество и если ничего не менять', href: sheetHref('profile-more') })));
     root.append(footNote());
     return root;
   }
@@ -619,12 +558,6 @@ export function renderPosition(): HTMLElement {
   const rw = runwayBlock(v);
   if (rw) root.append(rw);
   if (sp) root.append(sp);
-  // при отрицательном капитале «нужен капитал на миллиарды» только стыдит — сначала долги
-  if (v.money.total < 0 && v.independence.status !== 'not_assessed') {
-    root.append(h('p', { class: 'muted' }, 'Независимость сейчас не считается: сначала долги. Когда капитал станет положительным, здесь появится путь.'));
-  } else {
-    root.append(...independenceSection(v));
-  }
   root.append(footNote());
   return root;
 }

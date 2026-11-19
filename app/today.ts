@@ -20,7 +20,7 @@ export interface TodayStepInput {
   arrived: { amount: string; title: string; more: number } | null;
   /** Деньги на подушку есть, но не закреплены за ней: сумма в виде «120 тыс ₸». */
   cushionPin: string | null;
-  /** Ближайший шаг дороги одной фразой («Довести запас до 3 месяцев»). */
+  /** Ближайший шаг плана одной фразой («Довести запас до 3 месяцев»). */
   road: string | null;
 }
 
@@ -35,7 +35,7 @@ export function todayStep(i: TodayStepInput): TodayStep | null {
     return { key: 'arrived', title: `Пришли деньги: ${i.arrived.title} ${i.arrived.amount}${more}`, button: 'Распределить', href: '#/income' };
   }
   if (i.cushionPin) return { key: 'cushion', title: `Закрепить ${i.cushionPin} за подушкой`, button: 'Закрепить', href: '#/goals~cushion-fill' };
-  if (i.road) return { key: 'road', title: i.road, button: 'Открыть дорогу', href: '#/position' };
+  if (i.road) return { key: 'road', title: i.road, button: 'Открыть план', href: '#/position' };
   return null;
 }
 

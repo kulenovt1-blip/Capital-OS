@@ -87,12 +87,12 @@ describe('только платежи по долгам, трат «обязат
   });
 });
 
-describe('«Дорога»: условие запаса', () => {
+describe('«План»: условие запаса', () => {
   it('без отметки условие «Запас на жизнь» не заявляет число месяцев, а просит отметить обязательное', () => {
     const v = positionViewOf(build(unmarked(mk('Мало запаса', 60_000, 250_000, [['food', 'E_base', 120_000], ['fun', 'E_fun', 100_000]]))), TODAY);
     expect(v.essentialUnknown).toBe(true);
     const road = roadOf(v);
-    expect(road, 'для ступени ≤ 3 «Дорога» есть').not.toBeNull();
+    expect(road, 'для ступени ≤ 3 «План» есть').not.toBeNull();
     const cond = road!.next.conds.find((c) => c.kind === 'reserve');
     expect(cond, 'условие запаса есть').toBeDefined();
     expect(cond!.done).toBe(false);
