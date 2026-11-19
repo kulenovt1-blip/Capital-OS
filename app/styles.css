@@ -761,8 +761,8 @@ body.modal-open { overflow: hidden; }
 .mcard { padding: 14px 16px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .mcard .mhead { display: flex; align-items: center; gap: 8px; font-size: calc(13px * var(--fz)); font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .mcard .mhead span { flex: 1; }
-.mcard .mhead a { color: var(--muted); text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 600; }
-.mcard .mclose { width: 32px; height: 32px; margin: -6px -8px -6px 0; border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+.mcard .mhead a { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.mcard .mclose { width: 44px; height: 44px; margin: -6px -10px -6px 0; border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
 .mcard .mval { margin-top: 4px; font-size: calc(28px * var(--fz)); font-weight: 900; color: var(--good); }
 .mcard .mval.neg { color: var(--bad); }
 .mcard .msub { font-size: calc(14px * var(--fz)); color: var(--muted); }
@@ -924,3 +924,4 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .pc-head strong { font-size: calc(18px * var(--fz)); }
 .pc-level { font-size: calc(14px * var(--fz)); color: var(--ink-2); font-weight: 600; }
 .persona-card .btn.wide { width: 100%; }
+.act-card > .btn { min-height: 44px; }

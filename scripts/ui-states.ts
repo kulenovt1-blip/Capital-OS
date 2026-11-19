@@ -122,6 +122,8 @@ export const SCREENS: [string, string][] = [
   ['plan-job', '#/forecast~plan/job'], ['plan-payoff', '#/forecast~plan/payoff'], ['plan-study', '#/forecast~plan/study'], ['plan-inst', '#/forecast~plan/inst'], ['plan-inst-result', '#/forecast~plan/inst'], ['plan-own', '#/forecast~plan/own'], ['setaside-other', '#/income~setaside-other'], ['arrived-pick', '#/income~arrived-pick'], ['goal-laptop', '#/goals~goal/goal-laptop'],
 ];
 export async function put(page, json: string): Promise<void> {
+  // приложение при первой загрузке пишет своё пустое состояние: без паузы оно затирает наше (гонка, из-за которой экраны иногда открывались «Нет данных»)
+  await page.waitForTimeout(800);
   await page.evaluate(
     (v) =>
       new Promise<void>((res, rej) => {
