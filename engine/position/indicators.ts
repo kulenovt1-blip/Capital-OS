@@ -27,8 +27,9 @@ import type { AppState } from '../state';
 import { buildOverview } from '../overview';
 import { assetChoiceOf } from './inputs';
 import { buildSimInput } from '../plan';
-import { simulate, DEFAULT_SCENARIOS, assembleIncomeStreams } from '../simulate';
-import type { IsoDate } from '../date';
+import { simulate, DEFAULT_SCENARIOS, assembleIncomeStreams, grow } from '../simulate';
+import { EXTRA_INCOME_ID } from '../hidden';
+import { monthsBetween, type IsoDate } from '../date';
 import { buildPositionSeries, SERIES_LOOKBACK, type PositionSeries } from './series';
 import { incomeSources } from './sources';
 import type { IncomeStatus } from './settings';
@@ -261,9 +262,18 @@ export function securedDebtOf(state: AppState, o: { obligations: readonly { obli
   return debt > 0 && value > 0 ? { debt, value } : null;
 }
 
-/** D209: доход сегодня по расписанию — сумма месячных выплат потоков, действующих сегодня (начался не позже сегодня, не закончился), в тенге. */
-export function scheduledIncomeNow(streams: ReturnType<typeof assembleIncomeStreams>, today: IsoDate): number {
-  return streams.reduce((acc, s) => acc + ((!s.start || s.start <= today) && (!s.end || s.end >= today) ? T(s.amount) : 0), 0);
+/**
+ * D209: доход сегодня по расписанию — сумма месячных выплат потоков, действующих сегодня (начался не позже сегодня, не закончился), в тенге.
+ * Рост (индексация) считается так же, как в прогнозе: по числу полных периодов от якоря до сегодня.
+ */
+export function scheduledIncomeNow(streams: ReturnType<typeof assembleIncomeStreams>, today: IsoDate): { now: number; anyEnded: boolean } {
+  const anyEnded = streams.some((s) => s.end && s.end < today && !(s.start && s.start > today));
+  const now = streams.reduce((acc, s) => {
+    if ((s.start && s.start > today) || (s.end && s.end < today)) return acc;
+    const steps = s.growth && s.growth.everyMonths > 0 ? Math.floor(Math.max(0, monthsBetween(s.anchor, today)) / s.growth.everyMonths) : 0;
+    return acc + T(s.growth ? grow(s.amount, s.growth.rateBp, steps) : s.amount);
+  }, 0);
+  return { now, anyEnded };
 }
 
 export function computeIndicators(state: AppState, today: IsoDate, series: PositionSeries = buildPositionSeries(state, today), options: IndicatorOptions = {}): IndicatorsReport {
@@ -288,10 +298,14 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const manualIncomeMonthly = state.settings.incomeSchedule.reduce((a, i) => a + (i.passive === true && i.inHistory !== true && (!i.start || i.start <= today) && (!i.end || i.end >= today) ? T(i.amount) : 0), 0);
   const { input } = buildSimInput(state, today);
   const incomeHistory = mean(inc.slice(-6)) + manualIncomeMonthly;
-  // D209: среднее за 6 месяцев включает уже закончившиеся источники (летняя подработка, которой нет в расписании) и завышает доход для нагрузки по долгам.
-  // Есть действующие сегодня строки расписания — доход не выше их суммы (берётся меньшее); нет таких строк — расписание о текущем доходе ничего не говорит, остаётся история.
-  const scheduledNow = scheduledIncomeNow(assembleIncomeStreams(input.incomes, input.events, today), today);
-  const incomeMonthly = options.incomeFromSchedule !== false && scheduledNow > 0 ? Math.min(incomeHistory, scheduledNow) : incomeHistory;
+  // Расписание доходов — это строки и события «начало дохода» самого человека; автопоток «Подарки, кешбэк» к расписанию не относится (аудит 10, находка 1)
+  const declaredIncomes = input.incomes.filter((i) => i.id !== EXTRA_INCOME_ID);
+  const scheduleKnown = declaredIncomes.length > 0 || input.events.some((e) => e.kind === 'income_start');
+  // D209 (ред. аудита 10): когда расписание известно, доход для нагрузки по долгам — то, что по нему действует сегодня, как и в F и в прогнозе.
+  // Среднее за 6 месяцев включало закончившиеся источники (летняя подработка). Закончился единственный источник — доход 0 (так считает и F); расписания нет — история, как раньше.
+  // Будущее событие меняет только III (спец. v3 §2): расписание, в котором ничего не действует сегодня и ничего не закончилось (только будущие строки и «начало дохода»), о доходе сегодня не говорит — остаётся история.
+  const { now: scheduledNow, anyEnded } = scheduledIncomeNow(assembleIncomeStreams(declaredIncomes, input.events, today), today);
+  const incomeMonthly = options.incomeFromSchedule !== false && scheduleKnown && (scheduledNow > 0 || anyEnded) ? scheduledNow : incomeHistory;
 
   const values: Indicators = {};
   // I. Здесь и сейчас
@@ -322,7 +336,6 @@ export function computeIndicators(state: AppState, today: IsoDate, series: Posit
   const facts = incomeSources(input, today).map((s) => ({ status: s.status, monthly: T(s.monthly), volume: T(s.volume), endsWithin6m: s.endsWithin6m }));
   const sources = facts;
   // расписания доходов нет (ни строк, ни событий «начало дохода») — обеспеченность, опасность потери и будущая норма сбережений неизвестны, а не нули (спец. 5.1)
-  const scheduleKnown = input.incomes.length > 0 || input.events.some((e) => e.kind === 'income_start');
   values.F1 = scheduleKnown ? reserveScore(troughNet, needEssential) : null;
   values.F2 = scheduleKnown ? reliabilityScore(sources, needEssential) : null;
   values.F3 = scheduleKnown ? exposureScore(sources) : null;

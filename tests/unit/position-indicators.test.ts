@@ -283,7 +283,9 @@ describe('чистая ликвидность и ручной пассивный
     near(withRow({}).inputs!.manualIncomeMonthly, 50_000, 6); // не спрошено — как раньше
     near(withRow({ inHistory: false }).inputs!.manualIncomeMonthly, 50_000, 6);
     expect(withRow({ inHistory: true }).inputs!.manualIncomeMonthly).toBe(0);
-    expect(withRow({ inHistory: true }).inputs!.incomeMonthly).toBe(none.incomeMonthly);
+    // путь «история + ручной пассивный» (когда расписания нет, и сверка с пробой); при известном расписании доход берётся по нему (D209)
+    const legacy = (extra: object) => computeIndicators({ ...base, settings: { ...base.settings, incomeSchedule: [...base.settings.incomeSchedule, { ...row, ...extra }] } }, TODAY, undefined, { incomeFromSchedule: false }).inputs!;
+    expect(legacy({ inHistory: true }).incomeMonthly).toBe(computeIndicators(base, TODAY, undefined, { incomeFromSchedule: false }).inputs!.incomeMonthly);
   });
   it('доход без признака «не зависит от труда» второй раз не считается: он уже в операциях', () => {
     const base = build(SPECS2[1]!);

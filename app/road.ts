@@ -3,7 +3,7 @@
  * Чистая функция над `PositionView`: ничего не считает заново, только раскладывает уже посчитанное движком
  * (запас, общая оценка, направления) в строки «сколько есть из сколько нужно». Математику движка не меняет.
  */
-import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type Money, type MonthKey, type PositionView, type ReserveTarget, type Route, type SavingReport } from '../engine/index';
+import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type Money, type MonthKey, shownScore, type PositionView, type ReserveTarget, type Route, type SavingReport } from '../engine/index';
 
 /** Запас — округление вниз до десятых, как на «Профиле» и «Обзоре»: 5,96 → «5,9». */
 const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
@@ -50,7 +50,7 @@ export function roadOf(v: PositionView): RoadModel | null {
   const thr = SCORE_THRESHOLD[to];
   if (thr !== undefined && v.g !== null) {
     const weakHint = v.g < thr && v.weak ? `Слабее всего: ${v.weak.directionName}${v.weak.indicator ? ` · ${v.weak.indicator.label}` : ''}` : undefined;
-    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${Math.round(v.g)}` : `${Math.round(v.g)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score', ...(weakHint ? { hint: weakHint } : {}) });
+    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${shownScore(v.g)}` : `${shownScore(v.g)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score', ...(weakHint ? { hint: weakHint } : {}) });
   }
 
   if (to === 4) {
@@ -58,7 +58,7 @@ export function roadOf(v: PositionView): RoadModel | null {
     const unknown = v.directions.some((d) => d.score === null);
     conds.push({
       title: 'Каждое направление от 60',
-      value: low.length ? low.map((d) => `${d.name} ${Math.round(d.score!)}`).join(', ') : unknown ? 'данных мало' : 'выполнено',
+      value: low.length ? low.map((d) => `${d.name} ${shownScore(d.score!)}`).join(', ') : unknown ? 'данных мало' : 'выполнено',
       ratio: null,
       done: !low.length && !unknown,
       kind: 'directions',

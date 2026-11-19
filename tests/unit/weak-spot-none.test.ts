@@ -1,5 +1,5 @@
 /**
- * D210. «Слабое место» не называет хорошее слабым: если и лучший из «действуемых» показателей слабого направления не ниже WEAK_NONE_FROM (90), слабого места нет.
+ * D210. «Слабое место» не называет хорошее слабым: если даже самый низкий из «действуемых» показателей слабого направления не ниже WEAK_NONE_FROM (80), слабого места нет.
  * Инварианты проверяются на пуле проб и на двух именных профилях; ожидаемые значения — арифметика порога, не снимок вывода.
  */
 import { describe, it, expect } from 'vitest';
@@ -9,7 +9,7 @@ import { PERSONAS, PERSONA_TODAY, personaState } from '../support/personas';
 
 describe('«Слабое место»: порог D210', () => {
   const views = probeProfiles().map((p) => ({ name: p.name, v: positionViewOf(applyProbeOpts(p.state, p.opts), TODAY) }));
-  it('порог — 90', () => expect(WEAK_NONE_FROM).toBe(90));
+  it('порог — 80', () => expect(WEAK_NONE_FROM).toBe(80));
   it('если слабое место названо с показателем, его оценка ниже порога', () => {
     for (const { name, v } of views) if (v.weak?.indicator) expect(v.weak.indicator.score, name).toBeLessThan(WEAK_NONE_FROM);
   });
