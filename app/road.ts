@@ -3,7 +3,7 @@
  * Чистая функция над `PositionView`: ничего не считает заново, только раскладывает уже посчитанное движком
  * (запас, общая оценка, направления) в строки «сколько есть из сколько нужно». Математику движка не меняет.
  */
-import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type PositionView } from '../engine/index';
+import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type Money, type MonthKey, type PositionView, type ReserveTarget, type Route, type SavingReport } from '../engine/index';
 
 /** Запас — округление вниз до десятых, как на «Профиле» и «Обзоре»: 5,96 → «5,9». */
 const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
@@ -77,4 +77,56 @@ export function roadOf(v: PositionView): RoadModel | null {
     next: { level: to, name: v.next.name, conds },
     rest: v.ladder.filter((l) => l.level > to).map((l) => ({ level: l.level, name: l.name })),
   };
+}
+
+// ───────────────────────── «Как выполнить» (D3, вариант 3: из реальных данных) ─────────────────────────
+
+export interface RoadHowSaving { categoryId: string; title: string; monthly: Money; cutPerMonth: Money; gain12: Money }
+export interface RoadHowReserve {
+  /** Запас на сколько месяцев нужен. */
+  target: ReserveTarget;
+  missing: Money;
+  /** Траты больше доходов на столько в месяц (0 — нет). */
+  deficitMonthly: Money;
+  /** К какому месяцу при нынешнем темпе; null — не за пять лет. */
+  by: MonthKey | null;
+  /** «Откладывать сверху ≈ X в месяц, чтобы успеть за N месяцев» — только те сроки, где добавка нужна. */
+  deadlines: { months: number; month: MonthKey; extraMonthly: Money }[];
+  debtFree: { from: MonthKey; freed: Money } | null;
+  /** Самые крупные траты и что даст урезание на SAVING_CUT_PCT %. */
+  savings: RoadHowSaving[];
+}
+export interface RoadHowWeak { direction: 'N' | 'V' | 'F'; directionName: string; id: string; label: string; score: number }
+export interface RoadHow {
+  /** null — условие запаса выполнено или к нему не сводится. */
+  reserve: RoadHowReserve | null;
+  /** Самые слабые показатели (ниже 60), не больше трёх; пусто — тянуть нечего. */
+  weak: RoadHowWeak[];
+}
+
+/** Сколько категорий трат показываем на странице «Как выполнить». */
+export const ROAD_HOW_SAVINGS = 3;
+/** Показатель слабый, если ниже этой оценки (черта 60 — порог направления на ступень 4). */
+export const ROAD_HOW_WEAK_BELOW = 60;
+
+/**
+ * Страница «Как выполнить»: ничего не придумывает, раскладывает то, что уже считают `routeTo` (сколько не хватает, добавка к сроку, когда кончатся платежи по долгам),
+ * `savingOptions` (на что уходят деньги, что даст урезание) и `PositionView` (слабые показатели). Математику движка не меняет.
+ */
+export function roadHowOf(v: PositionView, route: Route | null, saving: SavingReport | null): RoadHow {
+  const reserve: RoadHowReserve | null = route && route.missing > 0
+    ? {
+        target: route.to,
+        missing: route.missing,
+        deficitMonthly: route.deficitMonthly,
+        by: route.by,
+        deadlines: route.deadlines.filter((d) => d.extraMonthly > 0).map((d) => ({ months: d.months, month: d.month, extraMonthly: d.extraMonthly })),
+        debtFree: route.debtFree,
+        savings: (saving?.options ?? []).filter((o) => o.cut !== null).slice(0, ROAD_HOW_SAVINGS).map((o) => ({ categoryId: o.categoryId, title: o.title, monthly: o.monthly, cutPerMonth: o.cut!.perMonth, gain12: o.cut!.capitalGain12 })),
+      }
+    : null;
+  const weak: RoadHowWeak[] = [];
+  for (const d of v.directions) for (const i of d.indicators) if (i.score !== null && i.score < ROAD_HOW_WEAK_BELOW) weak.push({ direction: d.id, directionName: d.name, id: i.id, label: i.label, score: i.score });
+  weak.sort((a, b) => a.score - b.score);
+  return { reserve, weak: weak.slice(0, 3) };
 }

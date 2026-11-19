@@ -3,8 +3,8 @@
  * Экран ничего не считает: всё берётся из `positionViewOf` (engine/position/view.ts) и рисуется в порядке важности для телефона.
  * Слова без внутренних терминов; коды показателей (N1, V2…) на экране не показываются.
  */
-import { roadOf, type RoadCond } from '../road';
-import { DESIRED_LABEL, INDEPENDENCE_TEXTS, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
+import { roadOf, roadHowOf, type RoadCond } from '../road';
+import { DESIRED_LABEL, INDEPENDENCE_TEXTS, SAVING_CUT_PCT, savingOptions, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getState, today } from '../store';
@@ -259,6 +259,7 @@ function roadBlock(v: PositionView): HTMLElement | null {
           h('div', { class: 'rd-sub' }, needLine(m.next.conds.length)),
           h('div', { class: 'rd-conds' }, ...m.next.conds.map(cond)),
           path.length ? h('div', { class: 'rd-path stack tight' }, ...path) : null,
+          h('a', { class: 'link', href: sheetHref('road-how'), style: 'display:flex;align-items:center;min-height:44px' }, 'Как выполнить ›'),
         ),
       ),
       m.rest.length ? h('li', { class: 'rd far' }, node(String(m.rest[0]!.level), 'far'), h('div', { class: 'rd-body muted' }, `Дальше: ${m.rest.map((x) => x.name).join(' → ')}`)) : null,
@@ -284,6 +285,59 @@ export function scoreWord(score: number): string {
   if (score >= 40) return 'слабо';
   return 'мало';
 }
+
+/** Срок словами: 12 → «год», 24 → «2 года». */
+const termWord = (n: number): string => (n === 12 ? 'год' : n === 24 ? '2 года' : `${n} мес.`);
+
+/**
+ * «Как выполнить» (D3, вариант 3): под условия дороги — реальные числа из движка. Запас: сколько не хватает, добавка к сроку, когда кончатся платежи, на чём можно сэкономить.
+ * Оценка и направления: самые слабые показатели со ссылкой на объяснение. Всё из `roadHowOf` (`routeTo`, `savingOptions`, `PositionView`); ничего не выдумано.
+ */
+defineSheet('road-how', () => {
+  const v = positionNow();
+  if (v.status !== 'ok') return null;
+  const target = pathTarget(v);
+  const st = getState();
+  const t = today();
+  const how = roadHowOf(v, target === null ? null : routeTo(st, t, target), savingOptions(st, t));
+  const r = how.reserve;
+  const parts: (HTMLElement | null)[] = [];
+  if (r) {
+    const pace = r.deficitMonthly > 0 ? null : r.by ? `Нынешним темпом — к ${monthTo(r.by)}.` : 'Нынешним темпом за пять лет не получается: расходы почти равны доходам.';
+    parts.push(
+      sub('Запас на жизнь'),
+      h('div', { class: 'card stack tight' },
+        h('strong', null, `Не хватает ${approx(r.missing / 100)} до запаса на ${r.target} мес.`),
+        r.deficitMonthly > 0 ? h('div', { class: 'badline' }, `Сейчас расходы больше доходов на ≈ ${fmtShort(r.deficitMonthly)} в месяц — запас тает. Сначала нужно выйти в плюс: любая добавка к накоплению начнёт работать только после этого.`) : null,
+        pace ? h('p', null, pace) : null,
+        r.debtFree ? h('p', { class: 'muted' }, `Платежи по долгам кончатся к ${monthTo(r.debtFree.from)}: освободится ≈ ${fmtShort(r.debtFree.freed)} в месяц — это уже учтено в сроке.`) : null,
+      ),
+    );
+    if (r.deficitMonthly <= 0 && r.deadlines.length) {
+      parts.push(
+        sub('Хочу быстрее'),
+        rows(r.deadlines.map((d) => row({ title: `За ${termWord(d.months)}`, sub: `к ${monthTo(d.month)}`, value: `+${fmtShort(d.extraMonthly)} в мес.`, chevron: false }))),
+        h('p', { class: 'muted' }, 'Сколько нужно откладывать сверху нынешнего. Меньше тратить или больше получать — для запаса одно и то же.'),
+      );
+    }
+    if (r.savings.length) {
+      parts.push(
+        sub('На чём можно сэкономить'),
+        rows(r.savings.map((x) => row({ title: x.title, sub: `уходит ${fmtShort(x.monthly)} в месяц; на ${SAVING_CUT_PCT} % меньше — ещё +${fmtShort(x.cutPerMonth)} в месяц`, href: sheetHref('save-cat', x.categoryId) }))),
+        h('a', { class: 'link', href: sheetHref('save-where'), style: 'display:flex;align-items:center;min-height:44px' }, 'Все траты ›'),
+      );
+    }
+    if (target !== null) parts.push(h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: () => setRouteTarget(target) }, 'Посчитать путь'));
+  }
+  if (how.weak.length) {
+    parts.push(
+      sub('Что тянет оценку вниз'),
+      rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(Math.round(w.score)), href: sheetHref('direction', w.direction) }))),
+    );
+  }
+  if (!parts.length) parts.push(h('div', { class: 'okline' }, 'Условия, которые зависят от денег и оценки, выполнены.'));
+  return { title: 'Как выполнить', body: h('div', { class: 'stack' }, ...parts) };
+});
 
 /** Что измеряет каждый показатель и что значит 0 и 100 — простыми словами (аудит UX: «откуда у направления 100?»). */
 const INDICATOR_HINTS: Readonly<Record<string, string>> = {
