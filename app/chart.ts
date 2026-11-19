@@ -255,7 +255,35 @@ export function reserveChart(months: MonthKey[], now: number, reserve: number[],
     lab.textContent = txt;
     svg.append(lab);
   }
+  // пороги ступеней (дизайн A+, D5): пунктир на 3 и 6 месяцах с подписью, на самом пороге — условие ступени
+  const RULES: [number, string, string][] = [[3, 'условие ступени 3', 'Запас 3 мес.'], [6, 'условие ступени 4', 'Запас 6 мес.']];
+  for (const [t, label] of RULES) {
+    if (t > top) continue;
+    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(t), y2: y(t), class: 'rc-rule' }));
+    // подписи справа над линиями: слева у начала линии стоят «сейчас» и значение запаса
+    const lab = s('text', { x: W - pad.r - 4, y: y(t) - 5, 'text-anchor': 'end', class: 'rc-rule-t' });
+    lab.textContent = `${t} мес. — ${label}`;
+    svg.append(lab);
+  }
   svg.append(s('path', { d: vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(''), class: 'line s1' }));
+  // где линия впервые доходит до порога — отметка с месяцем; если запас уже выше порога, отметки нет
+  const crossings: { i: number; t: number; text: string }[] = [];
+  for (const [t, , pill] of RULES) {
+    if (t > top || vals[0]! >= t) continue;
+    const i = vals.findIndex((v, k) => k > 0 && v >= t);
+    if (i > 0) crossings.push({ i, t, text: `${pill} · ${formatMonthRu(months[i - 1]!)}` });
+  }
+  for (const c of crossings) {
+    const cx = x(c.i), cy = y(c.t);
+    svg.append(s('line', { x1: cx, x2: cx, y1: cy, y2: H - pad.b, class: 'rc-drop' }));
+    svg.append(s('circle', { cx, cy, r: 8, class: 'rc-cross' }));
+    const w = c.text.length * 7 + 18;
+    const px = Math.max(pad.l, Math.min(W - pad.r - w + 40, cx - w / 2));
+    svg.append(s('rect', { x: px, y: cy - 36, width: w, height: 22, rx: 11, class: 'rc-pill' }));
+    const pt = s('text', { x: px + w / 2, y: cy - 21, 'text-anchor': 'middle', class: 'rc-pill-t' });
+    pt.textContent = c.text;
+    svg.append(pt);
+  }
   const f = (v: number) => v.toFixed(1).replace('.', ',');
   const point = (i: number, txt: string, anchor: 'start' | 'end') => {
     svg.append(s('circle', { cx: x(i), cy: y(vals[i]!), r: 4, class: 'rc-dot' }));

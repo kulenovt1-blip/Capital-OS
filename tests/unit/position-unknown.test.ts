@@ -157,7 +157,7 @@ describe('ограничители и G', () => {
     expect(aggregateG([], none, 'point')).toBeNull();
   });
   const inputs = (reserveEssentialMonths: number, netLiquid = 0, needLifestyle = 200): IndicatorInputs => ({
-    needEssential: 100, needLifestyle, liquid: netLiquid, netLiquid, net: 0, debtTotal: 0, obligationsMonthly: 0, incomeMonthly: 0, manualIncomeMonthly: 0,
+    needEssential: 100, needLifestyle, liquid: netLiquid, netLiquid, net: 0, debtTotal: 0, secured: null, obligationsMonthly: 0, incomeMonthly: 0, manualIncomeMonthly: 0,
     reserveEssentialMonths, reserveLifestyleMonths: 0, troughNet: 0,
   });
   const src = (monthly: number, endsWithin6m: boolean, status: 'P' | 'T' | 'X' | 'I' = 'P') => ({ status, monthly, volume: monthly * 12, endsWithin6m });

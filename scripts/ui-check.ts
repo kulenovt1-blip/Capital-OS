@@ -44,18 +44,20 @@ const HEIGHT_LIMIT: Record<string, number> = { forecast: 3.2, overview: 1.6, pos
  * а не только лишний мусор. Слов «безопасно», «гарантированно», «обеспечено» на экране нет в любом состоянии (D126).
  */
 const POSITION_EXPECT: Record<string, { has: string[]; hasNot?: string[] }> = {
-  'pos-l4': { has: ['Ступень 4 из 5', 'Защищён от ударов', 'Все уровни', 'Всего капитал', 'Независимость'], hasNot: ['Сдерживает уровень', 'предварительно', 'При желаемых расходах'] },
+  'pos-l4': { has: ['Ступень 4 из 5', 'Защищён от ударов', 'Как читать экран', 'Всего капитал', 'Независимость'], hasNot: ['Сдерживает уровень', 'предварительно', 'При желаемых расходах'] },
   'pos-l5': { has: ['Ступень 5 из 5', 'Могу не работать', 'более чем на 50 лет', 'При желаемых расходах (гипотеза)', 'Это прогноз, а не гарантия'], hasNot: ['предварительно'] },
-  'pos-limit': { has: ['Сдерживает уровень', 'кассовый разрыв'] },
-  'pos-border': { has: ['Ты на границе уровней', '1 очко общей оценки'] },
-  'pos-spiral': { has: ['Признаки долговой спирали', 'Есть просроченные платежи', 'Доступно в течение месяца'] },
-  'pos-short': { has: ['предварительно', 'независимость не оценена', 'Нужно хотя бы три полных месяца', 'мало данных'], hasNot: ['При желаемых расходах'] },
+  'pos-limit': { has: ['Снять ограничение', 'кассовый разрыв'] },
+  'pos-border': { has: ['Ты на границе ступеней'] },
+  'pos-spiral': { has: ['Признаки долговой спирали', 'Есть просроченные платежи', 'Снять за месяц'] },
+  'pos-short': { has: ['предварительно', 'независимость не оценена', 'Нужно хотя бы три полных месяца', 'данных мало'], hasNot: ['При желаемых расходах'] },
 };
 const POSITION_BANNED = /\b(безопасно|гарантированно|обеспечено)\b/i;
 
 const CONFIGURED = ['position', 'debt-new', 'debt-edit', 'plan-payoff', 'plan-study', 'plan-inst', 'plan-inst-result', 'explain-forecast', 'income-more', 'forecast-more', 'baskets', 'basket-sheet', 'cushion', 'cushion-fill', 'distribute', 'a-to-b', 'to-date', 'folder-sheet', 'plan-job', 'plan-own', 'setaside-other', 'arrived-pick', 'goal-laptop', 'overview', 'explain-overview', 'help', 'data', 'prefs', 'fc-scenarios', 'fc-goal', 'goals', 'goal-new', 'goal-sheet', 'goal-fund', 'goal-edit', 'income', 'income-result', 'forecast', 'more', 'setup', 'import', 'markup', 'accounts', 'account-sheet', 'savings', 'incomes', 'income-kinds', 'debts', 'backup', 'install', 'rare', 'rare-manual', 'manual-new', 'income-item', 'you', 'position', 'advanced', 'adv-rules', 'adv-params', 'adv-scenarios'];
 const PLAN: [string, string[]][] = [
   ['configured', CONFIGURED],
+  // простой режим (D7): «Сегодня», «Дорога», «Цели», «Ещё», «Прогноз» внутри «Ещё»
+  ['simple', ['overview', 'explain-overview', 'position', 'goals', 'more', 'forecast']],
   ['imported', ['start', 'start-savings', 'start-goals', 'overview', 'setup', 'setup-classes', 'setup-income', 'setup-obligations', 'setup-goals', 'markup', 'forecast', 'goals', 'debts']],
   ['empty', ['overview', 'position', 'setup', 'goals', 'income', 'forecast', 'import', 'more']],
   ['broken', ['overview', 'goals', 'income', 'forecast', 'more', 'import']],

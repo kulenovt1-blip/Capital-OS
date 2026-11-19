@@ -3,6 +3,9 @@ import { act, getState, setPreviewMode, update } from './store';
 import { go } from './main';
 import { startTour, tourActive, type TourStep } from './tour';
 import { isSimpleMode } from '../engine/index';
+import { positionNow } from './ctx';
+import { personaTourSteps } from './persona-tours';
+import type { PersonaId } from './personas';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function openScreen(hash: string): Promise<void> {
@@ -30,11 +33,11 @@ export async function modeTour(): Promise<void> {
   const choose = (simple: boolean) => act((s) => ({ ...s, settings: { ...s.settings, uiMode: simple ? 'simple' : 'full' } }), simple ? 'Простой режим включён' : 'Полный режим включён');
   const steps: TourStep[] = hasData
     ? [
-        { before: () => setPreviewMode('simple'), target: '[data-tour=hero]', title: 'Главное — в обоих режимах', text: 'Сколько свободно до дохода. Это число и все расчёты одинаковые в простом и полном режиме.' },
-        { before: () => setPreviewMode('simple'), target: '[data-tour=details]', title: 'Простой режим', text: 'Платежи на месяц, капитал и все счета спрятаны сюда, под «Подробнее». На экране — только то, что нужно каждый день.' },
-        { before: () => setPreviewMode('full'), target: ['[data-tour=payments]', '[data-tour=details]'], title: 'Полный режим', text: 'Те же платежи — сразу на экране, без лишнего нажатия. На Профиле, Прогнозе и Целях так же: больше блоков открыто.' },
+        { before: () => setPreviewMode('simple'), target: '[data-tour=hero]', title: 'Главное — в обоих режимах', text: 'Сколько свободно до следующего дохода. Это число и все расчёты одинаковые в простом и полном режиме.' },
+        { before: () => setPreviewMode('simple'), target: '[data-tour=full]', title: 'Простой режим', text: 'На экране три блока: сколько можно потратить, следующий шаг и ближайший платёж. Внизу четыре вкладки: Сегодня, Цели, Дорога, Ещё.' },
+        { before: () => setPreviewMode('full'), target: ['[data-tour=payments]', '[data-tour=details]'], title: 'Полный режим', text: 'Те же платежи — сразу на экране, плюс счета и капитал. Внизу пять вкладок: «Прогноз» и «Профиль» стоят отдельно, а на самих экранах открыто больше блоков.' },
       ]
-    : [{ title: 'Два режима', text: 'Простой — на экранах только главное, остальное под «Подробнее». Полный — всё сразу. Расчёты одинаковые.' }];
+    : [{ title: 'Два режима', text: 'Простой — три блока на «Сегодня» и четыре вкладки. Полный — все экраны и блоки сразу. Расчёты одинаковые.' }];
   steps.push({
     before: () => setPreviewMode(null),
     title: 'Какой оставить?',
@@ -55,13 +58,22 @@ export async function profileTour(): Promise<void> {
   await openScreen('#/position');
   startTour(
     [
-      { target: '[data-tour=level]', title: 'Твоя ступень', text: 'Где ты сейчас из пяти ступеней — от «Денег не хватает» до «Могу не работать». Все ступени — по кнопке ниже.' },
+      { target: '[data-tour=level]', title: 'Твоя ступень', text: 'Где ты сейчас из пяти ступеней — от «Не хватает на жизнь» до «Могу не работать». Нажми на ступень — увидишь все пять.' },
       { target: '[data-tour=dirs]', title: 'Три направления', text: 'Сейчас, как меняется и насколько защищено будущее. Оранжевая черта — порог 60: пока полоска короче, следующая ступень закрыта. Нажми на направление — увидишь, из чего оно.' },
       { target: ['[data-tour=weak]', '[data-tour=path]'], title: 'С чего начать', text: 'Самое слабое место и что нужно, чтобы подняться выше. Это и есть твой следующий шаг.' },
       { target: '[data-tour=money]', title: 'Деньги', text: 'Капитал — всё, что есть, минус долги. Запас — сколько месяцев проживёшь без дохода. Нажми ⓘ — подробнее.' },
     ],
     { label: 'Как читать профиль' },
   );
+}
+
+/** Тур по профилю примера (у каждого персонажа свой): те же блоки экрана, но про этого человека. */
+export async function personaTour(id: PersonaId): Promise<void> {
+  markTour('profile');
+  await openScreen('#/position');
+  const v = positionNow();
+  if (v.status !== 'ok') return;
+  startTour(personaTourSteps(id, v), { label: 'Как читать этот пример' });
 }
 
 /**
@@ -92,6 +104,19 @@ export function autoTour(id: string, hash: string, run: () => void | Promise<voi
 export async function spendTour(): Promise<void> {
   markTour('overview');
   await openScreen('#/overview');
+  // в простом режиме на экране «Сегодня» другие блоки (D7)
+  if (isSimpleMode(getState().settings)) {
+    startTour(
+      [
+        { target: '[data-tour=hero]', title: 'Сколько можно тратить', text: 'Свободно до следующего дохода — уже после еды, дороги, подписок и платежей по долгам. Рядом — сколько это в день сверх обычных трат.' },
+        { target: '[data-tour=step]', title: 'Следующий шаг', text: 'Одно действие, которое сейчас важнее всего. Нажми кнопку — приложение откроет нужный экран.' },
+        { target: '[data-tour=payment]', title: 'Ближайший платёж', text: 'Платёж по долгу или рассрочке. Если он придётся до следующего дохода, он уже вычтен из числа.' },
+        { target: ['[data-tour=step-chip]', '.trust'], title: 'Ступень и доверие к цифрам', text: 'Ступень — где ты на дороге из пяти ступеней. Если вместо неё жёлтая или красная метка — к данным есть вопросы; нажми, увидишь какие.' },
+      ],
+      { label: 'Сколько можно потратить' },
+    );
+    return;
+  }
   startTour(
     [
       { target: '[data-tour=hero]', title: 'Сколько можно тратить', text: 'Свободно до следующего дохода — уже после еды, дороги, подписок и платежей по долгам. «В день сверху» — сколько можно добавить к обычным тратам.' },

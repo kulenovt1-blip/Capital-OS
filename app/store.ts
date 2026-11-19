@@ -5,9 +5,11 @@
  * Данные никогда не затираются молча (D91): нечитаемое сохранённое состояние откладывается и блокирует запись,
  * а неудачная запись сразу видна человеку. Решения — в `persist.ts` (их проверяют тесты).
  */
-import { emptyState, serializeState, type AppState, type IsoDate } from '../engine/index';
+import { emptyState, parseState, serializeState, type AppState, type IsoDate } from '../engine/index';
 import { storage } from './storage';
 import { toast } from './dom';
+import { LATEST_RELEASE } from './whatsnew-data';
+import { PERSONA_DATE, personaById, type PersonaMeta } from './personas';
 import { canWrite, decideLoad, ensurePreSimpleCopy, errorText, needsPreSimpleCopy, quarantineKey, type StorageHealth } from './persist';
 
 const KEY = 'state';
@@ -15,8 +17,89 @@ let state: AppState = emptyState();
 let health: StorageHealth = { mode: 'ok' };
 const listeners = new Set<() => void>();
 
+/**
+ * Режим «На примере»: выдуманный персонаж живёт в отдельном ключе хранилища, собственные данные человека не читаются и не пишутся.
+ * Выбор запоминается флагом в localStorage, чтобы пример пережил перезагрузку; выход возвращает собственные данные как были (D176/D91).
+ */
+const DEMO_FLAG = 'capital-os-demo';
+const DEMO_KEY = 'demo:state';
+let demo: PersonaMeta | null = null;
+
+export function getDemo(): PersonaMeta | null {
+  return demo;
+}
+
+const readDemoFlag = (): string | null => {
+  try {
+    return localStorage.getItem(DEMO_FLAG);
+  } catch {
+    return null;
+  }
+};
+
+/** Открыть пример: запоминаем выбор и перезагружаем приложение на профиле персонажа. */
+export function enterDemo(id: string): void {
+  if (!personaById(id)) return;
+  try {
+    localStorage.setItem(DEMO_FLAG, id);
+    void storage.remove(DEMO_KEY).catch(() => undefined);
+  } catch {
+    toast('Браузер не даёт открыть пример', 'error');
+    return;
+  }
+  // небольшая задержка: удаление прошлого примера должно успеть до перезагрузки
+  setTimeout(() => (location.href = `${location.pathname}#/position`), 60);
+  setTimeout(() => location.reload(), 120);
+}
+
+/** Выйти из примера. `toImport` — сразу открыть «Импорт» (человек пришёл загрузить свои данные). */
+export function exitDemo(toImport = false): void {
+  try {
+    localStorage.removeItem(DEMO_FLAG);
+  } catch {
+    /* флаг не снимается — следующая загрузка снова откроет пример; человек увидит плашку и нажмёт ещё раз */
+  }
+  void storage.remove(DEMO_KEY).catch(() => undefined);
+  setTimeout(() => {
+    location.href = `${location.pathname}#/${toImport ? 'import' : 'overview'}`;
+    location.reload();
+  }, 80);
+}
+
+async function loadDemoState(meta: PersonaMeta): Promise<boolean> {
+  try {
+    let loaded: AppState | null = null;
+    const saved = await storage.get<string>(DEMO_KEY);
+    if (typeof saved === 'string') {
+      const d = decideLoad(saved);
+      if (d.kind === 'ok') loaded = d.state;
+    }
+    if (!loaded) {
+      const res = await fetch(`./personas/${meta.id}.json`);
+      const r = parseState(await res.text());
+      if (!r.ok) throw new Error(r.error);
+      loaded = r.value;
+    }
+    // режим экрана берём у человека: если у него простой — пример тоже простой
+    let uiMode: 'simple' | 'full' = 'simple';
+    try {
+      const mine = decideLoad(await storage.get<string>(KEY));
+      if (mine.kind === 'ok' && mine.state.settings.uiMode) uiMode = mine.state.settings.uiMode;
+    } catch {
+      /* своих данных не видно — простой режим, как у нового человека */
+    }
+    state = { ...loaded, settings: { ...loaded.settings, uiMode, whatsNewSeen: LATEST_RELEASE.id } };
+    demo = meta;
+    return true;
+  } catch (e) {
+    console.error('Не удалось открыть пример', e);
+    return false;
+  }
+}
+
 /** Сегодня в локальном часовом поясе устройства, 'YYYY-MM-DD'. Можно переопределить ?today=2026-10-28 для демонстрации. */
 export function today(): IsoDate {
+  if (demo) return PERSONA_DATE;
   const q = new URLSearchParams(location.search).get('today');
   if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) return q;
   const d = new Date();
@@ -53,6 +136,17 @@ export function getHealth(): StorageHealth {
 }
 
 export async function loadState(): Promise<void> {
+  const meta = personaById(readDemoFlag());
+  if (meta) {
+    if (await loadDemoState(meta)) return;
+    // пример не открылся — снимаем флаг и работаем с собственными данными, ничего не теряя
+    try {
+      localStorage.removeItem(DEMO_FLAG);
+    } catch {
+      /* ничего */
+    }
+    toast('Пример не открылся — вернул твои данные', 'error');
+  }
   let raw: unknown;
   try {
     raw = await storage.get<string>(KEY);
@@ -102,7 +196,7 @@ export async function update(fn: (s: AppState) => AppState, opts: { force?: bool
   const next = fn(structuredClone(state));
   state = next;
   try {
-    await storage.set(KEY, serializeState(next, today()));
+    await storage.set(demo ? DEMO_KEY : KEY, serializeState(next, today()));
     if (health.mode !== 'ok' && health.mode !== 'no-storage') health = { mode: 'ok' };
     notify();
     return true;
@@ -143,6 +237,10 @@ export async function retryPreSimpleCopy(): Promise<boolean> {
 
 /** Заменить состояние целиком: восстановление из бэкапа, «стереть всё», «начать заново». */
 export async function replaceState(s: AppState): Promise<boolean> {
+  if (demo) {
+    toast('Сначала выйди из примера: он не принимает свои данные', 'error');
+    return false;
+  }
   return update(() => s, { force: true });
 }
 

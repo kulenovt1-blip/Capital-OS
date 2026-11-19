@@ -1,7 +1,12 @@
-/** Сборка приложения из экранов (D81): 5 пунктов нижней панели и подэкраны «Ещё». */
+/** Сборка приложения из экранов (D81): 5 пунктов нижней панели (в простом режиме 4, D7) и подэкраны «Ещё». */
 import { addRoute, start } from './main';
+import { renderExamples } from './screens/examples';
 import { initPersistence } from './protect';
+import { getState } from './store';
+import { ov } from './ctx';
+import { isSimpleMode } from '../engine/index';
 import { renderOverview } from './screens/overview';
+import { renderToday, stepChip } from './screens/today';
 import { renderGoals } from './screens/goals';
 import { renderIncome } from './screens/income';
 import { renderArrived } from './screens/arrived';
@@ -20,18 +25,20 @@ import { renderSetup } from './screens/setup';
 import { renderPosition } from './screens/position';
 import { renderAccounts, renderAdvanced, renderBackup, renderDebts, renderIncomes, renderInstall, renderRare } from './screens/settings';
 
-addRoute({ path: 'overview', title: 'Обзор', nav: 'overview', render: () => renderOverview() });
+// простой режим с данными — «Сегодня» (D7); без данных — прежний пустой экран «Обзора» с загрузкой бэкапа
+addRoute({ path: 'overview', title: 'Обзор', simpleTitle: 'Сегодня', nav: 'overview', chip: stepChip, render: () => (isSimpleMode(getState().settings) && ov().hasData ? renderToday() : renderOverview()) });
 addRoute({ path: 'goals', title: 'Цели', nav: 'goals', render: () => renderGoals() });
 addRoute({ path: 'income', title: 'Пришли деньги', nav: 'more', parent: 'more', render: (r) => renderArrived(r) });
 addRoute({ path: 'income-more', title: 'Другие способы', nav: 'more', parent: 'income', render: (r) => renderIncome(r) });
-addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', render: (r) => renderForecastSimple(r) });
+addRoute({ path: 'forecast', title: 'Прогноз', nav: 'forecast', simpleParent: 'more', render: (r) => renderForecastSimple(r) });
 addRoute({ path: 'forecast-more', title: 'Хуже или лучше', nav: 'forecast', parent: 'forecast', render: (r) => renderForecast(r) });
 addRoute({ path: 'start', title: 'Настроим за минуту', nav: 'overview', lock: true, render: (r, sec) => renderStart(r, sec) });
 addRoute({ path: 'baskets', title: 'Раскладка трат', nav: 'more', parent: 'data', render: (r) => renderBaskets(r) });
-addRoute({ path: 'position', title: 'Финансовый профиль', nav: 'position', render: () => renderPosition() });
+addRoute({ path: 'position', title: 'Финансовый профиль', simpleTitle: 'Дорога', nav: 'position', render: () => renderPosition() });
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'months', title: 'Итоги месяцев', nav: 'more', parent: 'more', render: () => renderMonths() });
+addRoute({ path: 'examples', title: 'На примере', nav: 'more', parent: 'more', render: () => renderExamples() });
 addRoute({ path: 'help', title: 'Как пользоваться', nav: 'more', parent: 'more', render: () => renderHelp() });
 addRoute({ path: 'data', title: 'Данные', nav: 'more', parent: 'more', render: () => renderData() });
 addRoute({ path: 'prefs', title: 'Настройки', nav: 'more', parent: 'more', render: () => renderPrefs() });

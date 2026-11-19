@@ -975,7 +975,7 @@ defineSheet('manual', (id) => {
           h('select', { name: 'loan', onchange: (e: Event) => { loanId = (e.target as HTMLSelectElement).value || undefined; } },
             h('option', { value: '', selected: !loanId }, 'нет или не связывать'),
             ...loanOptions.map((o) => h('option', { value: o.id, selected: o.id === loanId }, o.title))),
-          h('p', { class: 'muted' }, 'Тогда на Профиле будет твоя доля: стоимость минус остаток кредита.'))
+          h('p', { class: 'muted' }, 'Тогда на Профиле будет твоя доля: стоимость минус остаток кредита. И «Долговая нагрузка» оценит такой долг по доле в стоимости жилья, а не как обычный: ипотека под квартиру не наказывается за сам размер.'))
       : h('p', { class: 'muted' }, 'Если на этом есть ипотека или кредит, заведи его в «Долги и рассрочки», потом открой этот актив и выбери кредит.'),
   );
   const err = h('div');
