@@ -9,6 +9,7 @@ import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
 import { getDemo, getState, today } from '../store';
 import { isSimpleMode } from '../../engine/index';
+import { WEAK_NONE_FROM } from '../../engine/position/view';
 import { positionNow, reserveCtx, trust } from '../ctx';
 import { fmt, fmtShort, info, monthTo, row, rows, sub } from '../ui';
 import { setRouteTarget, ROUTE_PLAN_PREFIX } from './forecast-simple';
@@ -297,7 +298,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
 
 /** Слово рядом с очками (аудит 9, U4): «92» само по себе ничего не говорит. Черта 60 — порог уровня «Защищён от ударов». */
 export function scoreWord(score: number): string {
-  if (score >= 80) return 'сильно';
+  if (score >= WEAK_NONE_FROM) return 'сильно';
   if (score >= 60) return 'достаточно';
   if (score >= 40) return 'слабо';
   return 'мало';
@@ -349,7 +350,7 @@ defineSheet('road-how', () => {
   if (how.weak.length) {
     parts.push(
       sub('Что тянет оценку вниз'),
-      rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(Math.round(w.score)), href: sheetHref('direction', w.direction) }))),
+      rows(how.weak.map((w) => row({ title: w.label, sub: INDICATOR_HINTS[w.id] ?? w.directionName, value: String(Math.min(Math.round(w.score), 59)), href: sheetHref('direction', w.direction) }))),
     );
   }
   if (!parts.length) parts.push(h('div', { class: 'okline' }, 'Условия, которые зависят от денег и оценки, выполнены.'));

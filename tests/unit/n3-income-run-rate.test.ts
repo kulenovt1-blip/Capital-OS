@@ -1,7 +1,7 @@
 /**
  * D209. Доход для «Долговой нагрузки» (N3): когда в расписании есть строки, действующие сегодня, доход не выше их суммы.
  * Раньше брали среднее за 6 месяцев — в него попадала уже закончившаяся подработка, которой в расписании нет, и нагрузка выглядела легче.
- * Эталон — ручная арифметика: доход = min(среднее за 6 мес., сумма действующих сегодня строк); N3 — по шкалам из debtLoadScore.
+ * Эталон — ручная арифметика: доход = сумма действующих сегодня строк расписания (если расписание известно), иначе среднее за 6 мес.; N3 — по шкалам из debtLoadScore (ред. аудита 10).
  * Сверка с пробой идёт с `incomeFromSchedule: false` (в пробе — среднее), поэтому эталоны проб не менялись.
  */
 import { describe, it, expect } from 'vitest';
@@ -46,14 +46,46 @@ describe('N3: доход по действующему расписанию (D20
     expect(rep.inputs!.incomeMonthly).toBeCloseTo(HISTORY_MEAN, 0);
   });
 
-  it('доход по расписанию выше истории — берётся история (меньшее)', () => {
+  it('доход по расписанию выше истории — берётся расписание (повышение или новая работа учитываются сразу)', () => {
     const s = build(spec([{ ...stipend, amount: 100_000, sched: 150_000 }]));
-    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBeCloseTo(100_000, 0);
+    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBeCloseTo(150_000, 0);
   });
 
-  it('ни одной строки расписания, действующей сегодня, — остаётся история', () => {
-    const s = build(spec([{ ...stipend, end: '2026-09-30' }]));
-    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBeCloseTo(STIPEND, 0);
+  it('единственная строка закончилась — доход 0, как считает и F; N3 = 0 при долге', () => {
+    const s = build(spec([{ ...stipend, end: '2026-11-03' }]));
+    const rep = computeIndicators(s, TODAY);
+    expect(rep.inputs!.incomeMonthly).toBe(0);
+    expect(rep.values.N3).toBe(0);
+  });
+
+  it('строка, которая ещё не началась, в доход сегодня не входит', () => {
+    const base = build(spec([stipend]));
+    const s = { ...base, settings: { ...base.settings, incomeSchedule: base.settings.incomeSchedule.map((i) => ({ ...i, start: '2027-01-01' })) } };
+    expect(computeIndicators(s, TODAY).inputs!.incomeMonthly).toBe(0);
+  });
+
+  it('больше строк расписания — доход и N3 не ниже (монотонность)', () => {
+    const one = computeIndicators(build(spec([stipend])), TODAY);
+    const two = computeIndicators(build(spec([stipend, { id: 'side', title: 'Сторона', cls: 'I_work' as const, day: 5, amount: 20_000, kind: 'work' as const, sched: 20_000 }])), TODAY);
+    expect(two.inputs!.incomeMonthly).toBeGreaterThan(one.inputs!.incomeMonthly);
+    expect(two.values.N3!).toBeGreaterThanOrEqual(one.values.N3!);
+  });
+
+  it('автопоток «Подарки, кешбэк» расписанием не считается: без строк доход — история, F — «нет данных»', () => {
+    const base = build(spec([stipend, summerJob(false)]));
+    const noSchedule = { ...base, settings: { ...base.settings, incomeSchedule: [], extraIncome: true } };
+    const rep = computeIndicators(noSchedule, TODAY);
+    expect(rep.inputs!.incomeMonthly).toBeCloseTo(HISTORY_MEAN, 0);
+    for (const id of ['F1', 'F2', 'F3', 'F4'] as const) expect(rep.values[id], id).toBeNull();
+  });
+
+  it('индексация: строка с ростом, повышение которой было раньше, считается с ростом на сегодня', () => {
+    const s = build(spec([stipend]));
+    const row = s.settings.incomeSchedule[0]!;
+    const indexed = { ...s, settings: { ...s.settings, inflationBp: 1000, incomeSchedule: [{ ...row, indexed: true, indexMonth: 3 } as never] } };
+    const now = computeIndicators(indexed, TODAY).inputs!.incomeMonthly;
+    expect(now).toBeGreaterThanOrEqual(STIPEND);
+    expect(now).toBeLessThanOrEqual(STIPEND * 1.1 + 1);
   });
 
   it('расписания нет совсем — среднее за 6 месяцев, как раньше', () => {
@@ -65,21 +97,23 @@ describe('N3: доход по действующему расписанию (D20
 
 describe('N3: влияние на пул проб (D209)', () => {
   const profiles = probeProfiles();
-  const both = profiles.map((p) => {
+  const rows = profiles.map((p) => {
     const st = applyProbeOpts(p.state, p.opts);
-    return { name: p.name, now: computeIndicators(st, TODAY).values, old: computeIndicators(st, TODAY, undefined, { incomeFromSchedule: false }).values };
+    return { name: p.name, st, now: computeIndicators(st, TODAY), old: computeIndicators(st, TODAY, undefined, { incomeFromSchedule: false }) };
   });
-  it('меняется только N3 и только в сторону «строже»; остальные 11 показателей совпадают', () => {
-    for (const { name, now, old } of both) {
-      for (const id of INDICATOR_IDS) {
-        if (id === 'N3') continue;
-        expect(now[id], `${name} ${id}`).toBe(old[id]);
-      }
-      if (old.N3 == null) expect(now.N3, name).toBe(old.N3);
-      else expect(now.N3!, name).toBeLessThanOrEqual(old.N3 + 1e-9);
+  it('меняется только N3; остальные 11 показателей совпадают с прежними', () => {
+    for (const { name, now, old } of rows) for (const id of INDICATOR_IDS) if (id !== 'N3') expect(now.values[id], `${name} ${id}`).toBe(old.values[id]);
+  });
+  it('доход для N3 = сумма действующих сегодня строк расписания (ручной подсчёт на профилях без индексации и событий)', () => {
+    let checked = 0;
+    for (const { name, st, now } of rows) {
+      const sched = st.settings.incomeSchedule;
+      if (!sched.length || sched.some((i) => i.indexed) || st.settings.plannedEvents.length) continue;
+      const hand = sched.reduce((a, i) => a + ((!i.start || i.start <= TODAY) && (!i.end || i.end >= TODAY) ? i.amount / 100 : 0), 0);
+      expect(now.inputs!.incomeMonthly, name).toBeCloseTo(hand, 0);
+      expect(now.values.N3, name).toBeCloseTo(debtLoadScore(now.inputs!.obligationsMonthly, now.inputs!.debtTotal, hand, now.inputs!.secured), 6);
+      checked++;
     }
-  });
-  it('на 127 пробных профилях N3 меняется у 21', () => {
-    expect(both.filter(({ now, old }) => now.N3 !== old.N3).length).toBe(21);
+    expect(checked).toBeGreaterThan(50);
   });
 });

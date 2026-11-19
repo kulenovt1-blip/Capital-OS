@@ -6,6 +6,8 @@
 import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, type Money, type MonthKey, type PositionView, type ReserveTarget, type Route, type SavingReport } from '../engine/index';
 
 /** Запас — округление вниз до десятых, как на «Профиле» и «Обзоре»: 5,96 → «5,9». */
+/** Очки ниже порога округляются как обычно, но не до самого порога: 74,91 при пороге 75 — «74 из 75», а не «75 из 75» (аудит 10, находка 8). */
+const belowThr = (x: number, thr: number): number => Math.min(Math.round(x), thr - 1);
 const nfDown = (x: number): string => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1).replace('.', ',');
 
 export interface RoadCond {
@@ -50,7 +52,7 @@ export function roadOf(v: PositionView): RoadModel | null {
   const thr = SCORE_THRESHOLD[to];
   if (thr !== undefined && v.g !== null) {
     const weakHint = v.g < thr && v.weak ? `Слабее всего: ${v.weak.directionName}${v.weak.indicator ? ` · ${v.weak.indicator.label}` : ''}` : undefined;
-    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${Math.round(v.g)}` : `${Math.round(v.g)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score', ...(weakHint ? { hint: weakHint } : {}) });
+    conds.push({ title: 'Общая оценка', value: v.g >= thr ? `выполнено · ${Math.round(v.g)}` : `${belowThr(v.g, thr)} из ${thr}`, ratio: Math.max(0, Math.min(1, v.g / thr)), done: v.g >= thr, kind: 'score', ...(weakHint ? { hint: weakHint } : {}) });
   }
 
   if (to === 4) {
@@ -58,7 +60,7 @@ export function roadOf(v: PositionView): RoadModel | null {
     const unknown = v.directions.some((d) => d.score === null);
     conds.push({
       title: 'Каждое направление от 60',
-      value: low.length ? low.map((d) => `${d.name} ${Math.round(d.score!)}`).join(', ') : unknown ? 'данных мало' : 'выполнено',
+      value: low.length ? low.map((d) => `${d.name} ${belowThr(d.score!, 60)}`).join(', ') : unknown ? 'данных мало' : 'выполнено',
       ratio: null,
       done: !low.length && !unknown,
       kind: 'directions',

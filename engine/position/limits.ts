@@ -42,7 +42,11 @@ export function limitStates(inputs: IndicatorInputs, forecast: ForecastFacts): L
 export const withoutForecast = (s: LimitStates): LimitStates => ({ ...s, gap: 'unknown', cliff: 'unknown' });
 
 /** Среднее геометрическое направлений; каждое не ниже 1, чтобы нулевое направление не обнуляло всё (как в пробе). */
-export const geometricMean = (xs: readonly number[]): number => Math.pow(xs.reduce((a, x) => a * Math.max(x, 1), 1), 1 / xs.length);
+export const geometricMean = (xs: readonly number[]): number => {
+  const g = Math.pow(xs.reduce((a, x) => a * Math.max(x, 1), 1), 1 / xs.length);
+  // 75 × 75 × 75 даёт 74,99999999999999: шум плавающей точки не должен переносить профиль через границу ступени (аудит 10, находка 7)
+  return Math.round(g * 1e9) / 1e9;
+};
 
 export type AggregateMode = 'low' | 'high' | 'point';
 export interface Aggregate { g: number; fired: LimitId[] }

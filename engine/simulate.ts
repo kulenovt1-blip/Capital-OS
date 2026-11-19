@@ -301,7 +301,7 @@ export function assembleIncomeStreams(incomes: readonly IncomeStream[], events: 
   return streams;
 }
 
-function grow(amount: Money, rateBp: number, steps: number): Money {
+export function grow(amount: Money, rateBp: number, steps: number): Money {
   let a = amount;
   for (let k = 0; k < steps; k++) a = mulDiv(a, 10000 + rateBp, 10000);
   return a;

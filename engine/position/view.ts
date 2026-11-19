@@ -13,7 +13,7 @@ import {
 } from './indicators';
 import { directionScore, isDirectionSufficient } from './directions';
 import { LIMIT_VALUES, limitStates, withoutForecast, type LimitId } from './limits';
-import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
+import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, liftLevel1, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
 import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
 import { boundsContext, historyBounds, reserveBounds, scheduleBounds, type Bounds } from './unknown';
@@ -59,9 +59,9 @@ export const RESERVE_BORDER_MARGIN = 0.25;
  */
 export function l4Warnings(i: Pick<IndicatorInputs, 'reserveEssentialMonths' | 'needEssential' | 'troughNet'>, blockedShare: number): L4Warning[] {
   const out: L4Warning[] = [];
-  if (i.reserveEssentialMonths < L4_WARN_RESERVE_MONTHS) out.push({ id: 'reserve', text: `Запас по необходимым расходам — ${nf(i.reserveEssentialMonths)} мес., это меньше ${L4_WARN_RESERVE_MONTHS}` });
-  if (i.needEssential > 0 && i.troughNet / i.needEssential < L4_WARN_TROUGH_MONTHS) out.push({ id: 'trough', text: `В неблагоприятном прогнозе запас опускается до ${nf(Math.max(0, i.troughNet) / i.needEssential)} мес. необходимых расходов, это меньше ${L4_WARN_TROUGH_MONTHS}` });
-  if (blockedShare > L4_WARN_BLOCKED_SHARE) out.push({ id: 'blocked', text: `${Math.round(blockedShare * 100)} % капитала нельзя снять в ближайшие 30 дней` });
+  if (i.needEssential > 0 && i.reserveEssentialMonths < L4_WARN_RESERVE_MONTHS) out.push({ id: 'reserve', text: `Запас по необходимым расходам — ${nfDown(i.reserveEssentialMonths)} мес., это меньше ${L4_WARN_RESERVE_MONTHS}` });
+  if (i.needEssential > 0 && i.troughNet / i.needEssential < L4_WARN_TROUGH_MONTHS) out.push({ id: 'trough', text: `В неблагоприятном прогнозе запас опускается до ${nfDown(Math.max(0, i.troughNet) / i.needEssential)} мес. необходимых расходов, это меньше ${L4_WARN_TROUGH_MONTHS}` });
+  if (blockedShare > L4_WARN_BLOCKED_SHARE) out.push({ id: 'blocked', text: `${Math.round(blockedShare * 100) <= 50 ? 'Больше 50' : Math.round(blockedShare * 100)} % капитала нельзя снять в ближайшие 30 дней` });
   return out;
 }
 
@@ -156,8 +156,8 @@ function housingOf(state: AppState, overview: Overview): PositionView['housing']
   return { assets, debt, equity: assets - debt, items: locked.length, linked: linked.length };
 }
 
-/** D210: «Слабое место» не показывается, когда самый низкий из действуемых показателей слабого направления не ниже этого значения. */
-export const WEAK_NONE_FROM = 90;
+/** D210: «Слабое место» не показывается, когда самый низкий из действуемых показателей слабого направления не ниже этого значения; это же граница слова «сильно» рядом с очками (`scoreWord`). */
+export const WEAK_NONE_FROM = 80;
 
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const series = buildPositionSeries(state, today);
@@ -197,7 +197,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     // D177 (L7): «Капитал» (N4) шкалой до 300 месяцев почти всегда самый низкий, но за месяцы на него не повлиять; при запасе от 3 месяцев называем то, что можно менять
     const actionable = inputs.reserveEssentialMonths >= L3_RESERVE_MONTHS ? known.filter((x) => x.id !== 'N4') : known;
     const low = actionable.length ? actionable.reduce((a, b) => (b.score < a.score ? b : a)) : null;
-    // D210: если и лучший из «действуемых» показателей слабого направления не ниже порога, слабого места нет — не называем хорошее слабым
+    // D210: если даже самый низкий из «действуемых» показателей слабого направления не ниже порога, слабого места нет — не называем хорошее слабым
     weak = low && low.score >= WEAK_NONE_FROM ? null : { direction: weakestId, directionName: dv.name, indicator: low };
   }
 
@@ -209,7 +209,9 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     const baseStates = limitStates(inputs, report.forecast!);
     const states = scheduleKnown ? baseStates : withoutForecast(baseStates);
     range = positionRange(report.values, actualBounds(boundsContext(series, inputs), series.histMonths, scheduleKnown), states);
-    if (range) rangeLevels = { low: LEVEL_NAMES[gateLevel(Math.min(range.levelLow, 4) as Level, factsOf(inputs)).level], high: LEVEL_NAMES[gateLevel(Math.min(range.levelHigh, 4) as Level, factsOf(inputs)).level] };
+    // края диапазона проходят те же правила, что и сама ступень: срез по фактам и подъём ступени 1 по D156 (аудит 10, находка 3)
+    const edgeName = (lv: number): string => { const gated = gateLevel(Math.min(lv, 4) as Level, factsOf(inputs)); return LEVEL_NAMES[gated.held ? gated.level : liftLevel1(gated.level, factsOf(inputs)).level]; };
+    if (range) rangeLevels = { low: edgeName(range.levelLow), high: edgeName(range.levelHigh) };
   }
 
   const blockedShare = cap.gross > 0 ? Math.max(0, 1 - liquidOn(cap, addDays(today, 30)) / cap.gross) : 0;
@@ -245,6 +247,8 @@ export const L5_MEANING = 'Капитал и независимый доход �
 const factsOf = (i: IndicatorInputs): LevelFacts => ({ reserveMonths: i.reserveEssentialMonths, savingRate: i.savingRate });
 const tg = (x: number): string => formatKZT(tenge(Math.round(Math.max(0, x) / 1000) * 1000));
 const reserveNeed = (months: number, i: IndicatorInputs): string =>
+  // нет необходимых расходов (ничего не отмечено «обязательно») — запас не определён, а не равен 0,0 (аудит 10, находка 5; D158)
+  i.needEssential <= 0 ? `запас от ${months} месяцев необходимых расходов: сначала отметь, что обязательно, — без этого запас не посчитать` :
   `запас от ${months} месяцев необходимых расходов: сейчас ${nfDown(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
 
 export function ladderOf(current: number | null): PositionView['ladder'] {
