@@ -9,12 +9,15 @@
  */
 import { SERIES_LOOKBACK, type PositionSeries } from './series';
 import {
-  INDICATOR_IDS, SCALES, SOURCE_LOSS_PROBABILITY, V1_CAPITAL_CAP_MONTHS, V1_MIN_BASE_MONTHS, monthRate, normalize,
-  type IndicatorId, type IndicatorInputs, type Indicators,
+  INDICATOR_IDS, SCALES, SOURCE_LOSS_PROBABILITY, SOURCE_RELIABILITY, V1_CAPITAL_CAP_MONTHS, V1_MIN_BASE_MONTHS, monthRate, normalize, reserveScore,
+  type ForecastFacts, type IndicatorId, type IndicatorInputs, type Indicators,
 } from './indicators';
 
-export type MaskKind = 'hist2' | 'hist4' | 'noSched' | 'noForecast' | 'noDebt';
+export type MaskKind = 'hist2' | 'hist4' | 'noSched' | 'noForecast' | 'noDebt' | 'noEssential';
+/** Типы, на которых модель сверена с пробой (T06): сверка с пробой идёт по ним. */
 export const MASK_KINDS: readonly MaskKind[] = ['hist2', 'hist4', 'noSched', 'noForecast', 'noDebt'];
+/** Все типы; «нет отметки обязательно» (D212) пробой не проверялся — это приведение к спецификации §5, тесты — `essential-unknown.test.ts`. */
+export const ALL_MASK_KINDS: readonly MaskKind[] = [...MASK_KINDS, 'noEssential'];
 /** Какие показатели скрывает каждый тип неизвестного. */
 export const MASKS: Readonly<Record<MaskKind, readonly IndicatorId[]>> = {
   hist2: ['N2', 'V1', 'V2', 'V3', 'V4'],
@@ -22,6 +25,8 @@ export const MASKS: Readonly<Record<MaskKind, readonly IndicatorId[]>> = {
   noSched: ['F2', 'F3', 'F4'],
   noForecast: ['F1', 'F2', 'F3', 'F4'],
   noDebt: ['N3', 'V3'],
+  /** Нет отметки «обязательно»: запас по необходимому неизвестен (D212). */
+  noEssential: ['N1', 'F1', 'F2'],
 };
 /** Сколько месяцев истории «наблюдено» в типах hist*. */
 export const MASK_HISTORY_MONTHS: Readonly<Partial<Record<MaskKind, number>>> = { hist2: 2, hist4: 4 };
@@ -62,18 +67,23 @@ export interface BoundsContext {
   incomeMonthly: number;
   /** Предел знаменателя V1 (для сверки с пробой без правки D — Infinity). */
   v1CapMonths: number;
+  /** Минимум доступных денег по неблагоприятному сценарию за 12 месяцев минус долг людям (F1). */
+  troughNet: number;
+  /** Сумма «объём источника × вес надёжности» (числитель F2). */
+  reliableVolume: number;
 }
 
 const FULL: readonly [number, number] = [0, 100];
 const mean = (xs: readonly number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const clamp100 = (x: number): number => Math.max(0, Math.min(100, x));
 
-export function boundsContext(series: PositionSeries, inputs: IndicatorInputs, v1CapMonths: number = V1_CAPITAL_CAP_MONTHS): BoundsContext {
+export function boundsContext(series: PositionSeries, inputs: IndicatorInputs, v1CapMonths: number = V1_CAPITAL_CAP_MONTHS, forecast: ForecastFacts | null = null): BoundsContext {
   const t = (m: number | null): number | null => (m === null ? null : m / 100);
   return {
     income: series.income.map((x) => x / 100), expense: series.expense.map((x) => x / 100), free: series.free.map((x) => x / 100),
     netNowConfirmed: t(series.netConfirmed[0] ?? null), netAgoConfirmed: series.netConfirmed.map(t),
     needLifestyle: inputs.needLifestyle, needEssential: inputs.needEssential, netLiquid: inputs.netLiquid, incomeMonthly: inputs.incomeMonthly, v1CapMonths,
+    troughNet: inputs.troughNet, reliableVolume: forecast ? forecast.sources.reduce((a, s) => a + s.volume * SOURCE_RELIABILITY[s.status], 0) : 0,
   };
 }
 
@@ -128,6 +138,20 @@ export function reserveBounds(ctx: BoundsContext): Bounds {
   return { F1: [normalize(Math.max(0, cov - m.noIncomeMonths * m.noIncomeSpendFactor), SCALES.reserve), normalize(cov + margin, SCALES.reserve)] };
 }
 
+/**
+ * Интервалы N1, F1, F2 без отметки «обязательно» (D212). Ничего не подбирается: необходимые расходы — часть обычных, значит они от 0 до `need_Ж`.
+ * Запас по необходимому тогда не меньше запаса по обычным и не больше 100; N1 — среднее двух запасов, поэтому [N1б; (N1б + 100) / 2];
+ * F1 — от запаса в плохой период по обычным расходам до 100; F2 — от обеспеченности обычных расходов до 100.
+ * Без расписания доходов F1 и F2 неизвестны целиком (0–100).
+ */
+export function essentialBounds(ctx: BoundsContext, scheduleKnown: boolean): Bounds {
+  const lifeReserve = reserveScore(ctx.netLiquid, ctx.needLifestyle);
+  const b: Bounds = { N1: [lifeReserve, (lifeReserve + 100) / 2] };
+  if (!scheduleKnown) return { ...b, F1: FULL, F2: FULL };
+  const relLow = ctx.needLifestyle > 0 ? normalize(ctx.reliableVolume / (12 * ctx.needLifestyle), SCALES.reliability) : 0;
+  return { ...b, F1: [reserveScore(ctx.troughNet, ctx.needLifestyle), 100], F2: [relLow, 100] };
+}
+
 /** Интервалы по типу неизвестного. Показатели, о которых тип ничего не говорит, здесь отсутствуют (подставляется вся шкала 0–100). */
 export function boundsFor(kind: MaskKind, ctx: BoundsContext): Bounds {
   switch (kind) {
@@ -135,6 +159,7 @@ export function boundsFor(kind: MaskKind, ctx: BoundsContext): Bounds {
     case 'noSched': return scheduleBounds(ctx);
     case 'noForecast': return { ...scheduleBounds(ctx), ...reserveBounds(ctx) };
     case 'noDebt': return { N3: FULL, V3: FULL };
+    case 'noEssential': return essentialBounds(ctx, true);
   }
 }
 

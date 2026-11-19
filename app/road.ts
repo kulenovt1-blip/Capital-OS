@@ -44,7 +44,8 @@ export function roadOf(v: PositionView): RoadModel | null {
   const reserveTarget = to === 3 ? L3_RESERVE_MONTHS : to === 4 ? L4_RESERVE_MONTHS : null;
   if (reserveTarget !== null) {
     const r = v.money.reserveEssentialMonths;
-    conds.push({ title: 'Запас на жизнь', value: r >= reserveTarget ? `выполнено · ${nfDown(r)} мес.` : `${nfDown(r)} из ${reserveTarget} мес.`, ratio: Math.max(0, Math.min(1, r / reserveTarget)), done: r >= reserveTarget, kind: 'reserve' });
+    if (v.essentialUnknown) conds.push({ title: 'Запас на жизнь', value: 'пока не определить — отметь, что обязательно', ratio: 0, done: false, kind: 'reserve' });
+    else conds.push({ title: 'Запас на жизнь', value: r >= reserveTarget ? `выполнено · ${nfDown(r)} мес.` : `${nfDown(r)} из ${reserveTarget} мес.`, ratio: Math.max(0, Math.min(1, r / reserveTarget)), done: r >= reserveTarget, kind: 'reserve' });
   }
 
   const thr = SCORE_THRESHOLD[to];

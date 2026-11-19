@@ -7,7 +7,7 @@ import { roadOf, roadHowOf, type RoadCond } from '../road';
 import { DESIRED_LABEL, INDEPENDENCE_TEXTS, SAVING_CUT_PCT, savingOptions, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
-import { getDemo, getState, today } from '../store';
+import { act, getDemo, getState, today } from '../store';
 import { isSimpleMode } from '../../engine/index';
 import { WEAK_NONE_FROM, shownScore } from '../../engine/position/view';
 import { positionNow, reserveCtx, trust } from '../ctx';
@@ -60,6 +60,7 @@ function trustLine(v: PositionView): HTMLElement | null {
   const f = v.directions.find((d) => d.id === 'F');
   if (!v.reconcileOk) return h('a', { class: 'pos-trust warn', href: '#/import' }, 'Уровень предварительный: баланс одного из счетов не совпал с MoneyManager · Посмотреть ›');
   if (f && f.score === null) return h('a', { class: 'pos-trust warn', href: '#/incomes' }, 'Уровень предварительный: нет расписания доходов · Указать ›');
+  if (v.essentialUnknown) return h('a', { class: 'pos-trust warn', href: '#/markup' }, 'Уровень предварительный: не отмечено, что обязательно — запас по необходимому не определён · Отметить ›');
   // про «мало данных» и «есть что проверить» говорит блок «Точность расчётов» — не дублируем
   return null;
 }
@@ -285,6 +286,27 @@ function roadBlock(v: PositionView): HTMLElement | null {
   );
 }
 
+/**
+ * Доход, срок которого прошёл (D214): без ответа приложение считает, что дохода больше нет, и «Долговая нагрузка» от этого падает.
+ * Три ответа: продолжается (убираем срок), закончился (запоминаем ответ), пришёл другой доход (новый доход через «Планирую»).
+ */
+function endedIncomeBlock(v: PositionView): HTMLElement | null {
+  if (!v.endedIncome.length) return null;
+  const dmy = (iso: string): string => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+  const cards = v.endedIncome.slice(0, 2).map((x) =>
+    h('section', { class: 'warnline stack', 'aria-label': 'Доход закончился' },
+      h('strong', null, `«${x.title}» (${money(x.amount / 100)} в месяц) закончился ${dmy(x.end)}`),
+      h('p', { class: 'muted' }, 'Пока ты не ответишь, приложение считает, что этого дохода больше нет, и оценка долговой нагрузки строится без него. Что дальше?'),
+      h('div', { class: 'chips wrap' },
+        h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeSchedule: s.settings.incomeSchedule.map((i) => { if (i.id !== x.id) return i; const { end: _end, ...rest } = i; return rest; }) } }), `«${x.title}» снова считается действующим`) }, 'Продолжается'),
+        h('button', { class: 'chip', type: 'button', onclick: () => void act((s) => ({ ...s, settings: { ...s.settings, incomeEndedAnswered: [...new Set([...(s.settings.incomeEndedAnswered ?? []), x.id])] } }), `Записано: «${x.title}» закончился`) }, 'Закончился, дохода нет'),
+        h('a', { class: 'chip', href: sheetHref('plan', `job@${today()}`) }, 'Теперь другой доход'),
+      ),
+    ),
+  );
+  return h('div', { class: 'stack' }, ...cards);
+}
+
 function warningsBlock(v: PositionView): HTMLElement | null {
   if (!v.l4Warnings.length) return null;
   return h(
@@ -431,7 +453,7 @@ function moneyBlock(v: PositionView): HTMLElement {
       'div',
       { class: 'pos-tiles' },
       h('div', { class: 'cell wide' }, h('div', { class: 'k' }, 'Всего капитал'), h('div', { class: 'v' }, money(m.total)), h('div', { class: 'cs' }, debts > 0.5 ? `есть ${short(m.gross)} − долги ${short(debts)}` : 'долгов нет')),
-      h('a', { class: 'cell', href: sheetHref('reserve-info') }, h('div', { class: 'k' }, 'Запас'), h('div', { class: 'v' }, mo(m.reserveEssentialMonths)), h('div', { class: 'cs' }, 'без дохода ›')),
+      h('a', { class: 'cell', href: sheetHref('reserve-info') }, h('div', { class: 'k' }, 'Запас'), h('div', { class: 'v' }, v.essentialUnknown ? '—' : mo(m.reserveEssentialMonths)), h('div', { class: 'cs' }, v.essentialUnknown ? 'отметь, что обязательно ›' : 'без дохода ›')),
       spendable ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Снять за месяц'), h('div', { class: 'v' }, short(m.spendable)), h('div', { class: 'cs' }, m.spendable > m.total ? 'платежи месяца вычтены, остаток долгов — нет' : 'после платежей и трат')) : null,
     ),
   );
@@ -564,6 +586,8 @@ export function renderPosition(): HTMLElement {
     return root;
   }
   root.append(levelCard(v));
+  const ei = endedIncomeBlock(v);
+  if (ei) root.append(ei);
   // первый заход на «Профиль» — подсказка по блокам сама, один раз (не поверх окна «Что нового»)
   const demo = getDemo();
   autoTour('profile', '#/position', demo ? () => personaTour(demo.id) : profileTour);
@@ -610,7 +634,7 @@ export function positionRow(): HTMLElement | null {
   const v = positionNow();
   if (v.status === 'no_data' || v.level === null) return null;
   // один запас на «Обзоре» (К4, этап 2): та же цифра, что в условиях ступени
-  const reserve = v.money.reserveEssentialMonths > 0 ? `запас ${mo(v.money.reserveEssentialMonths)}` : '';
+  const reserve = !v.essentialUnknown && v.money.reserveEssentialMonths > 0 ? `запас ${mo(v.money.reserveEssentialMonths)}` : '';
   const note = !v.reconcileOk ? 'предварительно — сверка не сошлась' : v.preliminary ? 'предварительно — данных пока мало' : '';
   return rows(row({ title: `Ступень ${v.level} · ${v.levelName}`, sub: [reserve, note].filter(Boolean).join(' · ') || undefined, href: '#/position' }));
 }

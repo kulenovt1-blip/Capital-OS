@@ -16,7 +16,8 @@ import { LIMIT_VALUES, limitStates, withoutForecast, type LimitId } from './limi
 import { L3_RESERVE_MONTHS, L4_RESERVE_MONTHS, LEVEL_MEANINGS, LEVEL_NAMES, gateLevel, liftLevel1, levelFromIndicators, type BoundaryId, type Level, type LevelFacts } from './level';
 import { formatKZT, tenge } from '../money';
 import { positionRange, type PositionRange } from './range';
-import { boundsContext, historyBounds, reserveBounds, scheduleBounds, type Bounds } from './unknown';
+import { endedIncomeToAsk, type EndedIncome } from '../income-ended';
+import { boundsContext, essentialBounds, historyBounds, reserveBounds, scheduleBounds, type Bounds } from './unknown';
 import { computeRunway, type Runway } from './runway';
 import { spiralSigns, type SpiralSigns } from './spiral';
 import { confidenceOf, isPreliminary } from './confidence';
@@ -57,10 +58,10 @@ export const RESERVE_BORDER_MARGIN = 0.25;
  * Три условия (D128, утверждено 05.11): запас по необходимым расходам < 6 мес.; минимум запаса по неблагоприятному прогнозу < 3 необходимых месяцев;
  * больше 50 % капитала недоступно за 30 дней. Каждое объясняется числом. Уровень предупреждение не меняет.
  */
-export function l4Warnings(i: Pick<IndicatorInputs, 'reserveEssentialMonths' | 'needEssential' | 'troughNet'>, blockedShare: number): L4Warning[] {
+export function l4Warnings(i: Pick<IndicatorInputs, 'reserveEssentialMonths' | 'needEssential' | 'troughNet' | 'essentialUnknown'>, blockedShare: number): L4Warning[] {
   const out: L4Warning[] = [];
-  if (i.needEssential > 0 && i.reserveEssentialMonths < L4_WARN_RESERVE_MONTHS) out.push({ id: 'reserve', text: `Запас по необходимым расходам — ${nfDown(i.reserveEssentialMonths)} мес., это меньше ${L4_WARN_RESERVE_MONTHS}` });
-  if (i.needEssential > 0 && i.troughNet / i.needEssential < L4_WARN_TROUGH_MONTHS) out.push({ id: 'trough', text: `В неблагоприятном прогнозе запас опускается до ${nfDown(Math.max(0, i.troughNet) / i.needEssential)} мес. необходимых расходов, это меньше ${L4_WARN_TROUGH_MONTHS}` });
+  if (i.needEssential > 0 && !i.essentialUnknown && i.reserveEssentialMonths < L4_WARN_RESERVE_MONTHS) out.push({ id: 'reserve', text: `Запас по необходимым расходам — ${nfDown(i.reserveEssentialMonths)} мес., это меньше ${L4_WARN_RESERVE_MONTHS}` });
+  if (i.needEssential > 0 && !i.essentialUnknown && i.troughNet / i.needEssential < L4_WARN_TROUGH_MONTHS) out.push({ id: 'trough', text: `В неблагоприятном прогнозе запас опускается до ${nfDown(Math.max(0, i.troughNet) / i.needEssential)} мес. необходимых расходов, это меньше ${L4_WARN_TROUGH_MONTHS}` });
   if (blockedShare > L4_WARN_BLOCKED_SHARE) out.push({ id: 'blocked', text: `${Math.round(blockedShare * 100) <= 50 ? 'Больше 50' : Math.round(blockedShare * 100)} % капитала нельзя снять в ближайшие 30 дней` });
   return out;
 }
@@ -128,6 +129,10 @@ export interface PositionView {
   independenceNote: string | null;
   independenceLine: string | null;
   essentialMissing: boolean;
+  /** D212: запас по необходимому не определён (нет отметки «обязательно»): N1, F1, F2 — «нет данных», итог — диапазон; запас на экранах не показывается числом. */
+  essentialUnknown: boolean;
+  /** D214: доходы с прошедшим сроком без ответа «что дальше» — на «Профиле» про них спрашивается. */
+  endedIncome: EndedIncome[];
   /** Личный сценарий «при желаемых расходах (гипотеза)»; null — сумма не задана. Основные поля от него не зависят. */
   desired: DesiredScenario | null;
 }
@@ -136,8 +141,12 @@ const emptyRunway = (): Runway => ({ status: 'no_data', deficit: 0, resources: 0
 const NO_SPIRAL: SpiralSigns = { status: 'no_data', overdue: null, growth: null, borrowToPay: null, count: 0, spiral: false, overdueCount: 0, growthMonths: null, borrowToPayMonths: null };
 
 /** Интервалы неизвестного по реальным данным: короткая история и отсутствие расписания доходов. Остальное неизвестное — вся шкала 0–100. */
-function actualBounds(ctx: ReturnType<typeof boundsContext>, histMonths: number, scheduleKnown: boolean): Bounds {
-  return { ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}), ...(scheduleKnown ? {} : { ...scheduleBounds(ctx), ...reserveBounds(ctx) }) };
+function actualBounds(ctx: ReturnType<typeof boundsContext>, histMonths: number, scheduleKnown: boolean, essentialUnknown = false): Bounds {
+  return {
+    ...(histMonths < MIN_HISTORY_VECTOR ? historyBounds(ctx, histMonths) : {}),
+    ...(scheduleKnown ? {} : { ...scheduleBounds(ctx), ...reserveBounds(ctx) }),
+    ...(essentialUnknown ? essentialBounds(ctx, scheduleKnown) : {}),
+  };
 }
 
 /** Счёт не сошёлся с MoneyManager — но только если он учитывается: исключённый счёт ни на что не влияет. */
@@ -183,7 +192,7 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
       status: !series.hasData || !report ? 'no_data' : 'needs_rate', unrated: overview.capital.unrated, reconcileOk: !hasMismatch(overview), level: null, levelName: null, levelMeaning: null, ladder: ladderOf(null), held: null, basis: 'none', g: null, directions: [], weak: null, range: null, rangeLevels: null, limitsFired: [], next: null,
       onBorder: [], l4Unconfirmed: false, l4Warnings: [], housing: null, money: { total: 0, gross: 0, spendable: 0, instant: 0, blockedShare: 0, reserveEssentialMonths: 0, reserveLifestyleMonths: 0 }, flow: null,
       runway: emptyRunway(), spiral: NO_SPIRAL, overdue: 0, confidence: 0, preliminary: true, independence, independenceNote: null,
-      independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, desired: null,
+      independenceLine: levelWithIndependence(null, independence).independenceLine ?? null, essentialMissing, essentialUnknown: false, endedIncome: endedIncomeToAsk(state, today), desired: null,
     };
   }
 
@@ -216,13 +225,13 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   let range: PositionRange | null = null;
   let rangeLevels: PositionView['rangeLevels'] = null;
   if (base && Object.values(report.values).some((v) => v === null)) {
-    const scheduleKnown = report.values.F2 !== null;
+    const scheduleKnown = report.values.F3 !== null;
     const baseStates = limitStates(inputs, report.forecast!);
     const states = scheduleKnown ? baseStates : withoutForecast(baseStates);
-    range = positionRange(report.values, actualBounds(boundsContext(series, inputs), series.histMonths, scheduleKnown), states);
+    range = positionRange(report.values, actualBounds(boundsContext(series, inputs, undefined, report.forecast), series.histMonths, scheduleKnown, inputs.essentialUnknown === true), states);
     // края диапазона проходят те же правила, что и сама ступень: срез по фактам и подъём ступени 1 по D156 (аудит 10, находка 3)
     // факты по запасу ступень проверяет только при необходимых расходах > 0 (D158) — края тоже
-    const edgeFacts = inputs.needEssential > 0 ? factsOf(inputs) : undefined;
+    const edgeFacts = inputs.needEssential > 0 && !inputs.essentialUnknown ? factsOf(inputs) : undefined;
     const edgeName = (lv: number): string => { const gated = gateLevel(Math.min(lv, 4) as Level, edgeFacts); return LEVEL_NAMES[gated.held ? gated.level : liftLevel1(gated.level, edgeFacts).level]; };
     if (range) rangeLevels = { low: edgeName(range.levelLow), high: edgeName(range.levelHigh) };
   }
@@ -247,8 +256,8 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     money: { total: cap.net / 100, gross: cap.gross / 100, spendable: spendable / 100, instant: series.liquidNow / 100, blockedShare, reserveEssentialMonths: inputs.reserveEssentialMonths, reserveLifestyleMonths: inputs.reserveLifestyleMonths },
     flow: { income: inputs.incomeMonthly, spending: inputs.needLifestyle, obligations: inputs.obligationsMonthly },
     runway: computeRunway(series, inputs.needEssential), spiral, overdue: spiral.overdueCount,
-    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || hasMismatch(overview),
-    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, desired: desiredScenarioOf(state, today, pre),
+    confidence, preliminary: isPreliminary(confidence) || inputs.needEssential <= 0 || inputs.essentialUnknown === true || hasMismatch(overview),
+    independence, independenceNote: fin.note ?? null, independenceLine: fin.independenceLine ?? null, essentialMissing, essentialUnknown: inputs.essentialUnknown === true, endedIncome: endedIncomeToAsk(state, today), desired: desiredScenarioOf(state, today, pre),
   };
 }
 
@@ -261,7 +270,7 @@ const factsOf = (i: IndicatorInputs): LevelFacts => ({ reserveMonths: i.reserveE
 const tg = (x: number): string => formatKZT(tenge(Math.round(Math.max(0, x) / 1000) * 1000));
 const reserveNeed = (months: number, i: IndicatorInputs): string =>
   // нет необходимых расходов (ничего не отмечено «обязательно») — запас не определён, а не равен 0,0 (аудит 10, находка 5; D158)
-  i.needEssential <= 0 ? `запас от ${months} месяцев необходимых расходов: сначала отметь, что обязательно, — без этого запас не посчитать` :
+  i.needEssential <= 0 || i.essentialUnknown ? `запас от ${months} месяцев необходимых расходов: сначала отметь, что обязательно, — без этого запас не посчитать` :
   `запас от ${months} месяцев необходимых расходов: сейчас ${nfDown(i.reserveEssentialMonths)}, не хватает около ${tg((months - i.reserveEssentialMonths) * i.needEssential)}`;
 
 export function ladderOf(current: number | null): PositionView['ladder'] {
@@ -279,7 +288,7 @@ export function heldText(reason: 'deficit' | 'reserve3' | 'reserve6', byScore: L
 /** «На границе» и по очкам, и по запасу: до порога 3 или 6 месяцев меньше RESERVE_BORDER_MARGIN (С6, D163). */
 export function borderOf(byScore: BoundaryId[], i: IndicatorInputs): BoundaryId[] {
   const out = new Set<BoundaryId>(byScore);
-  if (i.needEssential > 0) {
+  if (i.needEssential > 0 && !i.essentialUnknown) {
     if (Math.abs(i.reserveEssentialMonths - L3_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L2/L3');
     if (Math.abs(i.reserveEssentialMonths - L4_RESERVE_MONTHS) < RESERVE_BORDER_MARGIN) out.add('L3/L4');
   }

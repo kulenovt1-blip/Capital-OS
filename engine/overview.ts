@@ -252,7 +252,8 @@ export function buildOverview(state: AppState, today: IsoDate, extras: OverviewE
   );
 
   // цели: суммы по правилам, дерево, превышения назначений
-  const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).map((u) => u.amount)), 1, 3);
+  // Платёж в месяц — по графику на 90 дней вперёд. Просроченные платежи (перенесены на сегодня) сюда не входят: это разовая задолженность, а не постоянная нагрузка (D213)
+  const obligationsMonthly = mulDiv(sum(upcomingPayments(obligations, today, addDays(today, 90)).filter((u) => !u.overdue).map((u) => u.amount)), 1, 3);
   const resolved = resolveGoalTargets(state.goals, baseline.median, state.settings.reserveMonths, {
     essential: add(baseline.median, obligationsMonthly),
     all: add(add(add(baseline.median, regularMedian), averageMonthly(classification?.ops ?? [], today, UNCHECKED_CLASS_ID, 12).monthly), obligationsMonthly),

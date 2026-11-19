@@ -46,7 +46,7 @@ describe('каждый показатель равен пробе на всех 
     it(p.name, () => {
       const ref = REF.profiles[p.name]!;
       const expected: Record<string, number | null> = { ...ref.ind, N1: ref.indNet.N1, F1: ref.indNet.F1 };
-      const got = computeIndicators(applyProbeOpts(p.state, p.opts), TODAY, undefined, { incomeFromSchedule: false }).values as Record<string, number | null>; // как в пробе (D209)
+      const got = computeIndicators(applyProbeOpts(p.state, p.opts), TODAY, undefined, { incomeFromSchedule: false, overdueAsMonthly: true }).values as Record<string, number | null>; // как в пробе (D209)
       expect(Object.keys(got).sort()).toEqual(Object.keys(expected).sort()); // null и «нет ключа» различаются
       for (const k of Object.keys(expected)) {
         if (expected[k] === null) expect(got[k], k).toBeNull();
