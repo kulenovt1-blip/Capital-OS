@@ -4,7 +4,7 @@
  */
 import { autoLabelCategories, formatDateRu, importMmbackup, mergeAccountSettings, parseState, reconcileAccounts, settleSetAsides, type AppState, type ImportedData, type ReconcileReport } from '../../engine/index';
 import { append, h, readFileBytes, toast } from '../dom';
-import { getState, replaceState, today, update } from '../store';
+import { getDemo, getState, replaceState, today, update } from '../store';
 import { ov } from '../ctx';
 import { fmt, fmtExact, info, nWord, row, rows, stickyBar, sub } from '../ui';
 import { explainList } from '../explain';
@@ -35,20 +35,6 @@ function reconcileBlock(rep: ReconcileReport): HTMLElement {
 
 function period(d: ImportedData): string {
   return `${d.meta.firstDate ? formatDateRu(d.meta.firstDate) : '—'} — ${d.meta.lastDate ? formatDateRu(d.meta.lastDate) : '—'}`;
-}
-
-/** Демо: выдуманный профиль «Студент» на фиксированную дату; работает только на пустом приложении (D169). */
-export async function loadDemo(): Promise<void> {
-  try {
-    const res = await fetch('./demo.json');
-    const r = parseState(await res.text());
-    if (!r.ok) throw new Error(r.error);
-    if (getState().imported) return;
-    if (await replaceState(r.value)) location.href = `${location.pathname}?today=2026-11-04#/overview`;
-  } catch (e) {
-    lastError = e instanceof Error ? e.message : String(e);
-    toast('Не удалось загрузить демо', 'error');
-  }
 }
 
 /** Забрать файл, который service worker положил после «Поделиться → Capital OS»; забирается один раз. */
@@ -97,6 +83,7 @@ function shareHelp(): HTMLElement {
 
 /** Прочитать файл бэкапа и показать сверку на «Импорте». */
 async function loadFile(f: File): Promise<void> {
+  if (getDemo()) return void toast('Сначала выйди из примера (плашка вверху) — он не принимает свои данные', 'error');
   try {
     const data = importMmbackup(await readFileBytes(f));
     pending = { data, report: reconcileAccounts(data), fileName: f.name };
@@ -187,7 +174,7 @@ export function renderImport(_rerender: () => void): HTMLElement {
     append(root, [
       h('div', { class: 'card stack' }, h('strong', null, 'Загрузи бэкап MoneyManager'), h('p', { class: 'muted', style: 'margin:0' }, 'Файл .mmbackup читается на этом устройстве и никуда не отправляется.')),
       pick(true, 'Выбрать файл .mmbackup'),
-      h('button', { class: 'btn link wide', type: 'button', onclick: loadDemo }, 'Посмотреть на демо-данных'),
+      h('a', { class: 'btn link wide', href: '#/examples' }, 'Посмотреть на примере'),
       lastError ? h('div', { class: 'error-box', role: 'alert' }, `Не удалось прочитать файл: ${lastError}`) : null,
       shareHelp(),
     ]);

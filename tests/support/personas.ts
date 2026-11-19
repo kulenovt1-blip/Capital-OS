@@ -8,25 +8,9 @@ import { tenge } from '../../engine/money';
 import type { ManualAccount } from '../../engine/settings';
 import { applyProbeOpts, build, TODAY, type Spec } from './position-profiles';
 
+export { PERSONAS, type PersonaId, type PersonaMeta } from '../../app/personas';
+import type { PersonaId } from '../../app/personas';
 export const PERSONA_TODAY = TODAY;
-export type PersonaId = 'berik' | 'serik' | 'aliya' | 'olzhas' | 'dantal';
-
-export interface PersonaMeta {
-  id: PersonaId;
-  name: string;
-  /** Одна строка о человеке для карточки выбора. */
-  line: string;
-  /** Целевая ступень (проверяется тестом). */
-  level: 1 | 2 | 3 | 4 | 5;
-}
-
-export const PERSONAS: readonly PersonaMeta[] = [
-  { id: 'berik', name: 'Берик', line: '29 лет. Потерял стабильную работу, подработки и неполная ставка; берёт новые займы, чтобы дотянуть до конца месяца.', level: 1 },
-  { id: 'serik', name: 'Серик', line: '32 года. Стабильная зарплата, вовремя платит, закрывает рассрочку на телефон; запаса почти нет.', level: 2 },
-  { id: 'aliya', name: 'Алия', line: '31 год. Хорошая зарплата и новая квартира в ипотеку; откладывает, подушка есть.', level: 3 },
-  { id: 'olzhas', name: 'Олжас', line: '38 лет. Хорошая работа, своя квартира и машина, раз в год — отпуск; один источник дохода и крупный платёж.', level: 4 },
-  { id: 'dantal', name: 'Дантал', line: 'Обеспечил себя на много лет вперёд; живёт на проценты и аренду.', level: 5 },
-];
 
 type Ex = Spec['expenses'][number];
 const ex = (id: string, title: string, cls: Ex['cls'], amount: Ex['amount'], day: number): Ex => ({ id, title, cls, amount, day });

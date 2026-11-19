@@ -902,3 +902,13 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .pos-now .pn-s { font-size: calc(14px * var(--fz)); color: var(--ink-2); }
 .pos-now .btn { margin-top: 8px; }
 
+
+/* D201: «На примере» — выдуманные люди, плашка режима примера */
+.demo-banner { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 12px 16px 0; padding: 12px 16px; border-radius: 16px; background: var(--surface-sunken); color: var(--ink); border: 1px solid var(--line-strong); }
+.demo-banner span { flex: 1 1 200px; }
+.demo-banner .btn { flex: none; min-height: 44px; }
+.persona-card.on { border-color: var(--accent); }
+.pc-head { display: flex; flex-direction: column; gap: 2px; }
+.pc-head strong { font-size: calc(18px * var(--fz)); }
+.pc-level { font-size: calc(14px * var(--fz)); color: var(--ink-2); font-weight: 600; }
+.persona-card .btn.wide { width: 100%; }

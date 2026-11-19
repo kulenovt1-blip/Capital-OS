@@ -1,5 +1,6 @@
 /** Сборка приложения из экранов (D81): 5 пунктов нижней панели (в простом режиме 4, D7) и подэкраны «Ещё». */
 import { addRoute, start } from './main';
+import { renderExamples } from './screens/examples';
 import { initPersistence } from './protect';
 import { getState } from './store';
 import { ov } from './ctx';
@@ -37,6 +38,7 @@ addRoute({ path: 'position', title: 'Финансовый профиль', simpl
 addRoute({ path: 'more', title: 'Ещё', nav: 'more', render: () => renderMore() });
 addRoute({ path: 'setup', title: 'Настроим за 5 минут', nav: 'more', parent: 'more', lock: true, render: (r, sec) => renderSetup(r, sec) });
 addRoute({ path: 'months', title: 'Итоги месяцев', nav: 'more', parent: 'more', render: () => renderMonths() });
+addRoute({ path: 'examples', title: 'На примере', nav: 'more', parent: 'more', render: () => renderExamples() });
 addRoute({ path: 'help', title: 'Как пользоваться', nav: 'more', parent: 'more', render: () => renderHelp() });
 addRoute({ path: 'data', title: 'Данные', nav: 'more', parent: 'more', render: () => renderData() });
 addRoute({ path: 'prefs', title: 'Настройки', nav: 'more', parent: 'more', render: () => renderPrefs() });

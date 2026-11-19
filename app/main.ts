@@ -9,6 +9,7 @@ import './styles.css';
 import { h, clear, hideToast, type Child } from './dom';
 import { getHealth, getState, loadState, subscribe, today } from './store';
 import { recoveryScreen, storageBanner } from './recovery';
+import { demoBanner } from './screens/examples';
 import { trust } from './ctx';
 import { accuracyNow, accuracyPanel, meter } from './accuracy-ui';
 import { initTheme } from './theme';
@@ -324,6 +325,7 @@ function render(): void {
     h('a', { class: 'skip', href: '#screen-title', onclick: (e: Event) => (e.preventDefault(), document.getElementById('screen-title')?.focus()) }, 'К содержимому'),
     r.lock ? null : nav(r.nav),
     storageBanner(),
+    demoBanner(),
     header(r),
     h('main', { id: 'main' }, r.render(render, p.section)),
     sh,

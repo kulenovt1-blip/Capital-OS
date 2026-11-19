@@ -78,7 +78,7 @@ export function renderMore(): HTMLElement {
       'div',
       { class: 'stack' },
       sub('Приложение'),
-      rows(row({ title: 'Настройки', href: '#/prefs' }), row({ title: 'Что нового', onClick: openWhatsNew }), row({ title: 'Как пользоваться', href: '#/help' })),
+      rows(row({ title: 'Настройки', href: '#/prefs' }), row({ title: 'Что нового', onClick: openWhatsNew }), row({ title: 'Как пользоваться', href: '#/help' }), row({ title: 'На примере', sub: 'пять выдуманных людей — посмотреть, как выглядят ступени', href: '#/examples' })),
     ),
     h('p', { class: 'foot-note' }, `Capital OS · версия ${APP_VERSION} · ${buildLabel()}`),
   );

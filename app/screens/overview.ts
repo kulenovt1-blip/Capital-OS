@@ -5,7 +5,7 @@
 import { monthlyCard } from './monthly';
 import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, spendGap, mulDiv, type Money, detectNewIncomes, flattenTree, lockedByDate, dataFreshness, type Overview } from '../../engine/index';
 import { h } from '../dom';
-import { loadDemo, pickBackup } from './import';
+import { pickBackup } from './import';
 import { act, getState, today } from '../store';
 import { badAccounts, ov, positionNow, progress, reserveCtx } from '../ctx';
 import { roadOf, type RoadCond } from '../road';
@@ -292,8 +292,8 @@ function emptyState(): HTMLElement {
     { class: 'screen' },
     hero('Можно тратить', '—', 'Загрузи бэкап MoneyManager — и здесь появится, сколько денег можно тратить до следующего дохода.'),
     h('button', { class: 'btn primary big wide', type: 'button', onclick: pickBackup }, 'Загрузить бэкап'),
-    h('button', { class: 'btn big wide', type: 'button', onclick: () => void loadDemo() }, 'Посмотреть на примере'),
-    h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве. Пример — выдуманный студент: можно посмотреть, как всё выглядит.'),
+    h('a', { class: 'btn big wide', href: '#/examples' }, 'Посмотреть на примере'),
+    h('p', { class: 'one-line' }, 'Данные остаются на этом устройстве. Примеры — выдуманные люди: можно посмотреть, как всё выглядит.'),
     isSimpleMode(getState().settings) ? h('p', { class: 'one-line' }, 'Показано только главное. Полный режим — в «Ещё → Настройки».') : null,
     h(
       'details',
