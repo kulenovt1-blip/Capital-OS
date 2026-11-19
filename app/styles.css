@@ -827,7 +827,7 @@ a.cap-tile .ct-sub, a.plan-cta .ct-sub { color: var(--muted); }
 .rd-sub { font-size: calc(13px * var(--fz)); font-weight: 700; color: var(--muted); }
 .rd-conds { display: flex; flex-direction: column; margin-top: 6px; }
 .rd-cond { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); }
-.rd-dot { flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--line-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--on-primary); }
+.rd-dot { flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--line-strong); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--on-primary); }
 .rd-cond.ok .rd-dot { background: var(--primary); border-color: var(--primary); }
 .rd-cond-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .rd-cond-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
