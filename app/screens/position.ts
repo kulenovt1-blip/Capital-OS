@@ -315,7 +315,7 @@ function warningsBlock(v: PositionView): HTMLElement | null {
   return h(
     'div',
     { class: 'warnline stack' },
-    h('strong', null, `Это «${LEVEL_NAMES[4]}», но есть уязвимость`),
+    h('strong', null, `Это «${v.levelName ?? LEVEL_NAMES[4]}», но есть уязвимость`),
     v.l4Warnings.map((w) => h('div', null, w.text)),
     h('small', { class: 'hint' }, 'Ступень от этого не меняется: это объяснение, где профиль хрупкий.'),
   );
@@ -350,6 +350,14 @@ function howSheet(): { title: string; body: HTMLElement } {
   let n = 0;
   const stepHead = (title: string): HTMLElement => sub(`Шаг ${++n}. ${title}`);
   if (m) parts.push(h('p', { class: 'muted' }, `Ты на ступени ${m.current.level} «${m.current.name}». Следующая — «${m.next.name}». Шаги по порядку: следующий имеет смысл, когда сделан предыдущий.`));
+  const savingsParts = (): void => {
+    if (!how.savings.length) return;
+    parts.push(
+      sub(how.deficit ? 'Где траты крупнее всего' : 'На чём можно сэкономить'),
+      rows(how.savings.map((x) => row({ title: x.title, sub: `уходит ${fmtShort(x.monthly)} в месяц; на ${SAVING_CUT_PCT} % меньше — ещё +${fmtShort(x.cutPerMonth)} в месяц`, href: sheetHref('save-cat', x.categoryId) }))),
+      h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('save-where') }, 'Все траты'), h('a', { class: 'chip', href: sheetHref('plan', 'job') }, 'Добавить доход'), v.spiral.spiral ? h('a', { class: 'chip', href: '#/debts' }, 'Долги') : null),
+    );
+  };
   if (how.deficit) {
     parts.push(
       stepHead('Выйти в плюс'),
@@ -358,16 +366,11 @@ function howSheet(): { title: string; body: HTMLElement } {
         h('p', null, 'Пока так, деньги тают и откладывать бесполезно: любая добавка уходит на дыру. Закрыть её можно двумя путями — меньше тратить или больше получать. Ниже — где траты крупнее всего.'),
         v.spiral.spiral ? h('p', { class: 'muted' }, 'Если для этого берёшь новые долги — начни с того, чтобы не брать следующий: «Долги» покажут, какой платёж закрыть первым.') : null),
     );
-  }
-  if (how.savings.length) {
-    parts.push(
-      sub(how.deficit ? 'Где траты крупнее всего' : 'На чём можно сэкономить'),
-      rows(how.savings.map((x) => row({ title: x.title, sub: `уходит ${fmtShort(x.monthly)} в месяц; на ${SAVING_CUT_PCT} % меньше — ещё +${fmtShort(x.cutPerMonth)} в месяц`, href: sheetHref('save-cat', x.categoryId) }))),
-      h('div', { class: 'chips wrap' }, h('a', { class: 'chip', href: sheetHref('save-where') }, 'Все траты'), h('a', { class: 'chip', href: sheetHref('plan', 'job') }, 'Добавить доход'), v.spiral.spiral ? h('a', { class: 'chip', href: '#/debts' }, 'Долги') : null),
-    );
+    savingsParts();
   }
   if (target !== null && v.money.reserveEssentialMonths < target) {
     parts.push(stepHead(`Запас на ${target} месяцев`), ...reserveRouteParts(target, how.deficit !== null));
+    if (!how.deficit) savingsParts();
   }
   if (v.level === 4 && v.l5) {
     const c = v.l5;
@@ -377,7 +380,7 @@ function howSheet(): { title: string; body: HTMLElement } {
       need > 0 ? h('p', null, `Не хватает ${approx((c.lifeReserve.need - c.lifeReserve.have) * need)}. Считается со всеми обычными тратами — ${approx(need)} в месяц, — а не только с необходимыми.`) : null));
     if (!c.essentialShare.ok && c.essentialShare.have !== null) parts.push(stepHead('Обязательное — до половины дохода'), h('div', { class: 'card stack tight' },
       h('strong', null, `Сейчас на обязательное уходит ${pct(c.essentialShare.have)} дохода`),
-      h('p', null, 'Еда, жильё, связь, дорога и платежи по долгам. Снизить долю можно ростом дохода или меньшими обязательными тратами; когда кончится кредит, доля упадёт сама.')));
+      h('p', null, `Еда, жильё, связь, дорога и платежи по долгам. Снизить долю можно ростом дохода или меньшими обязательными тратами${(v.flow?.obligations ?? 0) > 0 ? '; когда кончатся платежи по кредитам, доля упадёт сама' : ''}.`)));
     if (!c.savingRate.ok || !c.habit.ok) parts.push(stepHead('Откладывать каждый месяц'), h('div', { class: 'card stack tight' },
       h('strong', null, c.savingRate.have === null ? 'Истории пока мало, чтобы проверить' : `Сейчас остаётся ${pct(Math.max(0, c.savingRate.have))} дохода, нужно от ${pct(c.savingRate.min)}`),
       h('p', null, 'И так — хотя бы в 5 из 6 последних месяцев. Проще всего — отложить в копилку сразу в день дохода.')));
