@@ -95,7 +95,7 @@
     },
     {
      "accountId": "card",
-     "amount": 2000000,
+     "amount": 10000000,
      "categoryId": null,
      "comment": "",
      "date": "2025-09-01",
@@ -955,7 +955,7 @@
     }
    ],
    "reportedBalances": {
-    "card": 2000000,
+    "card": 10000000,
     "save": 938000000
    },
    "tags": [],
@@ -963,7 +963,33 @@
   },
   "importedAt": "2026-11-04",
   "lastBackupAt": null,
-  "manualAccounts": [],
+  "manualAccounts": [
+   {
+    "assetKind": "non_investable",
+    "balance": 3200000000,
+    "balanceDate": "2026-11-04",
+    "comment": "введено вручную",
+    "id": "flat",
+    "liquidity": {
+     "date": "2035-01-01",
+     "kind": "locked_until"
+    },
+    "title": "Квартира"
+   },
+   {
+    "assetKind": "non_investable",
+    "balance": 1400000000,
+    "balanceDate": "2026-11-04",
+    "comment": "введено вручную",
+    "id": "car-asset",
+    "liquidity": {
+     "date": "2035-01-01",
+     "kind": "locked_until"
+    },
+    "loanId": "car",
+    "title": "Машина"
+   }
+  ],
   "manualMatches": {},
   "obligations": [
    {

@@ -79,7 +79,7 @@ const named = (name: string) => namedProfiles().find((p) => p.name === name)!.st
 /** Состояния экрана «Положение» (T16): по одному на каждый случай, который экран рисует по-разному. */
 const POSITION_STATES: Record<string, () => AppState> = {
   'pos-l4': () => profile(named('B Работающий')),
-  'pos-l5': () => profile(independenceProfiles().find((p) => p.name === 'FI3')!.state, { age: 55, desiredMonthly: tenge(500_000) }),
+  'pos-l5': () => profile(independenceProfiles().find((p) => p.name === 'FI3')!.state),
   'pos-limit': () => profile(named('B + трата 3 млн')),
   'pos-border': () => profile(named('D34')),
   'pos-spiral': () => profile(spiralCase(1, 'spiralAB').state),
@@ -114,7 +114,7 @@ export const SCREENS: [string, string][] = [
   ['goal-new', '#/goals~goal-new'], ['goal-sheet', '#/goals~goal/goal-trip'], ['goal-fund', '#/goals~goal-fund/goal-trip'], ['goal-edit', '#/goals~goal-edit/goal-trip'],
   ['backup', '#/backup'], ['install', '#/install'], ['rare', '#/rare'], ['advanced', '#/advanced'], ['adv-rules', '#/advanced/rules'], ['adv-params', '#/advanced/params'], ['adv-scenarios', '#/advanced/scenarios'],
   ['account-sheet', '#/accounts~account/acc-kaspi'], ['savings', '#/accounts/savings'], ['rare-manual', '#/rare/manual'], ['income-kinds', '#/incomes~income-kinds'],
-  ['position', '#/position'], ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'], ['you', '#/prefs~you'],
+  ['position', '#/position'], ['manual-new', '#/accounts~manual/new'], ['income-item', '#/incomes~income-item/sal'],
   ['debt-new', '#/debts~debt-new'], ['debt-edit', '#/debts~debt/ob-tag:телефон'], ['income-more', '#/income-more'], ['forecast-more', '#/forecast-more'], ['start', '#/start'], ['start-savings', '#/start/savings'], ['start-goals', '#/start/goals'],
   ['baskets', '#/baskets'], ['basket-sheet', '#/baskets~basket/cat-food'], ['cushion', '#/goals~cushion'], ['distribute', '#/goals~distribute'], ['folder-sheet', '#/goals~goal/goal-trip'],
   ['explain-forecast', '#/forecast~explain/forecast'],

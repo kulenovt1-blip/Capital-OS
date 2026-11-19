@@ -60,9 +60,10 @@ function aliya(): AppState {
 }
 
 function olzhas(): AppState {
-  // D219: ступень 4, а не 5 — крупные обязательные платежи (автокредит) берут больше половины дохода, и денег на год обычной жизни пока нет
-  return build({
-    name: 'Олжас', from: '2025-09', opening: 3_000_000,
+  // D219: ступень 4, а не 5 — крупные обязательные платежи (автокредит) берут больше половины дохода, и денег на год обычной жизни пока нет.
+  // Квартира и машина — имущество (раньше их не было, и капитал выходил в минус из-за автокредита)
+  const st = build({
+    name: 'Олжас', from: '2025-09', opening: 3_000_000, cardBuffer: 100_000,
     incomes: [{ id: 'job', title: 'Зарплата', cls: 'I_work', day: 5, amount: 1_500_000, kind: 'work', sched: 1_500_000 }],
     expenses: [
       ex('food', 'Еда', 'E_base', 240_000, 3), ex('home', 'Коммунальные, связь, садик', 'E_base', 260_000, 1), ex('fun', 'Развлечения', 'E_fun', 150_000, 20),
@@ -71,6 +72,10 @@ function olzhas(): AppState {
     ],
     debts: [{ id: 'car', title: 'Автокредит', remaining: 9_500_000, payment: 330_000, firstDate: '2026-11-12' }],
   });
+  const car = { ...property('Машина', 14_000_000, 'car'), id: 'car-asset' } as ManualAccount;
+  const flat = { ...property('Квартира', 32_000_000, ''), id: 'flat' } as ManualAccount;
+  delete (flat as { loanId?: string }).loanId;
+  return applyProbeOpts(st, { manual: [flat, car] });
 }
 
 /**

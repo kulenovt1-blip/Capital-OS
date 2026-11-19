@@ -69,8 +69,8 @@ function trustLine(v: PositionView): HTMLElement | null {
 /** «Почему ты здесь» — в листе «Ступени», фактами, а не правилом чужой ступени (D217: «на каждом направлении от 60» раньше показывалось на всех ступенях). */
 function levelMore(v: PositionView): HTMLElement[] {
   const out: HTMLElement[] = [];
-  if (v.levelMeaning) out.push(h('p', null, h('strong', null, 'Почему ты здесь. '), `${meaningOf(v)}.`));
-  if (v.held) out.push(h('p', { class: 'muted' }, `${v.held}.`));
+  const why = whyHere(v);
+  if (why) out.push(h('p', null, h('strong', null, 'Почему ты здесь. '), why));
   if (v.g !== null && (!v.range || v.range.showPoint) && v.level !== null && v.level < 5) out.push(h('p', { class: 'muted' }, `Общая оценка — ${shownScore(v.g)} из 100. Она собирается из трёх направлений и растёт сама, когда меняются деньги; что нужно для следующей ступени — в «Плане».`));
   if (v.level === 4) out.push(h('p', null, `Это крепкая опора. Следующая ступень — «${LEVEL_NAMES[5]}»: деньги на год обычной жизни и свобода в каждой зарплате.`));
   if (v.level === 5) out.push(h('p', null, 'Это верхняя ступень. Главное теперь — не растерять: чтобы обязательное не росло быстрее дохода и запас не таял.'));
@@ -83,6 +83,27 @@ function levelMore(v: PositionView): HTMLElement[] {
     );
   }
   return out;
+}
+
+/** «Почему ты здесь» — факты, на которых стоит ступень (D217), а не повтор её смысла. */
+function whyHere(v: PositionView): string | null {
+  if (v.level === null) return null;
+  if (v.held) return `${v.held}.`;
+  const r = v.essentialUnknown ? null : nfDown(v.money.reserveEssentialMonths);
+  const g = v.g !== null ? shownScore(v.g) : null;
+  const res = r === null ? '' : `запас на ${r} мес. необходимых расходов`;
+  switch (v.level) {
+    case 1: return `${meaningOf(v)}.`;
+    case 2: return [v.runway.status === 'deficit' ? 'расходы больше доходов, но запас от 3 месяцев' : 'доходы покрывают расходы', res && `${res} (для ступени 3 нужно от 3)`, g !== null && g < 40 ? `общая оценка ${g} из 100 (для ступени 3 нужно от 40)` : ''].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+    case 3: return [res && `${res} — от 3 есть`, g !== null ? `общая оценка ${g} из 100${g < 75 ? ' (для ступени 4 нужно от 75)' : ''}` : ''].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+    case 4: return [res && `${res} — от 6 есть`, g !== null ? `общая оценка ${g} из 100 — от 75 есть` : '', 'каждое направление от 60'].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+    default: {
+      const c = v.l5;
+      if (!c) return null;
+      if (c.capitalOnly && !c.ok) return `Денег хватит больше чем на ${Math.floor(c.lifeReserve.have / 12)} лет обычной жизни даже без дохода.`;
+      return `Денег на ${nfDown(c.lifeReserve.have)} мес. обычной жизни; на обязательное уходит ${Math.round((c.essentialShare.have ?? 0) * 100)} % дохода; откладываешь ${Math.round(Math.max(0, c.savingRate.have ?? 0) * 100)} % — и так почти каждый месяц.`;
+    }
+  }
 }
 
 defineSheet('ladder', () => {

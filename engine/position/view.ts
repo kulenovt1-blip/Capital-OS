@@ -298,7 +298,7 @@ function meaningOf(level: Level, i: IndicatorInputs, weak: string | null, spiral
   if (level <= 2 && deficit) {
     const base = i.reserveEssentialMonths >= L3_RESERVE_MONTHS
       ? `Расходы больше доходов: живёшь за счёт запаса, его хватит примерно на ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, и он тает`
-      : `Расходы больше доходов, а запаса меньше ${L3_RESERVE_MONTHS} месяцев: сейчас ${nfDown(i.reserveEssentialMonths)}`;
+      : i.reserveEssentialMonths < 0.1 ? 'Расходы больше доходов, а запаса нет' : `Расходы больше доходов, а запаса меньше ${L3_RESERVE_MONTHS} месяцев: сейчас на ${nfDown(i.reserveEssentialMonths)} мес.`;
     return spiral ? `${base}. Долги растут: начни с одного платежа` : base;
   }
   if (level <= 2 && i.reserveEssentialMonths >= L3_RESERVE_MONTHS) return `Запас есть — ${nfDown(i.reserveEssentialMonths)} мес. необходимых расходов, но общая оценка низкая${weak ? `: слабее всего «${weak}»` : ''}`;
