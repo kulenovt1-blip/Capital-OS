@@ -3,6 +3,7 @@
  * Экран ничего не считает: всё берётся из `positionViewOf` (engine/position/view.ts) и рисуется в порядке важности для телефона.
  * Слова без внутренних терминов; коды показателей (N1, V2…) на экране не показываются.
  */
+import { roadOf, type RoadCond } from '../road';
 import { DESIRED_LABEL, INDEPENDENCE_TEXTS, routeTo, type ReserveTarget, INDICATOR_LABELS, L5_NAME, LEVEL_NAMES, step, type Explanation, type PositionView } from '../../engine/index';
 import { h } from '../dom';
 import { explainLink, registerExplain } from '../explain';
@@ -145,12 +146,13 @@ function pathTarget(v: PositionView): ReserveTarget | null {
   if (v.level === null || v.level > 3 || !v.next) return null;
   return v.level <= 2 ? 3 : 6;
 }
-function pathBlock(v: PositionView): HTMLElement | null {
+/** Что внутри «Пути к ступени»: сколько отложить, к какому сроку и кнопка «Посчитать путь» (или «План принят»). Пусто — ступень не упирается в запас. */
+function pathParts(v: PositionView): (HTMLElement | null)[] {
   const target = pathTarget(v);
   const rs = reserveCtx();
-  if (target === null || !rs || rs.coverMonths >= target || !v.next) return null;
+  if (target === null || !rs || rs.coverMonths >= target || !v.next) return [];
   const r = routeTo(getState(), today(), target);
-  if (!r || r.missing <= 0) return null;
+  if (!r || r.missing <= 0) return [];
   const fast = r.deadlines.find((d) => d.months === 12 && d.extraMonthly > 0) ?? r.deadlines.find((d) => d.extraMonthly > 0);
   const pace = r.deficitMonthly > 0
     ? `Сейчас расходы больше доходов на ≈ ${fmtShort(r.deficitMonthly)} в месяц — сначала нужно выйти в плюс.`
@@ -158,19 +160,59 @@ function pathBlock(v: PositionView): HTMLElement | null {
   const open = (): void => setRouteTarget(target);
   const planned = getState().settings.plannedEvents.find((e) => e.title.startsWith(ROUTE_PLAN_PREFIX));
   if (planned) {
-    return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени', 'data-tour': 'path' },
-      h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
+    return [
       h('strong', null, 'План принят'),
       h('p', null, `В прогнозе: «${planned.title}». ${pace}`),
       h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посмотреть или убрать'),
-    );
+    ];
   }
-  return h('section', { class: 'card stack tight pos-path', 'aria-label': 'Путь к следующей ступени', 'data-tour': 'path' },
-    h('div', { class: 'muted' }, `Путь к ступени ${v.next.level} · «${v.next.name}»`),
+  return [
     h('strong', null, `Нужно отложить в запас ещё ${approx(r.missing / 100)}`),
     h('p', null, pace),
     fast && r.deficitMonthly <= 0 ? h('p', { class: 'muted' }, `Быстрее: откладывать сверху ≈ ${fmtShort(fast.extraMonthly)} в месяц — к ${monthTo(fast.month)}.`) : null,
     h('a', { class: 'btn wide', href: sheetHref('a-to-b'), onclick: open }, 'Посчитать путь'),
+  ];
+}
+
+/**
+ * «Твоя дорога» (дизайн A+): пройденные ступени одной строкой, «ты здесь», следующая ступень с условиями-цифрами и путём, остальные — строкой.
+ * Лестница из пяти полосок остаётся в карточке ступени («где я»), дорога отвечает «как подняться». Всё из `roadOf` и `routeTo`.
+ */
+function roadBlock(v: PositionView): HTMLElement | null {
+  const m = roadOf(v);
+  if (!m) return null;
+  const node = (text: string, cls: string): HTMLElement => h('span', { class: `rd-node ${cls}`, 'aria-hidden': 'true' }, text);
+  const cond = (c: RoadCond): HTMLElement =>
+    h('div', { class: `rd-cond${c.done ? ' ok' : ''}` },
+      h('span', { class: 'rd-dot', 'aria-hidden': 'true' }, c.done ? '✓' : ''),
+      h('div', { class: 'rd-cond-main' },
+        h('div', { class: 'rd-cond-row' }, h('span', { class: 'rd-cond-title' }, c.title), c.value ? h('span', { class: 'rd-cond-val' }, c.value) : null),
+        c.ratio !== null && !c.done ? h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.round(c.ratio * 100)}%` })) : null,
+      ),
+    );
+  const path = pathParts(v);
+  return h(
+    'section',
+    { class: 'pos-road', 'aria-label': 'Твоя дорога', 'data-tour': 'path' },
+    h('div', { class: 'pr-k' }, 'Твоя дорога'),
+    h(
+      'ol',
+      { class: 'road' },
+      m.passed ? h('li', { class: 'rd past' }, node('✓', 'past'), h('div', { class: 'rd-body' }, m.passed)) : null,
+      h('li', { class: 'rd here' }, node(String(m.current.level), 'here'), h('div', { class: 'rd-body' }, h('span', { class: 'rd-name' }, m.current.name), h('span', { class: 'rd-chip' }, 'ты здесь'))),
+      h(
+        'li',
+        { class: 'rd next' },
+        node(String(m.next.level), 'next'),
+        h('div', { class: 'rd-card' },
+          h('div', { class: 'rd-name' }, m.next.name),
+          h('div', { class: 'rd-sub' }, 'Чтобы подняться, нужно:'),
+          h('div', { class: 'rd-conds' }, ...m.next.conds.map(cond)),
+          path.length ? h('div', { class: 'rd-path stack tight' }, ...path) : null,
+        ),
+      ),
+      m.rest.length ? h('li', { class: 'rd far' }, node(String(m.rest[0]!.level), 'far'), h('div', { class: 'rd-body muted' }, `Дальше: ${m.rest.map((x) => x.name).join(' → ')}`)) : null,
+    ),
   );
 }
 
@@ -389,13 +431,13 @@ export function renderPosition(): HTMLElement {
   autoTour('profile', '#/position', profileTour);
   const fs = firstStepBlock(v);
   if (fs) root.append(fs);
-  const path = pathBlock(v);
-  if (path) root.append(path);
+  const road = roadBlock(v);
+  if (road) root.append(road);
   const w = warningsBlock(v);
   if (w) root.append(w);
   if (v.essentialMissing) root.append(rows(row({ title: 'Отметь, что обязательно', sub: 'ни одна трата не отмечена как «без этого не прожить» — запас считается неточно', href: '#/markup', cls: 'warn' })));
   root.append(directionsBlock(v));
-  const wk = weakBlock(v, path !== null);
+  const wk = weakBlock(v, road !== null);
   if (wk) root.append(wk);
   root.append(moneyBlock(v));
   const sp = spiralBlock(v);

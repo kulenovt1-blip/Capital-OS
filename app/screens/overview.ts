@@ -7,7 +7,8 @@ import { addDays, arrivedIncomes, buildSimInput, expensePart, cushionStatus, spe
 import { h } from '../dom';
 import { loadDemo, pickBackup } from './import';
 import { act, getState, today } from '../store';
-import { badAccounts, ov, progress, reserveCtx } from '../ctx';
+import { badAccounts, ov, positionNow, progress, reserveCtx } from '../ctx';
+import { roadOf, type RoadCond } from '../road';
 import { attentionItems } from '../attention';
 import { attention, fmt, fmtDay, fmtShort, hero, info, monthGen, monthTo, newId, nWord, row, rows, sub, whenAvailable } from '../ui';
 import { registerExplain } from '../explain';
@@ -194,6 +195,41 @@ function cushionRow(o: Overview): HTMLElement | null {
   );
 }
 
+/** Следующий шаг дороги одной фразой: что именно подтянуть, по первому невыполненному условию. */
+function roadStepText(c: RoadCond, target: string): string {
+  if (c.kind === 'reserve') return `Довести запас до ${target.replace('мес.', 'месяцев')}`;
+  if (c.kind === 'score') return `Поднять общую оценку до ${target}`;
+  if (c.kind === 'directions') return 'Подтянуть слабое направление';
+  return c.title;
+}
+
+/**
+ * «Дорога» на «Обзоре» (дизайн A+): пять ступеней в линию, следующая и ближайший шаг с полоской. Нажатие — «Профиль» с полной дорогой.
+ * На ступенях 4–5 дороги нет, карточки нет. Ничего не считает: данные из `positionNow` и `roadOf`.
+ */
+function roadCard(): HTMLElement | null {
+  const v = positionNow();
+  if (v.status !== 'ok' || v.level === null) return null;
+  const m = roadOf(v);
+  if (!m) return null;
+  const lvl = v.level;
+  const first = m.next.conds.find((c) => !c.done);
+  const target = first ? (first.value.split(' из ')[1] ?? '') : '';
+  const nodes = [1, 2, 3, 4, 5].map((n) => h('span', { class: `rs-n ${n < lvl ? 'past' : n === lvl ? 'here' : n === lvl + 1 ? 'next' : 'far'}`, 'aria-hidden': 'true' }, String(n)));
+  return h(
+    'a',
+    { class: 'rs', href: '#/position', 'aria-label': `Дорога: сейчас ступень ${lvl}, следующая — ${m.next.name}` },
+    h('div', { class: 'rs-head' }, h('span', { class: 'rs-k' }, 'Дорога'), h('span', { class: 'rs-more' }, 'Вся дорога ›')),
+    h('div', { class: 'rs-line', 'aria-hidden': 'true' }, h('span', { class: 'rs-fill', style: `width:calc((100% - 28px) * ${(lvl - 1) / 4})` }), ...nodes),
+    h('div', { class: 'rs-next' }, `Следующая: ступень ${m.next.level} · «${m.next.name}»`),
+    first
+      ? h('div', { class: 'rs-step' },
+          h('div', { class: 'rs-step-k' }, `Шаг: ${roadStepText(first, target)}`),
+          first.ratio !== null ? h('div', { class: 'rs-bar' }, h('span', { class: 'dbar', 'aria-hidden': 'true' }, h('span', { class: 'dfill', style: `width:${Math.round(first.ratio * 100)}%` })), h('span', { class: 'rs-val' }, first.value)) : first.value ? h('div', { class: 'rs-val' }, first.value) : null)
+      : null,
+  );
+}
+
 /** Новый доход в бэкапе — одной строкой: добавить или «это не доход» (D96). */
 function newIncomeLine(): HTMLElement | null {
   const st = getState();
@@ -355,6 +391,7 @@ export function renderOverview(): HTMLElement {
       h('a', { class: 'cell', href: '#/accounts' }, h('div', { class: 'k' }, 'Всего на счетах'), h('div', { class: 'v' }, fmtShort(sp.onHand)), !simple && lockedLine ? h('div', { class: 'cs' }, lockedLine) : null),
       h('a', { class: 'cell', href: '#/goals' }, h('div', { class: 'k' }, 'В копилках'), h('div', { class: 'v' }, fmtShort(sp.inSavings))),
     ),
+    roadCard(),
     cushionRow(o),
     simple ? null : paymentsRow,
     decisions,
