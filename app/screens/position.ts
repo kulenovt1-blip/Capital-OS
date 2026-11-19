@@ -398,7 +398,9 @@ function weakBlock(v: PositionView): HTMLElement | null {
       v.limitsFired.map((l) => h('div', { class: 'pf-limit' }, `Сдерживает: ${l.text}`)));
   }
   const next = v.next ?? null;
-  if (!v.weak && !next && !v.limitsFired.length) return null;
+  // D210: оценено, но слабого места нет (лучший из действуемых показателей слабого направления от WEAK_NONE_FROM) — говорим об этом, а не называем хорошее слабым
+  const noWeak = !v.weak && v.status === 'ok' && v.g !== null;
+  if (!v.weak && !noWeak && !next && !v.limitsFired.length) return null;
   return h(
     'div',
     { class: 'pos-focus', 'data-tour': 'weak' },
@@ -406,7 +408,9 @@ function weakBlock(v: PositionView): HTMLElement | null {
       ? h('div', { class: 'pf-row' },
           h('div', null, h('div', { class: 'pf-k' }, 'Слабое место'), h('div', { class: 'pf-v' }, v.weak.directionName)),
           v.weak.indicator ? h('span', { class: 'pf-chip' }, `${v.weak.indicator.label} · ${Math.round(v.weak.indicator.score)}`) : null)
-      : null,
+      : noWeak
+        ? h('div', { class: 'pf-row' }, h('div', null, h('div', { class: 'pf-k' }, 'Слабое место'), h('div', { class: 'pf-v' }, 'Слабых мест нет')))
+        : null,
     next ? h('div', { class: 'pf-next' }, h('div', { class: 'pf-k' }, `До «${next.name}»`), h('ul', null, next.needs.map((n) => h('li', null, n)))) : null,
     v.limitsFired.map((l) => h('div', { class: 'pf-limit' }, `Сдерживает: ${l.text}`)),
   );
@@ -427,7 +431,7 @@ function moneyBlock(v: PositionView): HTMLElement {
       { class: 'pos-tiles' },
       h('div', { class: 'cell wide' }, h('div', { class: 'k' }, 'Всего капитал'), h('div', { class: 'v' }, money(m.total)), h('div', { class: 'cs' }, debts > 0.5 ? `есть ${short(m.gross)} − долги ${short(debts)}` : 'долгов нет')),
       h('a', { class: 'cell', href: sheetHref('reserve-info') }, h('div', { class: 'k' }, 'Запас'), h('div', { class: 'v' }, mo(m.reserveEssentialMonths)), h('div', { class: 'cs' }, 'без дохода ›')),
-      spendable ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Снять за месяц'), h('div', { class: 'v' }, short(m.spendable)), h('div', { class: 'cs' }, 'после платежей и трат')) : null,
+      spendable ? h('div', { class: 'cell' }, h('div', { class: 'k' }, 'Снять за месяц'), h('div', { class: 'v' }, short(m.spendable)), h('div', { class: 'cs' }, m.spendable > m.total ? 'платежи месяца вычтены, остаток долгов — нет' : 'после платежей и трат')) : null,
     ),
   );
 }

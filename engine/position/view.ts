@@ -156,6 +156,9 @@ function housingOf(state: AppState, overview: Overview): PositionView['housing']
   return { assets, debt, equity: assets - debt, items: locked.length, linked: linked.length };
 }
 
+/** D210: «Слабое место» не показывается, когда самый низкий из действуемых показателей слабого направления не ниже этого значения. */
+export const WEAK_NONE_FROM = 90;
+
 export function positionViewOf(state: AppState, today: IsoDate): PositionView {
   const series = buildPositionSeries(state, today);
   const overview = buildOverview(state, today);
@@ -194,7 +197,8 @@ export function positionViewOf(state: AppState, today: IsoDate): PositionView {
     // D177 (L7): «Капитал» (N4) шкалой до 300 месяцев почти всегда самый низкий, но за месяцы на него не повлиять; при запасе от 3 месяцев называем то, что можно менять
     const actionable = inputs.reserveEssentialMonths >= L3_RESERVE_MONTHS ? known.filter((x) => x.id !== 'N4') : known;
     const low = actionable.length ? actionable.reduce((a, b) => (b.score < a.score ? b : a)) : null;
-    weak = { direction: weakestId, directionName: dv.name, indicator: low };
+    // D210: если и лучший из «действуемых» показателей слабого направления не ниже порога, слабого места нет — не называем хорошее слабым
+    weak = low && low.score >= WEAK_NONE_FROM ? null : { direction: weakestId, directionName: dv.name, indicator: low };
   }
 
   // диапазон: только если что-то неизвестно
